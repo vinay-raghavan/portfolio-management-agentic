@@ -76,3 +76,20 @@ The optional local LLM profile is disabled by default:
 ```bash
 podman compose --profile ollama up --build
 ```
+
+## GitHub Actions
+
+CI runs on pull requests into `develop` or `main`, pushes to `develop`, `main`,
+`feature/**`, and `fix/**`, and manual dispatch. It runs:
+
+- Root contract, security, integration, and hygiene tests.
+- Agent-service unit and integration tests.
+- Docker Compose config validation.
+- Agent and MCP image builds.
+- Agent readiness check at `/docs`.
+- MCP streamable HTTP safe-tool catalog check.
+
+CD runs on `v*` tags or manual dispatch. It builds the agent-service and
+MCP-server images and publishes them to GHCR only when tag-triggered or when
+manual dispatch explicitly enables image publishing. It does not deploy to an
+environment or require model, broker, or data-provider credentials.

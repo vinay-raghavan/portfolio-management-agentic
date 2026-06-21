@@ -97,6 +97,15 @@ The optional Ollama service is profile-gated:
 podman compose --profile ollama up --build
 ```
 
+## CI/CD
+
+GitHub Actions are split into CI and CD:
+
+- CI runs deterministic tests, Docker Compose validation, container builds, and MCP safe-tool smoke checks for PRs and topic-branch pushes.
+- CD publishes agent-service and MCP-server images to GHCR only for `v*` tags or explicit manual dispatch.
+
+No workflow requires broker credentials, model provider keys, or live-trading access.
+
 ## Branching Model
 
 - `main`: locked release line. Release commits merge here from `develop`.

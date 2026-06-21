@@ -11,6 +11,7 @@ Initial topics:
 - Agent platform abstraction for ADK, Codex, Claude Code, and generic MCP clients.
 - Demo data contracts.
 - Docker or Podman Compose service graph.
+- GitHub Actions CI/CD boundary.
 - Read-only RAG pattern memory and citation boundaries.
 
 Current docs:
