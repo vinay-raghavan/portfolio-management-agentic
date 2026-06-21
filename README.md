@@ -23,7 +23,8 @@ Primary constraints:
 - Broker/provider credentials may be used only for data fetching, never live order execution.
 - Existing projects and whitepapers are external references, not vendored source.
 - Docker Compose is the first deployment target.
-- Gemini is the first model provider, but the design must support local or OpenAI-compatible providers such as Ollama later.
+- Gemini is the first model provider, but the design must support other hosted and local providers such as Claude, OpenAI-compatible APIs, and Ollama later.
+- ADK is the first capstone runtime, but the reusable tool, policy, skill, and eval layers must remain portable to Codex, Claude Code, and generic MCP clients.
 
 ## Planned Structure
 
@@ -32,6 +33,7 @@ Primary constraints:
 - `apps/web`: Optional capstone UI or thin agent console.
 - `packages/policy`: Shared action-tier and safety policy logic.
 - `packages/model-provider`: Model provider configuration and adapter contracts.
+- `packages/agent-platform`: Agent runtime and coding-agent handoff contracts.
 - `packages/domain`: Shared typed contracts for portfolio, signals, strategy, and risk concepts.
 - `packages/evals`: Agent eval datasets, rubrics, and trajectory checks.
 - `packages/shared`: Cross-service utilities when needed.
