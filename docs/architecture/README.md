@@ -7,6 +7,6 @@ Initial topics:
 - Agent and sub-agent topology.
 - MCP tool catalog and action tiers.
 - Policy enforcement boundary.
+- Model provider abstraction for Gemini, Ollama, and OpenAI-compatible endpoints.
 - Demo data contracts.
 - Docker Compose service graph.
-
