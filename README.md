@@ -10,6 +10,7 @@ Agentic portfolio and paper-trading workbench for the Kaggle AI Agents capstone.
 - No copied portfolio data.
 - No broker trading credentials.
 - No live trading.
+- Gitflow-style branching is enabled: `main` is release-only, `develop` is the integration branch, and active work happens on topic branches from `develop`.
 
 ## Repository Intent
 
@@ -47,3 +48,12 @@ After this repo boundary is approved:
 3. Load the scaffold skill.
 5. Start with MCP policy tests and negative safety evals.
 
+## Branching Model
+
+- `main`: locked release line. Release commits merge here from `develop`.
+- `develop`: default integration branch.
+- `feature/*`: new work branched from `develop`, merged back into `develop`.
+- `fix/*`: defect fixes branched from `develop`, merged back into `develop`.
+- `release/*`: optional stabilization branches when preparing a release merge into `main`.
+
+Current active branch: `feature/agentic-scaffold`.
