@@ -18,7 +18,14 @@ def test_live_order_and_broker_token_tools_are_forbidden() -> None:
 
 
 def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
-    for tool_name in ("get_portfolio_summary", "draft_paper_strategy"):
+    for tool_name in (
+        "get_portfolio_summary",
+        "get_watchlist_snapshot",
+        "get_signal_summary",
+        "get_research_digest",
+        "create_pre_market_briefing",
+        "draft_paper_strategy",
+    ):
         decision = authorize_tool_call(tool_name)
 
         assert decision.allowed is True
@@ -46,4 +53,3 @@ def test_redaction_removes_sensitive_values() -> None:
         "token": "[REDACTED]",
         "nested": {"client_secret": "[REDACTED]", "safe": "value"},
     }
-

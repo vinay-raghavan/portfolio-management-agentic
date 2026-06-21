@@ -58,6 +58,76 @@ class ScreenerCandidate:
 
 
 @dataclass(frozen=True)
+class WatchlistItem:
+    symbol: str
+    last_price: float
+    change_percent: float
+    setup: str
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class WatchlistSnapshot:
+    session: str
+    source: str
+    items: list[WatchlistItem]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "session": self.session,
+            "source": self.source,
+            "items": [item.to_dict() for item in self.items],
+            "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True)
+class MarketSignal:
+    label: str
+    value: str
+    interpretation: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class SignalSummary:
+    regime: str
+    confidence: float
+    index_moves: dict[str, float]
+    breadth: dict[str, float | int | str]
+    signals: list[MarketSignal]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "regime": self.regime,
+            "confidence": self.confidence,
+            "index_moves": self.index_moves,
+            "breadth": self.breadth,
+            "signals": [signal.to_dict() for signal in self.signals],
+            "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True)
+class ResearchDigest:
+    theme: str
+    source: str
+    notes: list[str]
+    counterevidence: list[str]
+    citations: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class StrategyDraft:
     strategy_id: str
     symbol: str
@@ -81,3 +151,30 @@ class RiskReview:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+
+@dataclass(frozen=True)
+class PreMarketBriefing:
+    session: str
+    mode: str
+    source: str
+    portfolio: PortfolioSummary
+    watchlist: WatchlistSnapshot
+    signal_summary: SignalSummary
+    research_digest: ResearchDigest
+    risk_review: RiskReview
+    suggested_review_actions: list[str]
+    non_goals: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "session": self.session,
+            "mode": self.mode,
+            "source": self.source,
+            "portfolio": self.portfolio.to_dict(),
+            "watchlist": self.watchlist.to_dict(),
+            "signal_summary": self.signal_summary.to_dict(),
+            "research_digest": self.research_digest.to_dict(),
+            "risk_review": self.risk_review.to_dict(),
+            "suggested_review_actions": self.suggested_review_actions,
+            "non_goals": self.non_goals,
+        }

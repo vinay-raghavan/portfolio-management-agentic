@@ -29,6 +29,9 @@ class PolicyDecision:
 ACTION_TIERS: dict[str, ActionTier] = {
     "get_portfolio_summary": ActionTier.READ_ONLY,
     "get_watchlist_snapshot": ActionTier.READ_ONLY,
+    "get_signal_summary": ActionTier.READ_ONLY,
+    "get_research_digest": ActionTier.READ_ONLY,
+    "create_pre_market_briefing": ActionTier.READ_ONLY,
     "run_momentum_screener": ActionTier.READ_ONLY,
     "get_recommendation_explanation": ActionTier.READ_ONLY,
     "get_risk_review": ActionTier.READ_ONLY,
@@ -113,4 +116,3 @@ def redact_sensitive(value: Any) -> Any:
         return [redact_sensitive(item) for item in value]
 
     return value
-

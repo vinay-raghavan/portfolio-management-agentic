@@ -24,7 +24,7 @@ Start with 1-2 eval cases, run `agents-cli eval generate`, then `agents-cli eval
 Run `uv run pytest tests/unit tests/integration`. Fix issues until all tests pass.
 
 ### Phase 5: Deploy to Dev
-**Requires explicit human approval.** Run `agents-cli deploy` only after user confirms. See the **Deployment Guide** for details.
+**Requires explicit human approval.** Do not deploy by default. The current capstone runtime is local Compose; cloud deployment needs a separate release gate.
 
 ### Phase 6: Production Deployment
 Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline with `agents-cli infra cicd`).
@@ -54,6 +54,7 @@ Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline 
 
 - **Code preservation**: Only modify code directly targeted by the user's request. Preserve all surrounding code, config values (e.g., `model`), comments, and formatting.
 - **NEVER change the model** unless explicitly asked.
+- **Trading boundary**: all tools must remain paper-only, synthetic-demo-safe, or read-only unless the policy layer explicitly classifies otherwise.
 - **Model 404 errors**: Fix `GOOGLE_CLOUD_LOCATION` (e.g., `global` instead of `us-east1`), not the model name.
 - **ADK tool imports**: Import the tool instance, not the module: `from google.adk.tools.load_web_page import load_web_page`
 - **Run Python with `uv`**: `uv run python script.py`. Run `agents-cli install` first.

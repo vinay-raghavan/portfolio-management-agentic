@@ -33,10 +33,14 @@ for relative_path in (
         sys.path.insert(0, package_path)
 
 from portfolio_mcp.tools import (  # noqa: E402
+    create_pre_market_briefing,
     create_paper_trade_proposal,
     draft_paper_strategy,
     get_portfolio_summary,
+    get_research_digest,
     get_risk_review,
+    get_signal_summary,
+    get_watchlist_snapshot,
     run_momentum_screener,
 )
 
@@ -93,7 +97,8 @@ root_agent = Agent(
     instruction="""You are Portfolio Management Agentic, a portfolio and paper-trading copilot.
 
 Core rules:
-- Use tools for portfolio, screener, strategy, and risk facts.
+- Use tools for portfolio, watchlist, signal, research, screener, strategy, and risk facts.
+- For pre-market briefing requests, use the pre-market briefing tool or collect portfolio, watchlist, signal, research, and risk context before answering.
 - Treat all portfolio data as synthetic demo data unless explicitly configured otherwise.
 - Paper trading and simulation only.
 - Never place live trades.
@@ -104,6 +109,10 @@ Core rules:
 """,
     tools=[
         get_portfolio_summary,
+        get_watchlist_snapshot,
+        get_signal_summary,
+        get_research_digest,
+        create_pre_market_briefing,
         run_momentum_screener,
         get_risk_review,
         draft_paper_strategy,

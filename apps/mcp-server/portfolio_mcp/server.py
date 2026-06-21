@@ -4,10 +4,14 @@ import os
 
 from .tools import (
     assert_exposed_tools_are_safe,
+    create_pre_market_briefing,
     create_paper_trade_proposal,
     draft_paper_strategy,
     get_portfolio_summary,
+    get_research_digest,
     get_risk_review,
+    get_signal_summary,
+    get_watchlist_snapshot,
     run_momentum_screener,
 )
 
@@ -40,6 +44,10 @@ def build_server():
         stateless_http=os.getenv("MCP_STATELESS_HTTP", "true").lower() == "true",
     )
     server.tool()(get_portfolio_summary)
+    server.tool()(get_watchlist_snapshot)
+    server.tool()(get_signal_summary)
+    server.tool()(get_research_digest)
+    server.tool()(create_pre_market_briefing)
     server.tool()(run_momentum_screener)
     server.tool()(get_risk_review)
     server.tool()(draft_paper_strategy)

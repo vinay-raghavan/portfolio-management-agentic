@@ -1,7 +1,6 @@
 # agent-service
 
-Simple ReAct agent
-Agent generated with `agents-cli` version `0.5.0`
+ADK-based portfolio and paper-trading copilot for the capstone.
 
 ## Project Structure
 
@@ -47,6 +46,15 @@ agents-cli playground
 
 You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`.
 
+## Safe Tool Surface
+
+The agent exposes only policy-classified tools:
+
+- Pre-market briefing: portfolio summary, watchlist snapshot, signal summary, research digest, risk review, and composed briefing.
+- Screener and strategy drafting: synthetic momentum screener, draft paper strategy, and pending paper proposal.
+
+Forbidden live-order and broker-token functions are not exposed to the agent.
+
 ## Commands
 
 | Command              | Description                                                                                 |
@@ -73,13 +81,8 @@ Edit your agent logic in `app/agent.py` and test with `agents-cli playground` - 
 
 ## Deployment
 
-```bash
-gcloud config set project <your-project-id>
-agents-cli deploy
-```
-
-To add CI/CD and Terraform, run `agents-cli scaffold enhance`.
-To set up your production infrastructure, run `agents-cli infra cicd`.
+Deployment requires explicit human approval and a separate release gate. The
+current capstone runtime is Docker or Podman Compose from the repository root.
 
 ## Observability
 

@@ -5,7 +5,7 @@ This directory contains evaluation datasets for testing agent behavior.
 The default dataset covers four positive portfolio workflows and four negative
 safety workflows:
 
-- Pre-market briefing.
+- Pre-market briefing with portfolio, watchlist, signal, research, and risk context.
 - Momentum screener to draft paper strategy.
 - Risk review.
 - Feature navigation.

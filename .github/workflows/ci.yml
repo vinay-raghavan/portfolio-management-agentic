@@ -108,10 +108,14 @@ jobs:
           from mcp.client.streamable_http import streamable_http_client
 
           EXPECTED = {
+              "create_pre_market_briefing",
               "create_paper_trade_proposal",
               "draft_paper_strategy",
               "get_portfolio_summary",
+              "get_research_digest",
               "get_risk_review",
+              "get_signal_summary",
+              "get_watchlist_snapshot",
               "run_momentum_screener",
           }
           FORBIDDEN = {"place_live_order", "get_broker_trading_token"}

@@ -1,6 +1,18 @@
 from __future__ import annotations
 
-from .models import Holding, PortfolioSummary, RiskReview, ScreenerCandidate, StrategyDraft
+from .models import (
+    Holding,
+    MarketSignal,
+    PortfolioSummary,
+    PreMarketBriefing,
+    ResearchDigest,
+    RiskReview,
+    ScreenerCandidate,
+    SignalSummary,
+    StrategyDraft,
+    WatchlistItem,
+    WatchlistSnapshot,
+)
 
 DEMO_HOLDINGS = [
     Holding("INFY", 12, 1410.0, 1502.5, "Information Technology"),
@@ -60,6 +72,134 @@ def run_demo_momentum_screener(limit: int) -> list[ScreenerCandidate]:
     return candidates[: max(0, limit)]
 
 
+def get_demo_watchlist_snapshot() -> WatchlistSnapshot:
+    return WatchlistSnapshot(
+        session="pre_market",
+        source="synthetic_demo",
+        items=[
+            WatchlistItem(
+                symbol="TATAMOTORS",
+                last_price=992.4,
+                change_percent=1.18,
+                setup="breakout-continuation",
+                notes=[
+                    "Synthetic watchlist candidate also appears in momentum screen.",
+                    "Needs confirmation above prior session high before any paper draft.",
+                ],
+            ),
+            WatchlistItem(
+                symbol="SBIN",
+                last_price=821.7,
+                change_percent=0.42,
+                setup="pullback-to-support",
+                notes=[
+                    "Improving relative strength in demo signals.",
+                    "Financials exposure should be reviewed before sizing.",
+                ],
+            ),
+            WatchlistItem(
+                symbol="SUNPHARMA",
+                last_price=1518.2,
+                change_percent=-0.22,
+                setup="defensive-trend-resumption",
+                notes=[
+                    "Defensive diversification candidate in synthetic data.",
+                    "Momentum evidence is weaker than top watchlist names.",
+                ],
+            ),
+        ],
+        notes=[
+            "Synthetic watchlist only; no live market feed is connected.",
+            "Use as pre-market review context, not as trading instruction.",
+        ],
+    )
+
+
+def get_demo_signal_summary() -> SignalSummary:
+    return SignalSummary(
+        regime="constructive",
+        confidence=0.68,
+        index_moves={
+            "NIFTY 50": 0.34,
+            "NIFTY 500": 0.27,
+            "BANK NIFTY": 0.12,
+            "INDIA VIX": -1.8,
+        },
+        breadth={
+            "sample": 500,
+            "above_20ema_pct": 57.4,
+            "above_50ema_pct": 53.2,
+            "advance_decline_ratio": 1.24,
+        },
+        signals=[
+            MarketSignal(
+                label="Index trend",
+                value="NIFTY 50 above short-term average",
+                interpretation="Bias supports reviewing momentum candidates first.",
+            ),
+            MarketSignal(
+                label="Volatility",
+                value="INDIA VIX softening in synthetic snapshot",
+                interpretation="Paper risk can stay enabled, but stops still need review.",
+            ),
+            MarketSignal(
+                label="Breadth",
+                value="More than half the demo universe above 20EMA",
+                interpretation="Constructive but not broad enough to ignore concentration risk.",
+            ),
+        ],
+        notes=[
+            "Signal summary is modeled after market setup review scripts but uses synthetic data.",
+            "No provider credentials, live quotes, or account positions are accessed.",
+        ],
+    )
+
+
+def get_demo_research_digest() -> ResearchDigest:
+    return ResearchDigest(
+        theme="Momentum continuation with risk controls",
+        source="synthetic_demo",
+        notes=[
+            "Breakout candidates should be checked against volume confirmation.",
+            "Pullback candidates should remain above key moving-average support.",
+            "Defensive candidates can reduce sector concentration if signal quality is acceptable.",
+        ],
+        counterevidence=[
+            "Information Technology concentration is already high in the demo portfolio.",
+            "High ATR candidates need reduced paper sizing.",
+        ],
+        citations=[
+            "synthetic://pattern-library/breakout-continuation-v1",
+            "synthetic://pattern-library/pullback-to-support-v1",
+            "synthetic://policy/paper-trading-only-v1",
+        ],
+    )
+
+
+def create_demo_pre_market_briefing() -> PreMarketBriefing:
+    return PreMarketBriefing(
+        session="pre_market",
+        mode="read_only",
+        source="synthetic_demo",
+        portfolio=get_demo_portfolio_summary(),
+        watchlist=get_demo_watchlist_snapshot(),
+        signal_summary=get_demo_signal_summary(),
+        research_digest=get_demo_research_digest(),
+        risk_review=get_demo_risk_review(),
+        suggested_review_actions=[
+            "Review sector concentration before prioritizing candidates.",
+            "Compare top watchlist setups against signal confidence and counterevidence.",
+            "Confirm paper risk switches remain enabled and live trading remains disabled.",
+            "Draft paper strategies only after the user explicitly asks for a candidate.",
+        ],
+        non_goals=[
+            "No live trading.",
+            "No broker-token access.",
+            "No simulated execution without a separate human approval step.",
+        ],
+    )
+
+
 def draft_strategy(symbol: str, rationale: str) -> StrategyDraft:
     normalized_symbol = symbol.upper().strip()
     return StrategyDraft(
@@ -94,4 +234,3 @@ def get_demo_risk_review() -> RiskReview:
             "Review position sizing for high-ATR candidates.",
         ],
     )
-

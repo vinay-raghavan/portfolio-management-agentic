@@ -1,20 +1,45 @@
 from .demo import (
+    create_demo_pre_market_briefing,
     draft_strategy,
     get_demo_portfolio_summary,
+    get_demo_research_digest,
     get_demo_risk_review,
+    get_demo_signal_summary,
+    get_demo_watchlist_snapshot,
     run_demo_momentum_screener,
 )
-from .models import Holding, PortfolioSummary, RiskReview, ScreenerCandidate, StrategyDraft
+from .models import (
+    Holding,
+    MarketSignal,
+    PortfolioSummary,
+    PreMarketBriefing,
+    ResearchDigest,
+    RiskReview,
+    ScreenerCandidate,
+    SignalSummary,
+    StrategyDraft,
+    WatchlistItem,
+    WatchlistSnapshot,
+)
 
 __all__ = [
     "Holding",
+    "MarketSignal",
     "PortfolioSummary",
+    "PreMarketBriefing",
+    "ResearchDigest",
     "RiskReview",
     "ScreenerCandidate",
+    "SignalSummary",
     "StrategyDraft",
+    "WatchlistItem",
+    "WatchlistSnapshot",
+    "create_demo_pre_market_briefing",
     "draft_strategy",
     "get_demo_portfolio_summary",
+    "get_demo_research_digest",
     "get_demo_risk_review",
+    "get_demo_signal_summary",
+    "get_demo_watchlist_snapshot",
     "run_demo_momentum_screener",
 ]
-
