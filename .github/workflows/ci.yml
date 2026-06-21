@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+      - "feature/**"
+      - "fix/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.8.13"
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  root-contracts:
+    name: Root contracts and security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install root dependencies
+        run: uv sync --frozen --dev
+
+      - name: Run root tests
+        run: uv run pytest tests
+
+  agent-service:
+    name: Agent service tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/agent-service
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install agent-service dependencies
+        run: uv sync --frozen --dev
+
+      - name: Run agent-service tests
+        run: uv run pytest tests/unit tests/integration
+
+  container-smoke:
+    name: Container smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Validate Compose file
+        run: docker compose config --quiet
+
+      - name: Build runtime images
+        run: docker compose build agent-service mcp-server
+
+      - name: Start runtime services
+        run: docker compose up -d agent-service mcp-server
+
+      - name: Verify agent service readiness
+        run: |
+          curl --retry 20 --retry-all-errors --retry-delay 2 --fail \
+            http://127.0.0.1:8000/docs >/dev/null
+
+      - name: Verify MCP safe tool catalog
+        run: |
+          uv run python - <<'PY'
+          import asyncio
+
+          from mcp import ClientSession
+          from mcp.client.streamable_http import streamable_http_client
+
+          EXPECTED = {
+              "create_paper_trade_proposal",
+              "draft_paper_strategy",
+              "get_portfolio_summary",
+              "get_risk_review",
+              "run_momentum_screener",
+          }
+          FORBIDDEN = {"place_live_order", "get_broker_trading_token"}
+
+          async def main() -> None:
+              async with streamable_http_client("http://127.0.0.1:8081/mcp") as (
+                  read,
+                  write,
+                  _,
+              ):
+                  async with ClientSession(read, write) as session:
+                      await session.initialize()
+                      result = await session.list_tools()
+                      tool_names = {tool.name for tool in result.tools}
+                      assert tool_names == EXPECTED, tool_names
+                      assert tool_names.isdisjoint(FORBIDDEN), tool_names
+
+          asyncio.run(main())
+          PY
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color agent-service mcp-server
+
+      - name: Stop runtime services
+        if: always()
+        run: docker compose down --volumes --remove-orphans

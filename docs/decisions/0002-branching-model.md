@@ -20,10 +20,6 @@ Use a Gitflow-style branching model:
 
 The GitHub repository default branch is `develop`.
 
-Current active branch for scaffold work:
-
-`feature/agentic-scaffold`
-
 ## Consequences
 
 - Future agent work must begin from `develop` or a current topic branch based on `develop`.
