@@ -39,6 +39,6 @@ MCP and policy enforcement remain outside the model provider. The model can requ
 
 ## Open Questions
 
-1. Should Ollama run as a Docker Compose profile inside this repo or be treated as an external local dependency?
+1. Should Ollama run as a Docker or Podman Compose profile inside this repo or be treated as an external local dependency?
 2. Which local model should be the first Ollama target once the Gemini path is stable?
 3. Should local-provider support require native tool calling, or should the agent use a deterministic tool-routing fallback?

@@ -1,3 +1,7 @@
+from ._paths import configure_monorepo_paths
+
+configure_monorepo_paths()
+
 from .tools import (
     EXPOSED_TOOL_NAMES,
     create_paper_trade_proposal,
@@ -19,4 +23,3 @@ __all__ = [
     "place_live_order",
     "run_momentum_screener",
 ]
-

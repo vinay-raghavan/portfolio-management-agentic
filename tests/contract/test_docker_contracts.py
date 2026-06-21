@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+
+def _compose_command() -> list[str] | None:
+    if shutil.which("docker") is not None:
+        return ["docker", "compose"]
+    if shutil.which("podman") is not None:
+        return ["podman", "compose"]
+    return None
+
+
+def test_root_env_example_uses_safe_portable_defaults() -> None:
+    env_example = Path(".env.example").read_text()
+
+    assert "LLM_PROVIDER=gemini" in env_example
+    assert "MCP_TRANSPORT=streamable-http" in env_example
+    assert "OLLAMA_BASE_URL=http://ollama:11434" in env_example
+    assert "FYERS" not in env_example.upper()
+
+
+def test_dockerignore_excludes_local_references_and_env_files() -> None:
+    dockerignore = Path(".dockerignore").read_text()
+
+    for ignored in (
+        ".env",
+        ".env.*",
+        "local/",
+        "local-references/",
+        "private-references/",
+        "references/local/",
+        "references/private/",
+    ):
+        assert ignored in dockerignore
+    assert "!.env.example" in dockerignore
+
+
+def test_compose_config_is_valid_with_available_container_runtime() -> None:
+    compose_command = _compose_command()
+    if compose_command is None:
+        pytest.skip("Docker or Podman is not installed.")
+
+    result = subprocess.run(
+        [*compose_command, "config", "--quiet"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr

@@ -23,7 +23,7 @@ The portable core consists of:
 - Agentic skills and handoff prompts.
 - Eval datasets and rubrics.
 - Safety and refusal policy.
-- Docker Compose startup flow.
+- Docker or Podman Compose startup flow.
 
 Target platform paths:
 

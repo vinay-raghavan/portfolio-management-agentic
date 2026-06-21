@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from .tools import (
     assert_exposed_tools_are_safe,
     create_paper_trade_proposal,
@@ -15,6 +17,10 @@ except ImportError:  # pragma: no cover - exercised only before MCP deps are ins
     FastMCP = None  # type: ignore[assignment]
 
 
+def _mcp_port() -> int:
+    return int(os.getenv("MCP_PORT", "8081"))
+
+
 def build_server():
     """Build the portfolio MCP server.
 
@@ -25,7 +31,14 @@ def build_server():
     if FastMCP is None:
         raise RuntimeError("The mcp package is required to run the MCP server.")
 
-    server = FastMCP("portfolio-management-agentic")
+    server = FastMCP(
+        "portfolio-management-agentic",
+        host=os.getenv("MCP_HOST", "127.0.0.1"),
+        port=_mcp_port(),
+        streamable_http_path=os.getenv("MCP_STREAMABLE_HTTP_PATH", "/mcp"),
+        sse_path=os.getenv("MCP_SSE_PATH", "/sse"),
+        stateless_http=os.getenv("MCP_STATELESS_HTTP", "true").lower() == "true",
+    )
     server.tool()(get_portfolio_summary)
     server.tool()(run_momentum_screener)
     server.tool()(get_risk_review)
@@ -37,8 +50,14 @@ def build_server():
 server = build_server() if FastMCP is not None else None
 
 
-if __name__ == "__main__":
+def main() -> None:
     if server is None:
         raise SystemExit("Install MCP dependencies before running the server.")
-    server.run()
+    transport = os.getenv("MCP_TRANSPORT", "stdio")
+    if transport not in {"stdio", "sse", "streamable-http"}:
+        raise SystemExit(f"Unsupported MCP_TRANSPORT: {transport}")
+    server.run(transport=transport)
 
+
+if __name__ == "__main__":
+    main()
