@@ -19,4 +19,3 @@ Useful starting points:
 - Policy code: `packages/policy`
 - MCP tools: `apps/mcp-server`
 - ADK prototype: `apps/agent-service`
-

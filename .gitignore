@@ -34,8 +34,18 @@ data/
 *.token
 *.credentials
 
+# Local-only references and private notes
+local/
+.local/
+local-references/
+private-references/
+references/local/
+references/private/
+LOCAL_NOTES.md
+*.local.md
+*.private.md
+
 # OS/editor
 .DS_Store
 .idea/
 .vscode/
-

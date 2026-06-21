@@ -6,17 +6,15 @@ Accepted.
 
 ## Context
 
+The capstone should be a clean, standalone agentic project. The work needs ADK structure, MCP tooling, safety gates, evals, Docker packaging, and Kaggle-specific docs without mixing in private source, local data, or live-trading configuration.
 
 ## Decision
 
-Create a new local repository folder at:
-
-
+Use this repository as the capstone boundary. Keep it self-contained and public-safe.
 
 ## Consequences
 
 - The capstone has a clean boundary and can be pushed to `github.com/vinay-raghavan/portfolio-management-agentic`.
-- The public repo can avoid accidental leakage of real data, credentials, or old app internals.
-- Any integration with the old app must happen through documented contracts or explicit adapters.
+- The repo can avoid accidental leakage of real data, credentials, local paths, or private internals.
+- Any integration with external services must happen through documented contracts or explicit adapters.
 - The first implementation slice should use demo data and policy-controlled MCP tools.
-

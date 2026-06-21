@@ -2,6 +2,7 @@
 
 Agentic portfolio and paper-trading workbench for the Kaggle AI Agents capstone.
 
+This is a standalone repository boundary. Implementation should use documented API contracts, bounded tools, demo data, and explicit safety policy.
 
 ## Current State
 
@@ -22,7 +23,7 @@ Primary constraints:
 - Paper trading and simulation only.
 - All major app features should be reachable through agent workflows.
 - Broker/provider credentials may be used only for data fetching, never live order execution.
-- Existing projects and whitepapers are external references, not vendored source.
+- Private source, local paths, and real financial data are excluded from the repo.
 - Docker Compose is the first deployment target.
 - Gemini is the first model provider, but the design must support other hosted and local providers such as Claude, OpenAI-compatible APIs, and Ollama later.
 - ADK is the first capstone runtime, but the reusable tool, policy, skill, and eval layers must remain portable to Codex, Claude Code, and generic MCP clients.
@@ -42,7 +43,7 @@ Primary constraints:
 - `infra`: Docker and future deployment assets.
 - `tests`: Contract, security, and integration tests.
 - `demo`: Synthetic data and demo scenarios only.
-- `references`: Pointers to external reference material, not copied source.
+- `references`: Public-safe reference policy and approved public links.
 
 ## Next Step
 
