@@ -9,12 +9,14 @@ Initial topics:
 - Policy enforcement boundary.
 - Model provider abstraction for Gemini, Ollama, and OpenAI-compatible endpoints.
 - Agent platform abstraction for ADK, Codex, Claude Code, and generic MCP clients.
-- Demo data contracts.
+- Offline-safe data contracts.
 - Docker or Podman Compose service graph.
 - GitHub Actions CI/CD boundary.
 - Read-only RAG pattern memory and citation boundaries.
+- Product data, screener, factor-evidence, and pattern-foundation plan.
 
 Current docs:
 
 - `tool-catalog.md`
 - `verification.md`
+- `../product/product-data-pattern-foundation.md`

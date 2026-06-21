@@ -17,4 +17,4 @@ Use this repository as the capstone boundary. Keep it self-contained and public-
 - The capstone has a clean boundary and can be pushed to `github.com/vinay-raghavan/portfolio-management-agentic`.
 - The repo can avoid accidental leakage of real data, credentials, local paths, or private internals.
 - Any integration with external services must happen through documented contracts or explicit adapters.
-- The first implementation slice should use demo data and policy-controlled MCP tools.
+- The first implementation slice should use offline-safe data and policy-controlled MCP tools.

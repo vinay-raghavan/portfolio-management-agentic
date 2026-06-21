@@ -19,7 +19,7 @@ The portable core consists of:
 - MCP tool server.
 - MCP tool schemas.
 - Action-tier policy.
-- Demo data contracts.
+- Offline-safe data contracts.
 - Agentic skills and handoff prompts.
 - Eval datasets and rubrics.
 - Safety and refusal policy.

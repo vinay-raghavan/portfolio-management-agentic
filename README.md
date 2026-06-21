@@ -1,8 +1,8 @@
 # Portfolio Management Agentic
 
-Agentic portfolio and paper-trading workbench for the Kaggle AI Agents capstone.
+Agentic portfolio research and paper-trading workbench for the Kaggle AI Agents capstone.
 
-This is a standalone repository boundary. Implementation should use documented API contracts, bounded tools, demo data, and explicit safety policy.
+This is a standalone repository boundary. Implementation should use documented API contracts, bounded tools, configured data adapters, offline-safe fixtures, and explicit safety policy.
 
 ## Current State
 
@@ -18,13 +18,13 @@ This is a standalone repository boundary. Implementation should use documented A
 
 ## Repository Intent
 
-The project will add an ADK-based agent layer, MCP policy server, eval suite, and capstone demo around a portfolio-management and paper-trading workflow.
+The project will become a functioning agentic portfolio research and paper-trading tool. The Kaggle demo is one evidence path, not the product boundary. The system should support real configured data providers, deterministic analysis, explainable strategy evidence, a persistent paper-trading ledger, and policy-controlled agent workflows while forbidding live order placement.
 
 ## North Star
 
 The end goal is a full agentic portfolio and paper-trading web application. It should cover dashboard, portfolio, watchlist, screeners, research, signals, strategies, backtests, risk, paper trades, reports, and settings while making every major capability reachable through agent workflows.
 
-Source-system scripts and workflows are reference material only. Useful logic should be rewritten as typed domain functions, MCP tools, scheduled jobs, RAG pattern cards, evals, or UI flows with synthetic fixtures and policy tests. Live-account assumptions, broker-token access, direct execution paths, and local state should not be imported.
+Source-system scripts and workflows are reference material only. Useful logic should be rewritten as typed domain functions, MCP tools, scheduled jobs, RAG pattern cards, evals, or UI flows with offline-safe fixtures and policy tests. Live-account assumptions, broker-token access, direct execution paths, and local state should not be imported.
 
 Primary constraints:
 
@@ -50,18 +50,19 @@ Primary constraints:
 - `docs`: Architecture, capstone, decisions, tool catalog, and safety docs.
 - `infra`: Container and future deployment assets.
 - `tests`: Contract, security, and integration tests.
-- `demo`: Synthetic data and demo scenarios only.
+- `demo`: Offline-safe fixtures and public demo scenarios only.
 - `references`: Public-safe reference policy and approved public links.
 
 ## Next Step
 
 Next implementation milestones:
 
-1. Inventory and classify source-system scripts for safe repurposing.
-2. Add read-only RAG pattern memory for strategy playbooks and cited explanations.
-3. Add backtest and recommendation-explanation tool contracts.
-4. Run and tune model-backed agent evals when provider credentials are configured.
-5. Build the first thin web console after the matching MCP/domain workflows are tested.
+1. Add the product data and pattern foundation: adapter contracts, screener engine plan, factor evidence model, public source registry, and paper-ledger requirements.
+2. Inventory and classify source-system scripts for safe repurposing, starting with screener and strategy-inference workflows.
+3. Add read-only RAG pattern memory for strategy playbooks, public citations, and cited factor explanations.
+4. Add backtest, recommendation-explanation, and paper-ledger tool contracts.
+5. Run and tune model-backed agent evals when provider credentials are configured.
+6. Build the first thin web console after the matching MCP/domain workflows are tested.
 
 ## Verification
 
