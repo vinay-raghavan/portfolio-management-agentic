@@ -6,7 +6,7 @@ Accepted.
 
 ## Context
 
-The capstone should be a clean, standalone agentic project. The work needs ADK structure, MCP tooling, safety gates, evals, Docker packaging, and Kaggle-specific docs without mixing in private source, local data, or live-trading configuration.
+The capstone should be a clean, standalone agentic project. The work needs ADK structure, MCP tooling, safety gates, evals, container packaging, and Kaggle-specific docs without mixing in private source, local data, or live-trading configuration.
 
 ## Decision
 

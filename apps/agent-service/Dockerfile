@@ -16,11 +16,15 @@ FROM python:3.12-slim
 
 RUN pip install --no-cache-dir uv==0.8.13
 
-WORKDIR /code
+WORKDIR /workspace
 
-COPY ./pyproject.toml ./README.md ./uv.lock* ./
+COPY ./apps/agent-service/pyproject.toml ./apps/agent-service/README.md ./apps/agent-service/uv.lock* ./apps/agent-service/
+COPY ./apps/agent-service/app ./apps/agent-service/app
+COPY ./apps/mcp-server/portfolio_mcp ./apps/mcp-server/portfolio_mcp
+COPY ./packages/domain ./packages/domain
+COPY ./packages/policy ./packages/policy
 
-COPY ./app ./app
+WORKDIR /workspace/apps/agent-service
 
 RUN uv sync --frozen
 
@@ -30,6 +34,6 @@ ENV COMMIT_SHA=${COMMIT_SHA}
 ARG AGENT_VERSION=0.0.0
 ENV AGENT_VERSION=${AGENT_VERSION}
 
-EXPOSE 8080
+EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uv", "run", "uvicorn", "app.fast_api_app:app", "--host", "0.0.0.0", "--port", "8000"]

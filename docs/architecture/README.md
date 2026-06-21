@@ -10,7 +10,8 @@ Initial topics:
 - Model provider abstraction for Gemini, Ollama, and OpenAI-compatible endpoints.
 - Agent platform abstraction for ADK, Codex, Claude Code, and generic MCP clients.
 - Demo data contracts.
-- Docker Compose service graph.
+- Docker or Podman Compose service graph.
+- Read-only RAG pattern memory and citation boundaries.
 
 Current docs:
 

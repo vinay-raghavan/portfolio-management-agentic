@@ -1,9 +1,8 @@
-# Local environment
-.env
-.env.*
-!.env.example
-
-# Python
+.git/
+.venv/
+**/.venv/
+venv/
+**/venv/
 __pycache__/
 **/__pycache__/
 *.py[cod]
@@ -13,25 +12,17 @@ __pycache__/
 **/.ruff_cache/
 .mypy_cache/
 **/.mypy_cache/
-.venv/
-**/.venv/
-venv/
-**/venv/
+.DS_Store
 
-# JavaScript
-node_modules/
-.next/
-dist/
-build/
-coverage/
+.env
+.env.*
+!.env.example
 
-# Generated outputs
 artifacts/
 reports/generated/
 eval-runs/
 traces/
 
-# Local data and secrets
 data/
 *.sqlite
 *.db
@@ -40,7 +31,6 @@ data/
 *.token
 *.credentials
 
-# Local-only references and private notes
 local/
 .local/
 local-references/
@@ -50,8 +40,3 @@ references/private/
 LOCAL_NOTES.md
 *.local.md
 *.private.md
-
-# OS/editor
-.DS_Store
-.idea/
-.vscode/

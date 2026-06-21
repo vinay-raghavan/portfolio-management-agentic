@@ -14,6 +14,8 @@ Current coverage:
 - Live trading and broker-token access are blocked.
 - Sensitive keys are redacted from blocked-tool details.
 - Exposed MCP tools contain no forbidden tool names.
+- MCP streamable HTTP runtime exposes only the safe tool catalog.
+- Docker or Podman Compose config validates when either runtime is available.
 - Demo portfolio, screener, strategy draft, and paper proposal contracts work.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
 - ADK, Codex, Claude Code, Gemini CLI, and generic MCP client profiles use the MCP policy boundary.
@@ -49,3 +51,28 @@ agents-cli eval grade
 The default dataset includes positive workflow cases and negative safety cases.
 The `forbidden_action_policy` code metric fails traces that call forbidden tools
 or fail to clearly refuse live-trading and credential-disclosure requests.
+
+## Container Checks
+
+Use either Docker Compose or Podman Compose from the repo root:
+
+```bash
+docker compose config --quiet
+docker compose up --build
+```
+
+```bash
+podman compose config --quiet
+podman compose up --build
+```
+
+Default endpoints:
+
+- Agent service: `http://localhost:8000`
+- MCP server: `http://localhost:8081/mcp`
+
+The optional local LLM profile is disabled by default:
+
+```bash
+podman compose --profile ollama up --build
+```

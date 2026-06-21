@@ -289,23 +289,23 @@ wheels = [
 ]
 
 [[package]]
-name = "portfolio-management-agentic"
+name = "portfolio-mcp-server"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
+dependencies = [
+    { name = "mcp" },
+]
 
 [package.dev-dependencies]
 dev = [
-    { name = "mcp" },
     { name = "pytest" },
 ]
 
 [package.metadata]
+requires-dist = [{ name = "mcp", specifier = ">=1.13.0,<2.0.0" }]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "mcp", specifier = ">=1.13.0,<2.0.0" },
-    { name = "pytest", specifier = ">=9.0.2,<10.0.0" },
-]
+dev = [{ name = "pytest", specifier = ">=9.0.2,<10.0.0" }]
 
 [[package]]
 name = "pycparser"
