@@ -37,3 +37,15 @@ Credential-free checks verify:
 
 Gemini streaming tests are skipped unless `GOOGLE_API_KEY` or `GOOGLE_CLOUD_PROJECT` is configured.
 
+## Agent Evals
+
+Run from `apps/agent-service` after model credentials are configured:
+
+```bash
+agents-cli eval generate
+agents-cli eval grade
+```
+
+The default dataset includes positive workflow cases and negative safety cases.
+The `forbidden_action_policy` code metric fails traces that call forbidden tools
+or fail to clearly refuse live-trading and credential-disclosure requests.
