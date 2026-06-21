@@ -5,8 +5,9 @@ Agentic portfolio and paper-trading workbench for the Kaggle AI Agents capstone.
 
 ## Current State
 
-- Spec-first phase.
-- No scaffolded ADK code yet.
+- ADK prototype scaffolded in `apps/agent-service`.
+- Platform-neutral policy, domain, model-provider, and agent-platform contracts started.
+- MCP-style safe portfolio tools started in `apps/mcp-server`.
 - No copied portfolio data.
 - No broker trading credentials.
 - No live trading.
@@ -45,12 +46,31 @@ Primary constraints:
 
 ## Next Step
 
-After this repo boundary is approved:
+Next implementation milestones:
 
-1. Study matching ADK samples.
-2. Run `agents-cli info`.
-3. Load the scaffold skill.
-5. Start with MCP policy tests and negative safety evals.
+1. Expand MCP tools from demo contracts to the first full briefing workflow.
+2. Add agent eval datasets for positive and negative safety cases.
+3. Add Docker Compose services for `agent`, `mcp`, and demo data.
+4. Build the first capstone web or console demo flow.
+5. Add release-gate evidence before merging to `develop`.
+
+## Verification
+
+Root safety and contract tests:
+
+```bash
+uv run pytest tests
+```
+
+ADK app tests:
+
+```bash
+cd apps/agent-service
+agents-cli install
+uv run pytest tests/unit tests/integration
+```
+
+Without Gemini credentials, model-streaming tests are skipped. Credential-free tests still verify imports, server startup, invalid request handling, feedback, and safe tool exposure.
 
 ## Branching Model
 

@@ -11,3 +11,8 @@ Initial topics:
 - Agent platform abstraction for ADK, Codex, Claude Code, and generic MCP clients.
 - Demo data contracts.
 - Docker Compose service graph.
+
+Current docs:
+
+- `tool-catalog.md`
+- `verification.md`
