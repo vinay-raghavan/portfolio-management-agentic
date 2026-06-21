@@ -9,6 +9,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - ADK prototype scaffolded in `apps/agent-service`.
 - Platform-neutral policy, domain, model-provider, and agent-platform contracts started.
 - MCP-style safe portfolio tools started in `apps/mcp-server` with streamable HTTP runtime support.
+- Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
 - Docker or Podman Compose runs the agent service, MCP server, and optional Ollama profile.
 - No copied portfolio data.
 - No broker trading credentials.
@@ -18,6 +19,12 @@ This is a standalone repository boundary. Implementation should use documented A
 ## Repository Intent
 
 The project will add an ADK-based agent layer, MCP policy server, eval suite, and capstone demo around a portfolio-management and paper-trading workflow.
+
+## North Star
+
+The end goal is a full agentic portfolio and paper-trading web application. It should cover dashboard, portfolio, watchlist, screeners, research, signals, strategies, backtests, risk, paper trades, reports, and settings while making every major capability reachable through agent workflows.
+
+Source-system scripts and workflows are reference material only. Useful logic should be rewritten as typed domain functions, MCP tools, scheduled jobs, RAG pattern cards, evals, or UI flows with synthetic fixtures and policy tests. Live-account assumptions, broker-token access, direct execution paths, and local state should not be imported.
 
 Primary constraints:
 
@@ -50,11 +57,11 @@ Primary constraints:
 
 Next implementation milestones:
 
-1. Expand MCP tools from demo contracts to the first full briefing workflow.
+1. Inventory and classify source-system scripts for safe repurposing.
 2. Add read-only RAG pattern memory for strategy playbooks and cited explanations.
-3. Add demo scenarios or a demo data service for richer capstone walkthroughs.
+3. Add backtest and recommendation-explanation tool contracts.
 4. Run and tune model-backed agent evals when provider credentials are configured.
-5. Build the first capstone web or console demo flow.
+5. Build the first thin web console after the matching MCP/domain workflows are tested.
 
 ## Verification
 

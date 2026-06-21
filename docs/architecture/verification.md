@@ -17,6 +17,7 @@ Current coverage:
 - MCP streamable HTTP runtime exposes only the safe tool catalog.
 - Docker or Podman Compose config validates when either runtime is available.
 - Demo portfolio, screener, strategy draft, and paper proposal contracts work.
+- Pre-market briefing contracts compose portfolio, watchlist, signal, research, and risk sections from synthetic data.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
 - ADK, Codex, Claude Code, Gemini CLI, and generic MCP client profiles use the MCP policy boundary.
 
@@ -32,7 +33,7 @@ uv run pytest tests/unit tests/integration
 Credential-free checks verify:
 
 - Agent imports without Google ADC.
-- The ADK agent exposes safe portfolio tools only.
+- The ADK agent exposes safe portfolio, briefing, screener, strategy, and risk tools only.
 - The FastAPI app starts without Google ADC.
 - Invalid request handling works.
 - Feedback endpoint works with local logging fallback.

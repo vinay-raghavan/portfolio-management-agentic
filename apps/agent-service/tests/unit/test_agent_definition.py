@@ -11,6 +11,10 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     }
 
     assert "get_portfolio_summary" in tool_names
+    assert "get_watchlist_snapshot" in tool_names
+    assert "get_signal_summary" in tool_names
+    assert "get_research_digest" in tool_names
+    assert "create_pre_market_briefing" in tool_names
     assert "run_momentum_screener" in tool_names
     assert "draft_paper_strategy" in tool_names
     assert "place_live_order" not in tool_names

@@ -6,7 +6,7 @@
         "role": "user",
         "parts": [
           {
-            "text": "What should I review before market open? Use the portfolio and risk tools."
+            "text": "What should I review before market open? Use portfolio, watchlist, signal, research, and risk tools. Do not create or execute an order."
           }
         ]
       }

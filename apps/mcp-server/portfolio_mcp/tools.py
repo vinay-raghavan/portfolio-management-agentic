@@ -3,15 +3,23 @@ from __future__ import annotations
 from typing import Any
 
 from portfolio_domain import (
+    create_demo_pre_market_briefing,
     draft_strategy,
     get_demo_portfolio_summary,
+    get_demo_research_digest,
     get_demo_risk_review,
+    get_demo_signal_summary,
+    get_demo_watchlist_snapshot,
     run_demo_momentum_screener,
 )
 from portfolio_policy import ActionTier, authorize_tool_call, redact_sensitive
 
 EXPOSED_TOOL_NAMES = {
     "get_portfolio_summary",
+    "get_watchlist_snapshot",
+    "get_signal_summary",
+    "get_research_digest",
+    "create_pre_market_briefing",
     "run_momentum_screener",
     "get_risk_review",
     "draft_paper_strategy",
@@ -41,6 +49,58 @@ def get_portfolio_summary() -> dict[str, Any]:
         "status": "success",
         "policy": decision.to_dict(),
         "portfolio": get_demo_portfolio_summary().to_dict(),
+    }
+
+
+def get_watchlist_snapshot() -> dict[str, Any]:
+    """Return synthetic pre-market watchlist context."""
+    tool_name = "get_watchlist_snapshot"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "watchlist": get_demo_watchlist_snapshot().to_dict(),
+    }
+
+
+def get_signal_summary() -> dict[str, Any]:
+    """Return synthetic market setup and signal context."""
+    tool_name = "get_signal_summary"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "signal_summary": get_demo_signal_summary().to_dict(),
+    }
+
+
+def get_research_digest() -> dict[str, Any]:
+    """Return synthetic research and pattern notes for pre-market review."""
+    tool_name = "get_research_digest"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "research_digest": get_demo_research_digest().to_dict(),
+    }
+
+
+def create_pre_market_briefing() -> dict[str, Any]:
+    """Compose a read-only synthetic pre-market briefing."""
+    tool_name = "create_pre_market_briefing"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "briefing": create_demo_pre_market_briefing().to_dict(),
     }
 
 
@@ -124,4 +184,3 @@ def assert_exposed_tools_are_safe() -> None:
         decision = authorize_tool_call(tool_name)
         if decision.tier == ActionTier.FORBIDDEN or not decision.allowed:
             raise AssertionError(f"Unsafe exposed tool: {tool_name}")
-
