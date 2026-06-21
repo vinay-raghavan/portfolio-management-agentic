@@ -1,21 +1,25 @@
-# Reference Map
+# Reference Policy
 
-This file records external references for the capstone. These paths are intentionally outside this repository boundary.
+This file records public-safe reference rules for the capstone.
 
+## Approved Reference Types
 
+- Public documentation.
+- Public sample repositories.
+- Manually written contracts and notes that contain no private paths or proprietary source.
+- Synthetic demo data created for this repo.
 
 ## Reference Rules
 
-- Use references to understand concepts, API shapes, feature coverage, and safety constraints.
 - Do not copy real portfolio data, local env files, broker credentials, or provider tokens.
-- If a small code pattern is intentionally reused later, document the file, reason, license/ownership assumption, and review status.
+- Do not include local absolute paths.
+- Do not import private source.
+- If a public code pattern is intentionally reused later, document the URL, reason, license/ownership assumption, and review status.
 
-## Initial Existing-App Areas To Study
+## Initial Public Areas To Study
 
-- Backend route catalog and auth boundaries.
-- Algo strategy and paper-trade proposal flows.
-- Screener and strategy inference flows.
-- Risk, kill-switch, and circuit-breaker flows.
-- Frontend pending proposal review flow.
-- Docker Compose service topology.
-
+- ADK agent samples.
+- MCP server examples.
+- Safety and approval workflow examples.
+- Agent evaluation examples.
+- Docker Compose service topology examples.
