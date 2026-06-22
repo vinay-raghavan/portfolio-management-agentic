@@ -324,6 +324,46 @@ class FactorStackExplanation:
 
 
 @dataclass(frozen=True)
+class RecommendationExplanation:
+    symbol: str
+    setup: str
+    mode: str
+    stance: str
+    confidence: float
+    evidence: list[str]
+    counterevidence: list[str]
+    risk_gates: list[GateResult]
+    missing_data: list[str]
+    factor_summary: dict[str, dict[str, Any]]
+    history_refs: dict[str, list[str]]
+    backtest_summary: dict[str, Any]
+    ledger_context: dict[str, Any]
+    citations: list[PatternCitation]
+    next_allowed_actions: list[str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "symbol": self.symbol,
+            "setup": self.setup,
+            "mode": self.mode,
+            "stance": self.stance,
+            "confidence": self.confidence,
+            "evidence": self.evidence,
+            "counterevidence": self.counterevidence,
+            "risk_gates": [gate.to_dict() for gate in self.risk_gates],
+            "missing_data": self.missing_data,
+            "factor_summary": self.factor_summary,
+            "history_refs": self.history_refs,
+            "backtest_summary": self.backtest_summary,
+            "ledger_context": self.ledger_context,
+            "citations": [citation.to_dict() for citation in self.citations],
+            "next_allowed_actions": self.next_allowed_actions,
+            "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True)
 class WatchlistItem:
     symbol: str
     last_price: float

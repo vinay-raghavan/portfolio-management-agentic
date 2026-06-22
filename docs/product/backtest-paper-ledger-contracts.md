@@ -8,6 +8,7 @@ This slice establishes the safe contract between research, simulation, and the f
 - Persist and retrieve paper strategy draft history.
 - Persist and retrieve paper backtest request history.
 - Return deterministic simulated backtest metrics and closed simulated trades.
+- Explain paper-only recommendations by joining factor evidence, strategy history, backtest history, risk gates, ledger context, and citations.
 - Create a paper order proposal that remains `pending_approval`.
 - Approve a paper order for simulated execution through an approval-required tool.
 - Simulate a paper fill only after approval.
@@ -41,5 +42,5 @@ files are ignored by Git.
 
 ## Next Product Step
 
-The next implementation slice should add recommendation explanations that join
-screener, strategy history, backtest, risk, and ledger evidence.
+The next implementation slice should add report-generation contracts for
+paper-trading review and audit export.

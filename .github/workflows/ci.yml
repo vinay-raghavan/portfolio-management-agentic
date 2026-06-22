@@ -117,6 +117,7 @@ jobs:
               "cite_strategy_evidence",
               "explain_candidate_evidence",
               "explain_factor_stack",
+              "get_recommendation_explanation",
               "get_approval_queue",
               "get_audit_events",
               "get_backtest_request",

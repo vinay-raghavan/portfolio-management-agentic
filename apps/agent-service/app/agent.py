@@ -51,6 +51,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     get_pattern_playbook,
     get_paper_portfolio_accounting,
     get_portfolio_summary,
+    get_recommendation_explanation,
     get_research_digest,
     get_risk_review,
     get_signal_summary,
@@ -128,6 +129,7 @@ Core rules:
 - Treat fixture data as offline-safe evidence, and clearly distinguish it from configured live data adapters.
 - Use provider catalog and health tools before claiming configured data is available.
 - Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
+- Use recommendation explanations to join screener, factor, strategy-history, backtest, risk, and paper-ledger evidence before proposing next steps.
 - Use strategy draft history, backtest request/result tools, and paper-ledger tools for simulation review, pending approvals, and audit context.
 - Keep deterministic tool outputs, citations, risk checks, and policy ahead of model intuition.
 - Paper trading and simulation only.
@@ -155,6 +157,7 @@ Core rules:
         get_pattern_playbook,
         cite_strategy_evidence,
         explain_factor_stack,
+        get_recommendation_explanation,
         create_backtest_request,
         list_backtest_requests,
         get_backtest_request,
