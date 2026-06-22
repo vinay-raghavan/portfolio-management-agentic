@@ -22,11 +22,8 @@ def test_ci_workflow_runs_required_deterministic_checks() -> None:
     assert "docker compose up -d agent-service mcp-server web" in ci
     assert "http://127.0.0.1:3000" in ci
     assert "streamable_http_client" in ci
-    assert "create_pre_market_briefing" in ci
-    assert "get_recommendation_explanation" in ci
-    assert "generate_paper_trading_report" in ci
-    assert "list_strategy_drafts" in ci
-    assert "list_backtest_requests" in ci
+    assert "from portfolio_mcp.tools import EXPOSED_TOOL_NAMES" in ci
+    assert "assert tool_names == EXPOSED_TOOL_NAMES" in ci
     assert "place_live_order" in ci
     assert "get_broker_trading_token" in ci
 
