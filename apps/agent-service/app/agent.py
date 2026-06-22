@@ -39,12 +39,16 @@ from portfolio_mcp.tools import (  # noqa: E402
     draft_paper_strategy,
     explain_candidate_evidence,
     explain_factor_stack,
+    get_data_provider_health,
+    get_market_data_snapshot,
     get_pattern_playbook,
     get_portfolio_summary,
     get_research_digest,
     get_risk_review,
     get_signal_summary,
     get_watchlist_snapshot,
+    get_universe_members,
+    list_data_providers,
     list_universes,
     run_screener,
     run_momentum_screener,
@@ -107,6 +111,7 @@ Core rules:
 - Use tools for portfolio, watchlist, signal, research, screener, strategy, and risk facts.
 - For pre-market briefing requests, use the pre-market briefing tool or collect portfolio, watchlist, signal, research, and risk context before answering.
 - Treat fixture data as offline-safe evidence, and clearly distinguish it from configured live data adapters.
+- Use provider catalog and health tools before claiming configured data is available.
 - Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
 - Keep deterministic tool outputs, citations, risk checks, and policy ahead of model intuition.
 - Paper trading and simulation only.
@@ -123,6 +128,10 @@ Core rules:
         get_research_digest,
         create_pre_market_briefing,
         run_momentum_screener,
+        list_data_providers,
+        get_data_provider_health,
+        get_market_data_snapshot,
+        get_universe_members,
         list_universes,
         run_screener,
         explain_candidate_evidence,

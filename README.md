@@ -11,6 +11,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - MCP-style safe portfolio tools started in `apps/mcp-server` with streamable HTTP runtime support.
 - Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
 - Product data foundation adds fixture universes, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
+- Provider adapter contracts expose fixture defaults plus read-only provider catalog, health, market snapshot, and universe-member tools.
 - Docker or Podman Compose runs the agent service, MCP server, and optional Ollama profile.
 - No copied portfolio data.
 - No broker trading credentials.
@@ -58,8 +59,8 @@ Primary constraints:
 
 Next implementation milestones:
 
-1. Expand the product data foundation from fixtures into provider adapter contracts for configured market, fundamentals, sentiment, volatility, and macro data.
-2. Add backtest, recommendation-explanation, and paper-ledger tool contracts.
+1. Add backtest, recommendation-explanation, and paper-ledger tool contracts.
+2. Add structured persistence for paper orders, simulated fills, approvals, and audit events.
 3. Inventory and classify additional source-system workflows for safe repurposing.
 4. Run and tune model-backed agent evals when provider credentials are configured.
 5. Build the first thin web console after the matching MCP/domain workflows are tested.

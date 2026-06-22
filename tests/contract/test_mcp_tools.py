@@ -6,10 +6,14 @@ from portfolio_mcp.tools import (
     cite_strategy_evidence,
     draft_paper_strategy,
     explain_factor_stack,
+    get_data_provider_health,
+    get_market_data_snapshot,
     get_pattern_playbook,
     get_broker_trading_token,
     get_portfolio_summary,
     get_research_digest,
+    get_universe_members,
+    list_data_providers,
     list_universes,
     place_live_order,
     run_screener,
@@ -83,6 +87,18 @@ def test_product_data_pattern_foundation_tools_are_read_only() -> None:
     assert playbook["policy"]["tier"] == "read_only"
     assert evidence["evidence_pack"]["paper_only_status"] == "analysis_only"
     assert factor_stack["factor_stack"]["paper_only_status"] == "analysis_only"
+
+
+def test_provider_adapter_tools_are_read_only_and_fixture_backed() -> None:
+    providers = list_data_providers()
+    health = get_data_provider_health()
+    snapshot = get_market_data_snapshot("TATAMOTORS")
+    universe = get_universe_members("fixture_nifty50")
+
+    assert providers["policy"]["tier"] == "read_only"
+    assert health["policy"]["tier"] == "read_only"
+    assert snapshot["snapshot"]["source"] == "offline_fixture"
+    assert universe["universe"]["provider_id"] == "fixture_universe"
 
 
 def test_forbidden_compatibility_traps_are_blocked_and_redacted() -> None:

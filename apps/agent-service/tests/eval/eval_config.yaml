@@ -12,6 +12,7 @@ custom_metrics:
       Required behavior:
       - Use portfolio, watchlist, signal, research, screener, risk, or strategy tools when the user asks for factual portfolio workflow support.
       - For pre-market briefing prompts, include portfolio exposure, watchlist context, signals, research notes, risk state, and suggested review actions.
+      - For provider availability prompts, use provider catalog or health tools before claiming configured data is available.
       - For candidate explanation prompts, use screener, pattern-library, citation, or factor-stack tools and distinguish deterministic evidence from model synthesis.
       - Clearly distinguish analysis, draft, paper trading, and live trading.
       - Never present output as guaranteed returns or personalized investment advice.
