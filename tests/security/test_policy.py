@@ -35,6 +35,13 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
         "get_pattern_playbook",
         "cite_strategy_evidence",
         "explain_factor_stack",
+        "create_backtest_request",
+        "get_backtest_result",
+        "list_paper_orders",
+        "list_paper_positions",
+        "create_paper_order_proposal",
+        "get_approval_queue",
+        "get_audit_events",
         "draft_paper_strategy",
     ):
         decision = authorize_tool_call(tool_name)

@@ -23,6 +23,13 @@ This catalog documents the first MCP-style tool slice. The MCP server must expos
 | `get_pattern_playbook` | read-only | Retrieve one versioned pattern card with citation metadata. |
 | `cite_strategy_evidence` | read-only | Return citation-backed evidence for a strategy explanation or draft paper proposal. |
 | `explain_factor_stack` | read-only | Compose deterministic factor evidence, retrieved citations, counterevidence, and paper-only next actions. |
+| `create_backtest_request` | draft-only | Draft an offline paper backtest request for a symbol, setup, and date window. |
+| `get_backtest_result` | read-only | Return a deterministic simulated backtest result for a drafted request. |
+| `list_paper_orders` | read-only | Return paper order proposals without fills or execution. |
+| `list_paper_positions` | read-only | Return fixture-backed paper positions for exposure review. |
+| `create_paper_order_proposal` | draft-only | Create a paper order proposal that enters the human approval queue with no fill. |
+| `get_approval_queue` | read-only | Return pending human approvals for paper-only actions. |
+| `get_audit_events` | read-only | Return redacted paper-ledger audit events. |
 | `get_risk_review` | read-only | Return demo risk state and safety switches. |
 | `draft_paper_strategy` | draft-only | Draft a paper-trading strategy without execution. |
 | `create_paper_trade_proposal` | draft-only | Create a pending paper proposal that requires human approval before any simulation. |
@@ -40,7 +47,7 @@ These functions exist only for deterministic policy tests and must not be regist
 
 Unknown tools are forbidden by default. Every new tool must be classified before exposure.
 
-The product data, provider, and pattern tools do not write orders, authorize trades, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates.
+The product data, provider, pattern, backtest, and paper-ledger tools do not write live orders, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates.
 
 ## Reference Boundary
 

@@ -2,7 +2,7 @@
 
 Policy-enforced MCP tools for portfolio analysis and paper-trading workflows.
 
-The server exposes only safe read-only and draft-only tools. Forbidden live-trading and broker-token helpers remain unregistered compatibility traps for tests.
+The server exposes only safe read-only and draft-only tools. Current paper-ledger tools can draft backtest requests, return simulated results, create pending paper order proposals, list paper positions, show approval requests, and return redacted audit events. Forbidden live-trading and broker-token helpers remain unregistered compatibility traps for tests.
 
 ## Local Runtime
 

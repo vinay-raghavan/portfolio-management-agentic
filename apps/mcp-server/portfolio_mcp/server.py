@@ -4,12 +4,17 @@ import os
 
 from .tools import (
     assert_exposed_tools_are_safe,
+    create_backtest_request,
     create_pre_market_briefing,
+    create_paper_order_proposal,
     create_paper_trade_proposal,
     cite_strategy_evidence,
     draft_paper_strategy,
     explain_candidate_evidence,
     explain_factor_stack,
+    get_approval_queue,
+    get_audit_events,
+    get_backtest_result,
     get_data_provider_health,
     get_market_data_snapshot,
     get_pattern_playbook,
@@ -20,6 +25,8 @@ from .tools import (
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_paper_orders,
+    list_paper_positions,
     list_universes,
     run_screener,
     run_momentum_screener,
@@ -71,6 +78,13 @@ def build_server():
     server.tool()(get_pattern_playbook)
     server.tool()(cite_strategy_evidence)
     server.tool()(explain_factor_stack)
+    server.tool()(create_backtest_request)
+    server.tool()(get_backtest_result)
+    server.tool()(list_paper_orders)
+    server.tool()(list_paper_positions)
+    server.tool()(create_paper_order_proposal)
+    server.tool()(get_approval_queue)
+    server.tool()(get_audit_events)
     server.tool()(get_risk_review)
     server.tool()(draft_paper_strategy)
     server.tool()(create_paper_trade_proposal)

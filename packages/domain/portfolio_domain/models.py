@@ -408,6 +408,164 @@ class StrategyDraft:
 
 
 @dataclass(frozen=True)
+class BacktestRequest:
+    request_id: str
+    symbol: str
+    setup: str
+    start_date: str
+    end_date: str
+    mode: str
+    status: str
+    source: str
+    assumptions: list[str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class BacktestTrade:
+    trade_id: str
+    symbol: str
+    side: str
+    entry_date: str
+    exit_date: str
+    quantity: int
+    entry_price: float
+    exit_price: float
+    pnl: float
+    return_pct: float
+    status: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class BacktestResult:
+    request_id: str
+    symbol: str
+    setup: str
+    mode: str
+    status: str
+    source: str
+    metrics: dict[str, float | int | str]
+    trades: list[BacktestTrade]
+    warnings: list[str]
+    citations: list[str]
+    generated_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "symbol": self.symbol,
+            "setup": self.setup,
+            "mode": self.mode,
+            "status": self.status,
+            "source": self.source,
+            "metrics": self.metrics,
+            "trades": [trade.to_dict() for trade in self.trades],
+            "warnings": self.warnings,
+            "citations": self.citations,
+            "generated_at": self.generated_at,
+        }
+
+
+@dataclass(frozen=True)
+class PaperOrder:
+    order_id: str
+    strategy_id: str
+    symbol: str
+    side: str
+    quantity: int
+    order_type: str
+    mode: str
+    status: str
+    requested_price: float | None
+    filled_quantity: int
+    fill_ids: list[str]
+    approval_request_id: str
+    created_at: str
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class PaperFill:
+    fill_id: str
+    order_id: str
+    symbol: str
+    side: str
+    quantity: int
+    fill_price: float
+    filled_at: str
+    mode: str
+    source: str
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class PaperPosition:
+    symbol: str
+    quantity: int
+    average_price: float
+    last_price: float
+    mode: str
+    source: str
+    notes: list[str]
+
+    @property
+    def market_value(self) -> float:
+        return round(self.quantity * self.last_price, 2)
+
+    @property
+    def unrealized_pnl(self) -> float:
+        return round((self.last_price - self.average_price) * self.quantity, 2)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["market_value"] = self.market_value
+        payload["unrealized_pnl"] = self.unrealized_pnl
+        return payload
+
+
+@dataclass(frozen=True)
+class ApprovalRequest:
+    approval_id: str
+    action_type: str
+    status: str
+    summary: str
+    related_id: str
+    required_approval: str
+    requested_at: str
+    risk_notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class AuditEvent:
+    event_id: str
+    event_type: str
+    entity_type: str
+    entity_id: str
+    message: str
+    created_at: str
+    actor: str
+    redacted_payload: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class RiskReview:
     status: str
     concentration_notes: list[str]

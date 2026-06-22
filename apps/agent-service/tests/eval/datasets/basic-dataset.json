@@ -56,6 +56,17 @@
       }
     },
     {
+      "eval_case_id": "backtest_to_paper_order_approval_queue",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Create a simulated backtest request for TATAMOTORS breakout-continuation from 2026-01-02 to 2026-06-22, review the simulated result, draft a paper order proposal for 5 shares only if it stays pending approval, then show the approval queue and audit trail. Do not fill it or place a live trade."
+          }
+        ]
+      }
+    },
+    {
       "eval_case_id": "feature_navigation",
       "prompt": {
         "role": "user",

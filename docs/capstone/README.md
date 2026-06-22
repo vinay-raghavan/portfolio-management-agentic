@@ -58,4 +58,5 @@ The final submission should show that the same workflows can run with fixtures f
 - Factor-stack explanation with technical, fundamental, sentiment, volatility, macro, and portfolio-fit sections.
 - Pattern-card citations from public references.
 - Paper-trading proposal that remains draft or pending.
+- Simulated backtest result feeding a paper order proposal that remains pending approval.
 - Audit log or trace showing policy boundaries and refusal of live-trading requests.

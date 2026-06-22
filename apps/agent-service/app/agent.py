@@ -33,12 +33,17 @@ for relative_path in (
         sys.path.insert(0, package_path)
 
 from portfolio_mcp.tools import (  # noqa: E402
+    create_backtest_request,
     create_pre_market_briefing,
+    create_paper_order_proposal,
     create_paper_trade_proposal,
     cite_strategy_evidence,
     draft_paper_strategy,
     explain_candidate_evidence,
     explain_factor_stack,
+    get_approval_queue,
+    get_audit_events,
+    get_backtest_result,
     get_data_provider_health,
     get_market_data_snapshot,
     get_pattern_playbook,
@@ -49,6 +54,8 @@ from portfolio_mcp.tools import (  # noqa: E402
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_paper_orders,
+    list_paper_positions,
     list_universes,
     run_screener,
     run_momentum_screener,
@@ -113,6 +120,7 @@ Core rules:
 - Treat fixture data as offline-safe evidence, and clearly distinguish it from configured live data adapters.
 - Use provider catalog and health tools before claiming configured data is available.
 - Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
+- Use backtest request/result tools and paper-ledger tools for simulation review, pending approvals, and audit context.
 - Keep deterministic tool outputs, citations, risk checks, and policy ahead of model intuition.
 - Paper trading and simulation only.
 - Never place live trades.
@@ -139,6 +147,13 @@ Core rules:
         get_pattern_playbook,
         cite_strategy_evidence,
         explain_factor_stack,
+        create_backtest_request,
+        get_backtest_result,
+        list_paper_orders,
+        list_paper_positions,
+        create_paper_order_proposal,
+        get_approval_queue,
+        get_audit_events,
         get_risk_review,
         draft_paper_strategy,
         create_paper_trade_proposal,
