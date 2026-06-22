@@ -3,12 +3,18 @@ from portfolio_mcp.tools import (
     assert_exposed_tools_are_safe,
     create_pre_market_briefing,
     create_paper_trade_proposal,
+    cite_strategy_evidence,
     draft_paper_strategy,
+    explain_factor_stack,
+    get_pattern_playbook,
     get_broker_trading_token,
     get_portfolio_summary,
     get_research_digest,
+    list_universes,
     place_live_order,
+    run_screener,
     run_momentum_screener,
+    search_pattern_library,
     get_signal_summary,
     get_watchlist_snapshot,
 )
@@ -62,6 +68,21 @@ def test_screener_to_strategy_to_pending_paper_proposal() -> None:
     assert draft["strategy"]["status"] == "draft"
     assert proposal["status"] == "pending_approval"
     assert proposal["proposal"]["mode"] == "paper"
+
+
+def test_product_data_pattern_foundation_tools_are_read_only() -> None:
+    universes = list_universes()
+    screener = run_screener("fixture_nifty50", "momentum", 3)
+    patterns = search_pattern_library("momentum", "", 2)
+    playbook = get_pattern_playbook(patterns["patterns"][0]["pattern_id"])
+    evidence = cite_strategy_evidence("TATAMOTORS", "breakout-continuation")
+    factor_stack = explain_factor_stack("TATAMOTORS", "breakout-continuation")
+
+    assert universes["policy"]["tier"] == "read_only"
+    assert screener["policy"]["tier"] == "read_only"
+    assert playbook["policy"]["tier"] == "read_only"
+    assert evidence["evidence_pack"]["paper_only_status"] == "analysis_only"
+    assert factor_stack["factor_stack"]["paper_only_status"] == "analysis_only"
 
 
 def test_forbidden_compatibility_traps_are_blocked_and_redacted() -> None:

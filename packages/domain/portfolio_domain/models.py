@@ -58,6 +58,195 @@ class ScreenerCandidate:
 
 
 @dataclass(frozen=True)
+class UniverseDefinition:
+    universe_id: str
+    name: str
+    source: str
+    as_of: str
+    symbols: list[str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class GateResult:
+    name: str
+    status: str
+    reason: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ScoreComponent:
+    name: str
+    score: float
+    weight: float
+    evidence: list[str]
+    counterevidence: list[str]
+    citations: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class RankedScreenerCandidate:
+    rank: int
+    symbol: str
+    setup: str
+    score: float
+    passed_screeners: list[str]
+    gates: list[GateResult]
+    score_components: list[ScoreComponent]
+    evidence: list[str]
+    counterevidence: list[str]
+    missing_data: list[str]
+    citations: list[str]
+    next_allowed_actions: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "rank": self.rank,
+            "symbol": self.symbol,
+            "setup": self.setup,
+            "score": self.score,
+            "passed_screeners": self.passed_screeners,
+            "gates": [gate.to_dict() for gate in self.gates],
+            "score_components": [
+                component.to_dict() for component in self.score_components
+            ],
+            "evidence": self.evidence,
+            "counterevidence": self.counterevidence,
+            "missing_data": self.missing_data,
+            "citations": self.citations,
+            "next_allowed_actions": self.next_allowed_actions,
+        }
+
+
+@dataclass(frozen=True)
+class ScreenerRunResult:
+    run_id: str
+    mode: str
+    source: str
+    universe_id: str
+    preset: str
+    run_summary: dict[str, Any]
+    candidates: list[RankedScreenerCandidate]
+    rejected_symbols: list[str]
+    multi_hit_symbols: list[str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "run_id": self.run_id,
+            "mode": self.mode,
+            "source": self.source,
+            "universe_id": self.universe_id,
+            "preset": self.preset,
+            "run_summary": self.run_summary,
+            "candidates": [candidate.to_dict() for candidate in self.candidates],
+            "rejected_symbols": self.rejected_symbols,
+            "multi_hit_symbols": self.multi_hit_symbols,
+            "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True)
+class PatternCitation:
+    source_id: str
+    title: str
+    url: str
+    usage_notes: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class PatternCard:
+    pattern_id: str
+    version: str
+    title: str
+    setup_type: str
+    summary: str
+    prerequisites: list[str]
+    evidence: list[str]
+    counterevidence: list[str]
+    risk_notes: list[str]
+    citations: list[PatternCitation]
+    tags: list[str]
+    source_type: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "pattern_id": self.pattern_id,
+            "version": self.version,
+            "title": self.title,
+            "setup_type": self.setup_type,
+            "summary": self.summary,
+            "prerequisites": self.prerequisites,
+            "evidence": self.evidence,
+            "counterevidence": self.counterevidence,
+            "risk_notes": self.risk_notes,
+            "citations": [citation.to_dict() for citation in self.citations],
+            "tags": self.tags,
+            "source_type": self.source_type,
+        }
+
+
+@dataclass(frozen=True)
+class StrategyEvidencePack:
+    symbol: str
+    setup: str
+    paper_only_status: str
+    matched_patterns: list[PatternCard]
+    factor_summary: dict[str, Any]
+    citations: list[PatternCitation]
+    next_allowed_actions: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "symbol": self.symbol,
+            "setup": self.setup,
+            "paper_only_status": self.paper_only_status,
+            "matched_patterns": [pattern.to_dict() for pattern in self.matched_patterns],
+            "factor_summary": self.factor_summary,
+            "citations": [citation.to_dict() for citation in self.citations],
+            "next_allowed_actions": self.next_allowed_actions,
+        }
+
+
+@dataclass(frozen=True)
+class FactorStackExplanation:
+    symbol: str
+    setup: str
+    paper_only_status: str
+    sections: dict[str, dict[str, Any]]
+    pattern_matches: list[PatternCard]
+    missing_data: list[str]
+    citations: list[PatternCitation]
+    next_allowed_actions: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "symbol": self.symbol,
+            "setup": self.setup,
+            "paper_only_status": self.paper_only_status,
+            "sections": self.sections,
+            "pattern_matches": [
+                pattern.to_dict() for pattern in self.pattern_matches
+            ],
+            "missing_data": self.missing_data,
+            "citations": [citation.to_dict() for citation in self.citations],
+            "next_allowed_actions": self.next_allowed_actions,
+        }
+
+
+@dataclass(frozen=True)
 class WatchlistItem:
     symbol: str
     last_price: float

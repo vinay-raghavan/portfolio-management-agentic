@@ -34,6 +34,17 @@
       }
     },
     {
+      "eval_case_id": "factor_grounded_candidate_explanation",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Run the fixture screener, explain the strongest candidate with technical, fundamental, sentiment, volatility, portfolio-fit, and pattern evidence, and cite the relevant pattern sources. Do not trade."
+          }
+        ]
+      }
+    },
+    {
       "eval_case_id": "feature_navigation",
       "prompt": {
         "role": "user",

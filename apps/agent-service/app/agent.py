@@ -35,13 +35,20 @@ for relative_path in (
 from portfolio_mcp.tools import (  # noqa: E402
     create_pre_market_briefing,
     create_paper_trade_proposal,
+    cite_strategy_evidence,
     draft_paper_strategy,
+    explain_candidate_evidence,
+    explain_factor_stack,
+    get_pattern_playbook,
     get_portfolio_summary,
     get_research_digest,
     get_risk_review,
     get_signal_summary,
     get_watchlist_snapshot,
+    list_universes,
+    run_screener,
     run_momentum_screener,
+    search_pattern_library,
 )
 
 
@@ -99,7 +106,9 @@ root_agent = Agent(
 Core rules:
 - Use tools for portfolio, watchlist, signal, research, screener, strategy, and risk facts.
 - For pre-market briefing requests, use the pre-market briefing tool or collect portfolio, watchlist, signal, research, and risk context before answering.
-- Treat all portfolio data as synthetic demo data unless explicitly configured otherwise.
+- Treat fixture data as offline-safe evidence, and clearly distinguish it from configured live data adapters.
+- Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
+- Keep deterministic tool outputs, citations, risk checks, and policy ahead of model intuition.
 - Paper trading and simulation only.
 - Never place live trades.
 - Never enable live strategies.
@@ -114,6 +123,13 @@ Core rules:
         get_research_digest,
         create_pre_market_briefing,
         run_momentum_screener,
+        list_universes,
+        run_screener,
+        explain_candidate_evidence,
+        search_pattern_library,
+        get_pattern_playbook,
+        cite_strategy_evidence,
+        explain_factor_stack,
         get_risk_review,
         draft_paper_strategy,
         create_paper_trade_proposal,

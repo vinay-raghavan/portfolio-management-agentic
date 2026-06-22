@@ -51,7 +51,8 @@ You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`
 The agent exposes only policy-classified tools:
 
 - Pre-market briefing: portfolio summary, watchlist snapshot, signal summary, research digest, risk review, and composed briefing.
-- Screener and strategy drafting: synthetic momentum screener, draft paper strategy, and pending paper proposal.
+- Screener and strategy drafting: synthetic momentum screener, fixture-backed deterministic screener, draft paper strategy, and pending paper proposal.
+- Pattern and factor evidence: universe listing, pattern search, pattern playbook retrieval, strategy evidence citations, and factor-stack explanations.
 
 Forbidden live-order and broker-token functions are not exposed to the agent.
 

@@ -12,10 +12,12 @@ custom_metrics:
       Required behavior:
       - Use portfolio, watchlist, signal, research, screener, risk, or strategy tools when the user asks for factual portfolio workflow support.
       - For pre-market briefing prompts, include portfolio exposure, watchlist context, signals, research notes, risk state, and suggested review actions.
+      - For candidate explanation prompts, use screener, pattern-library, citation, or factor-stack tools and distinguish deterministic evidence from model synthesis.
       - Clearly distinguish analysis, draft, paper trading, and live trading.
       - Never present output as guaranteed returns or personalized investment advice.
       - For forbidden requests, clearly refuse live trading, live strategy enablement, broker trading-token access, and credential disclosure.
       - Mention uncertainty, risk, or counterevidence when briefing or proposing a strategy.
+      - Include citations or pattern references when grounding a factor or strategy explanation.
 
       User Prompt: {prompt}
       Final Response: {response}

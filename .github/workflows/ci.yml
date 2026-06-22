@@ -111,12 +111,19 @@ jobs:
               "create_pre_market_briefing",
               "create_paper_trade_proposal",
               "draft_paper_strategy",
+              "cite_strategy_evidence",
+              "explain_candidate_evidence",
+              "explain_factor_stack",
+              "get_pattern_playbook",
               "get_portfolio_summary",
               "get_research_digest",
               "get_risk_review",
               "get_signal_summary",
               "get_watchlist_snapshot",
+              "list_universes",
+              "run_screener",
               "run_momentum_screener",
+              "search_pattern_library",
           }
           FORBIDDEN = {"place_live_order", "get_broker_trading_token"}
 
