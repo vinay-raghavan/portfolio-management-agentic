@@ -17,6 +17,8 @@ services:
       ALLOW_ORIGINS: ${ALLOW_ORIGINS:-http://localhost:3000,http://localhost:8000}
       PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}
       MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}
+      PORTFOLIO_MARKET_DATA_PROVIDER: ${PORTFOLIO_MARKET_DATA_PROVIDER:-fixture}
+      PORTFOLIO_MARKET_DATA_JSON_PATH: ${PORTFOLIO_MARKET_DATA_JSON_PATH:-}
     ports:
       - "8000:8000"
     volumes:
@@ -49,6 +51,8 @@ services:
       MCP_STATELESS_HTTP: ${MCP_STATELESS_HTTP:-true}
       PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}
       MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}
+      PORTFOLIO_MARKET_DATA_PROVIDER: ${PORTFOLIO_MARKET_DATA_PROVIDER:-fixture}
+      PORTFOLIO_MARKET_DATA_JSON_PATH: ${PORTFOLIO_MARKET_DATA_JSON_PATH:-}
     ports:
       - "8081:8081"
     volumes:
