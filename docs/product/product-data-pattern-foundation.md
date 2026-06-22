@@ -77,13 +77,13 @@ Use a layered approach:
 
 - Use typed provider contracts for `MarketDataProvider`, `UniverseProvider`, `FundamentalsProvider`, `SentimentProvider`, `VolatilityProvider`, and `MacroProvider`.
 - Use SQLite or Postgres for users, portfolios, watchlists, strategies, paper orders, simulated fills, approvals, and audit logs.
-- Use DuckDB or Parquet for local market snapshots, screener runs, and backtest datasets.
+- Use structured local storage for market snapshots, screener runs, and backtest datasets. The current implementation uses SQLite for the first durable market-data cache so it follows the existing repository pattern; DuckDB or Parquet can replace or supplement it when batch analytics volume justifies it.
 - Use a `PatternStore` interface for reference cards. Start file-backed and add ChromaDB only when semantic retrieval over a larger corpus is actually needed.
 - Keep price candles, paper trades, and approvals in structured stores, not vector memory.
 
 ## Implementation Status
 
-Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot and screener-run persistence, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
 
 The implementation sequence for this foundation was:
 

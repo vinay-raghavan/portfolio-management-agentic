@@ -19,6 +19,7 @@ Current coverage:
 - Demo portfolio, screener, strategy draft, and paper proposal contracts work.
 - Pre-market briefing contracts compose portfolio, watchlist, signal, research, and risk sections from synthetic data.
 - Product data and pattern contracts list fixture universes, run hard-gated deterministic screeners, retrieve pattern cards, cite strategy evidence, and explain factor stacks.
+- Market-data persistence contracts store and reload fixture/provider market snapshots and screener runs in their tool payload shape without exposing database paths or credentials.
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with JSON-ready redacted audit exports and no file writes.
 - Model-backed eval preflight checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, and never print secret values.
@@ -94,8 +95,9 @@ Default endpoints:
 - Web console: `http://localhost:3000`
 
 Compose config also validates the shared `paper-ledger-data` volume and
-`PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` default for durable local ledger
-state.
+`PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` plus
+`MARKET_DATA_DB_PATH=/data/market-data.db` defaults for durable local ledger and
+market-data state.
 
 The optional local LLM profile is disabled by default:
 

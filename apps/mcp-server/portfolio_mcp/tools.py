@@ -17,6 +17,7 @@ from portfolio_domain import (
     get_fixture_strategy_draft,
     get_fixture_paper_portfolio_accounting,
     get_data_provider_registry,
+    get_market_data_storage_status,
     get_pattern_card,
     get_demo_portfolio_summary,
     get_demo_research_digest,
@@ -31,6 +32,10 @@ from portfolio_domain import (
     list_fixture_paper_positions,
     list_fixture_strategy_drafts,
     list_fixture_universes,
+    list_stored_market_snapshots,
+    list_stored_screener_runs,
+    record_market_data_snapshot,
+    record_screener_run,
     run_fixture_screener,
     run_demo_momentum_screener,
     search_pattern_cards,
@@ -48,9 +53,11 @@ EXPOSED_TOOL_NAMES = {
     "list_data_providers",
     "get_data_provider_health",
     "get_market_data_snapshot",
+    "list_market_data_snapshots",
     "get_universe_members",
     "list_universes",
     "run_screener",
+    "list_screener_runs",
     "explain_candidate_evidence",
     "search_pattern_library",
     "get_pattern_playbook",
@@ -200,13 +207,14 @@ def get_data_provider_health() -> dict[str, Any]:
 
 
 def get_market_data_snapshot(symbol: str) -> dict[str, Any]:
-    """Return fixture-backed market data snapshot for one symbol."""
+    """Return and cache a fixture-backed market data snapshot for one symbol."""
     tool_name = "get_market_data_snapshot"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
         return _blocked(tool_name)
     try:
         snapshot = get_data_provider_registry().market_data.get_snapshot(symbol)
+        record_market_data_snapshot(snapshot)
     except ValueError as exc:
         return {
             "status": "error",
@@ -216,7 +224,23 @@ def get_market_data_snapshot(symbol: str) -> dict[str, Any]:
     return {
         "status": "success",
         "policy": decision.to_dict(),
+        "storage": get_market_data_storage_status(),
         "snapshot": snapshot.to_dict(),
+    }
+
+
+def list_market_data_snapshots(symbol: str = "", limit: int = 20) -> dict[str, Any]:
+    """Return cached market data snapshots without exposing storage paths."""
+    tool_name = "list_market_data_snapshots"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    snapshots = list_stored_market_snapshots(symbol.strip() or None, limit)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "storage": get_market_data_storage_status(),
+        "snapshots": [snapshot.to_dict() for snapshot in snapshots],
     }
 
 
@@ -259,13 +283,14 @@ def run_screener(
     preset: str = "momentum",
     limit: int = 10,
 ) -> dict[str, Any]:
-    """Run a deterministic read-only screener over fixture data."""
+    """Run and cache a deterministic read-only screener over fixture data."""
     tool_name = "run_screener"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
         return _blocked(tool_name)
     try:
         screener_run = run_fixture_screener(universe_id, preset, limit)
+        record_screener_run(screener_run)
     except ValueError as exc:
         return {
             "status": "error",
@@ -275,7 +300,31 @@ def run_screener(
     return {
         "status": "success",
         "policy": decision.to_dict(),
+        "storage": get_market_data_storage_status(),
         "screener_run": screener_run.to_dict(),
+    }
+
+
+def list_screener_runs(
+    universe_id: str = "",
+    preset: str = "",
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Return cached screener runs without exposing storage paths."""
+    tool_name = "list_screener_runs"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    runs = list_stored_screener_runs(
+        universe_id.strip() or None,
+        preset.strip() or None,
+        limit,
+    )
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "storage": get_market_data_storage_status(),
+        "screener_runs": [run.to_dict() for run in runs],
     }
 
 

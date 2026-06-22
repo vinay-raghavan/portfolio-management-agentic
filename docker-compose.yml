@@ -16,6 +16,7 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       ALLOW_ORIGINS: ${ALLOW_ORIGINS:-http://localhost:3000,http://localhost:8000}
       PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}
+      MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}
     ports:
       - "8000:8000"
     volumes:
@@ -47,6 +48,7 @@ services:
       MCP_STREAMABLE_HTTP_PATH: ${MCP_STREAMABLE_HTTP_PATH:-/mcp}
       MCP_STATELESS_HTTP: ${MCP_STATELESS_HTTP:-true}
       PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}
+      MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}
     ports:
       - "8081:8081"
     volumes:

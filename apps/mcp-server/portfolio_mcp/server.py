@@ -31,10 +31,12 @@ from .tools import (
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_market_data_snapshots,
     list_backtest_requests,
     list_paper_fills,
     list_paper_orders,
     list_paper_positions,
+    list_screener_runs,
     list_strategy_drafts,
     list_universes,
     run_screener,
@@ -80,9 +82,11 @@ def build_server():
     server.tool()(list_data_providers)
     server.tool()(get_data_provider_health)
     server.tool()(get_market_data_snapshot)
+    server.tool()(list_market_data_snapshots)
     server.tool()(get_universe_members)
     server.tool()(list_universes)
     server.tool()(run_screener)
+    server.tool()(list_screener_runs)
     server.tool()(explain_candidate_evidence)
     server.tool()(search_pattern_library)
     server.tool()(get_pattern_playbook)
