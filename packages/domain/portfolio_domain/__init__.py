@@ -44,6 +44,8 @@ from .models import (
     WatchlistSnapshot,
 )
 from .paper_ledger import (
+    SQLitePaperLedgerStore,
+    build_paper_ledger_store,
     create_fixture_backtest_request,
     create_fixture_paper_order_proposal,
     get_fixture_backtest_result,
@@ -115,6 +117,7 @@ __all__ = [
     "VolatilityProvider",
     "build_factor_stack_explanation",
     "build_data_provider_registry",
+    "build_paper_ledger_store",
     "build_strategy_evidence_pack",
     "create_demo_pre_market_briefing",
     "create_fixture_backtest_request",
@@ -136,4 +139,5 @@ __all__ = [
     "run_fixture_screener",
     "run_demo_momentum_screener",
     "search_pattern_cards",
+    "SQLitePaperLedgerStore",
 ]

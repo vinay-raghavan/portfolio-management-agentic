@@ -81,13 +81,11 @@ Use a layered approach:
 - Use a `PatternStore` interface for reference cards. Start file-backed and add ChromaDB only when semantic retrieval over a larger corpus is actually needed.
 - Keep price candles, paper trades, and approvals in structured stores, not vector memory.
 
-## Next Implementation Slice
+## Implementation Status
 
-Branch: `feature/product-data-pattern-foundation`
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, and deterministic tests.
 
-Current status: the first fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, file-backed pattern cards, read-only MCP tools, and deterministic tests. Structured persistence, backtests, and paper-ledger state remain next work.
-
-Implement in this order:
+The implementation sequence for this foundation was:
 
 1. Update specs and reference docs for real-tool scope, public references, factor combination, and source-system screener lessons.
 2. Add typed domain contracts for universes, OHLCV snapshots, factor evidence, screener definitions, screener runs, pattern cards, paper orders, fills, and audit events.

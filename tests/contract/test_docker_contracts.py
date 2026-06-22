@@ -20,6 +20,7 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
 
     assert "LLM_PROVIDER=gemini" in env_example
     assert "MCP_TRANSPORT=streamable-http" in env_example
+    assert "PAPER_LEDGER_DB_PATH=data/paper-ledger.db" in env_example
     assert "OLLAMA_BASE_URL=http://ollama:11434" in env_example
     assert "FYERS" not in env_example.upper()
 
@@ -38,6 +39,14 @@ def test_dockerignore_excludes_local_references_and_env_files() -> None:
     ):
         assert ignored in dockerignore
     assert "!.env.example" in dockerignore
+
+
+def test_compose_mounts_paper_ledger_volume() -> None:
+    compose = Path("docker-compose.yml").read_text()
+
+    assert "PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}" in compose
+    assert "paper-ledger-data:/data" in compose
+    assert "paper-ledger-data:" in compose
 
 
 def test_compose_config_is_valid_with_available_container_runtime() -> None:
