@@ -10,8 +10,10 @@ from .models import (
     RankedScreenerCandidate,
     ScoreComponent,
     ScreenerRunResult,
+    SentimentSnapshot,
     StrategyEvidencePack,
     UniverseDefinition,
+    VolatilitySnapshot,
 )
 from .providers import DataProviderRegistry, get_data_provider_registry
 
@@ -451,6 +453,30 @@ def _fundamental_metric(
         return default
 
 
+def _sentiment_metric(
+    sentiment: SentimentSnapshot,
+    name: str,
+    default: float = 0.0,
+) -> float:
+    value = sentiment.metrics.get(name, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _volatility_metric(
+    volatility: VolatilitySnapshot,
+    name: str,
+    default: float = 0.0,
+) -> float:
+    value = volatility.metrics.get(name, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _bounded(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
     return max(minimum, min(maximum, value))
 
@@ -506,26 +532,31 @@ def _configured_components(
     snapshot: MarketDataSnapshot,
     passed_screeners: list[str],
     fundamentals: FundamentalsSnapshot | None,
+    sentiment: SentimentSnapshot | None,
+    volatility: VolatilitySnapshot | None,
 ) -> list[ScoreComponent]:
     roc20 = _metric(snapshot, "roc20_pct")
     rsi14 = _metric(snapshot, "rsi14")
     atr_pct = _metric(snapshot, "atr_pct")
     turnover = _metric(snapshot, "median_turnover_cr")
     technical_score = _bounded(0.48 + (roc20 / 20.0) + ((rsi14 - 50.0) / 120.0))
-    volatility_score = _bounded(1.0 - abs(atr_pct - 2.5) / 8.0)
+    atr_volatility_score = _bounded(1.0 - abs(atr_pct - 2.5) / 8.0)
     liquidity_score = _bounded(turnover / 10.0)
     pattern_score = 0.82 if "breakout" in passed_screeners else 0.68
-    pattern_counterevidence = ["Configured sentiment adapter is not available for this symbol."]
+    pattern_counterevidence: list[str] = []
     if fundamentals is None:
-        pattern_counterevidence.insert(
-            0,
-            "Configured fundamentals are unavailable for this symbol.",
+        pattern_counterevidence.append("Configured fundamentals are unavailable for this symbol.")
+    if sentiment is None:
+        pattern_counterevidence.append("Configured sentiment is unavailable for this symbol.")
+    if volatility is None:
+        pattern_counterevidence.append(
+            "Configured volatility context is unavailable for this symbol."
         )
     components = [
         ScoreComponent(
             "technical",
             round(technical_score, 3),
-            0.35,
+            0.30,
             [
                 f"Configured 20-day momentum proxy is {roc20:.2f}%.",
                 f"Configured RSI proxy is {rsi14:.2f}.",
@@ -570,22 +601,72 @@ def _configured_components(
                 [FAMA_FRENCH_FACTORS.source_id, SP_QVM.source_id],
             )
         )
+    if sentiment is not None:
+        news = _sentiment_metric(sentiment, "news_score")
+        investor = _sentiment_metric(sentiment, "investor_score")
+        contradiction = _sentiment_metric(sentiment, "contradiction_score")
+        sentiment_score = _bounded(
+            (news * 0.50)
+            + (investor * 0.35)
+            + ((1.0 - contradiction) * 0.15)
+        )
+        sentiment_counterevidence: list[str] = []
+        if news < 0.50:
+            sentiment_counterevidence.append("News sentiment does not confirm the setup.")
+        if contradiction > 0.40:
+            sentiment_counterevidence.append(
+                "Contradiction score is high enough to reduce confidence."
+            )
+        components.append(
+            ScoreComponent(
+                "sentiment",
+                round(sentiment_score, 3),
+                0.10,
+                [
+                    f"Configured sentiment is as of {sentiment.as_of}.",
+                    f"News and investor sentiment scores are {news:.2f} and {investor:.2f}.",
+                    f"Contradiction score is {contradiction:.2f}.",
+                ],
+                sentiment_counterevidence,
+                [AAII_SENTIMENT.source_id],
+            )
+        )
+    volatility_score = atr_volatility_score
+    volatility_evidence = [f"Configured ATR proxy is {atr_pct:.2f}%."]
+    volatility_counterevidence = [
+        "Volatility controls can still downgrade sizing or candidate count.",
+    ]
+    if volatility is not None:
+        india_vix = _volatility_metric(volatility, "india_vix")
+        vix_change = _volatility_metric(volatility, "vix_change_pct")
+        regime = _volatility_metric(volatility, "regime_score", atr_volatility_score)
+        risk_multiplier = _volatility_metric(volatility, "risk_multiplier", 1.0)
+        volatility_score = _bounded((atr_volatility_score * 0.45) + (regime * 0.55))
+        volatility_evidence.extend(
+            [
+                f"Configured volatility is as of {volatility.as_of}.",
+                f"India VIX is {india_vix:.2f} with {vix_change:.2f}% change.",
+                f"Volatility regime score is {regime:.2f}; risk multiplier is {risk_multiplier:.2f}.",
+            ]
+        )
+        if india_vix >= 18.0 or vix_change >= 5.0 or risk_multiplier < 0.65:
+            volatility_counterevidence.append(
+                "Configured volatility context calls for smaller paper sizing."
+            )
     components.extend(
         [
             ScoreComponent(
                 "volatility",
                 round(volatility_score, 3),
                 0.15,
-                [f"Configured ATR proxy is {atr_pct:.2f}%."],
-                [
-                    "Volatility controls can still downgrade sizing or candidate count.",
-                ],
+                volatility_evidence,
+                volatility_counterevidence,
                 [NSE_INDIA_VIX.source_id, CBOE_VIX.source_id],
             ),
             ScoreComponent(
                 "liquidity",
                 round(liquidity_score, 3),
-                0.15,
+                0.10,
                 [f"Configured median turnover proxy is {turnover:.2f} crore."],
                 [],
                 ["portfolio-policy-paper-only"],
@@ -607,16 +688,25 @@ def _configured_candidate(
     snapshot: MarketDataSnapshot,
     rank: int,
     fundamentals: FundamentalsSnapshot | None = None,
+    sentiment: SentimentSnapshot | None = None,
+    volatility: VolatilitySnapshot | None = None,
 ) -> RankedScreenerCandidate:
     passed_screeners = _configured_passed_screeners(snapshot)
-    components = _configured_components(snapshot, passed_screeners, fundamentals)
+    components = _configured_components(
+        snapshot,
+        passed_screeners,
+        fundamentals,
+        sentiment,
+        volatility,
+    )
     gates = _configured_gates(snapshot)
-    missing_data = [
-        "configured_sentiment",
-        "intraday_spread",
-    ]
+    missing_data = ["intraday_spread"]
     if fundamentals is None:
         missing_data.insert(0, "configured_fundamentals")
+    if sentiment is None:
+        missing_data.insert(0, "configured_sentiment")
+    if volatility is None:
+        missing_data.insert(0, "configured_volatility")
     return RankedScreenerCandidate(
         rank=rank,
         symbol=snapshot.symbol,
@@ -651,6 +741,26 @@ def _fundamentals_for_symbol(
         return None
 
 
+def _sentiment_for_symbol(
+    registry: DataProviderRegistry,
+    symbol: str,
+) -> SentimentSnapshot | None:
+    try:
+        return registry.sentiment.get_context(symbol)
+    except ValueError:
+        return None
+
+
+def _volatility_for_symbol(
+    registry: DataProviderRegistry,
+    symbol: str,
+) -> VolatilitySnapshot | None:
+    try:
+        return registry.volatility.get_context(symbol)
+    except ValueError:
+        return None
+
+
 def run_fixture_screener(
     universe_id: str = "fixture_nifty50",
     preset: str = "momentum",
@@ -666,7 +776,7 @@ def run_fixture_screener(
         "configured_json_file"
         if any(
             "configured_" in providers_used[name]
-            for name in ("market_data", "universe", "fundamentals")
+            for name in ("market_data", "universe", "fundamentals", "sentiment", "volatility")
         )
         else OFFLINE_SOURCE
     )
@@ -674,10 +784,12 @@ def run_fixture_screener(
     for symbol in universe.symbols:
         snapshot = registry.market_data.get_snapshot(symbol)
         fundamentals = _fundamentals_for_symbol(registry, symbol)
+        sentiment = _sentiment_for_symbol(registry, symbol)
+        volatility = _volatility_for_symbol(registry, symbol)
         candidate = (
             _candidate(symbol, 0)
             if symbol in _COMPONENTS
-            else _configured_candidate(snapshot, 0, fundamentals)
+            else _configured_candidate(snapshot, 0, fundamentals, sentiment, volatility)
         )
         gates = candidate.gates
         if any(gate.status != "pass" for gate in gates):
@@ -803,7 +915,13 @@ def _candidate_for_symbol(symbol: str) -> RankedScreenerCandidate:
         if "Unknown fixture symbol" in str(exc):
             raise ValueError(str(exc)) from exc
         raise ValueError(f"Unknown symbol: {symbol}") from exc
-    return _configured_candidate(snapshot, 1, _fundamentals_for_symbol(registry, normalized))
+    return _configured_candidate(
+        snapshot,
+        1,
+        _fundamentals_for_symbol(registry, normalized),
+        _sentiment_for_symbol(registry, normalized),
+        _volatility_for_symbol(registry, normalized),
+    )
 
 
 def build_strategy_evidence_pack(symbol: str, setup: str) -> StrategyEvidencePack:

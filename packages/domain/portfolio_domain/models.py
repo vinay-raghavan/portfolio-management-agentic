@@ -161,6 +161,32 @@ class FundamentalsSnapshot:
 
 
 @dataclass(frozen=True)
+class SentimentSnapshot:
+    provider_id: str
+    source: str
+    symbol: str
+    as_of: str
+    metrics: dict[str, float | int | str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class VolatilitySnapshot:
+    provider_id: str
+    source: str
+    symbol: str
+    as_of: str
+    metrics: dict[str, float | int | str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class GateResult:
     name: str
     status: str

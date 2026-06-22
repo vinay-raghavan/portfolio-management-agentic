@@ -183,6 +183,74 @@ def _write_configured_fundamentals(tmp_path) -> str:
     return str(json_path)
 
 
+def _write_configured_sentiment(tmp_path) -> str:
+    json_path = tmp_path / "sentiment.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "sentiment": [
+                    {
+                        "symbol": "DEMODATA",
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "news_score": 0.71,
+                            "investor_score": 0.63,
+                            "contradiction_score": 0.18,
+                        },
+                        "notes": ["Configured sentiment for tests."],
+                    },
+                    {
+                        "symbol": "SLOWDATA",
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "news_score": 0.42,
+                            "investor_score": 0.49,
+                            "contradiction_score": 0.44,
+                        },
+                        "notes": ["Mixed configured sentiment for tests."],
+                    },
+                ]
+            }
+        )
+    )
+    return str(json_path)
+
+
+def _write_configured_volatility(tmp_path) -> str:
+    json_path = tmp_path / "volatility.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "volatility": [
+                    {
+                        "symbol": "DEMODATA",
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "india_vix": 13.8,
+                            "vix_change_pct": -4.2,
+                            "regime_score": 0.74,
+                            "risk_multiplier": 0.82,
+                        },
+                        "notes": ["Configured volatility for tests."],
+                    },
+                    {
+                        "symbol": "SLOWDATA",
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "india_vix": 19.6,
+                            "vix_change_pct": 7.4,
+                            "regime_score": 0.38,
+                            "risk_multiplier": 0.52,
+                        },
+                        "notes": ["Elevated volatility context for tests."],
+                    },
+                ]
+            }
+        )
+    )
+    return str(json_path)
+
+
 def test_data_provider_catalog_defaults_to_fixture_providers() -> None:
     result = list_data_providers()
 
@@ -201,6 +269,10 @@ def test_data_provider_catalog_defaults_to_fixture_providers() -> None:
     assert "PORTFOLIO_UNIVERSE_JSON_PATH" in providers["configured_universe"]["required_env"]
     assert "PORTFOLIO_FUNDAMENTALS_PROVIDER" in providers["configured_fundamentals"]["required_env"]
     assert "PORTFOLIO_FUNDAMENTALS_JSON_PATH" in providers["configured_fundamentals"]["required_env"]
+    assert "PORTFOLIO_SENTIMENT_PROVIDER" in providers["configured_sentiment"]["required_env"]
+    assert "PORTFOLIO_SENTIMENT_JSON_PATH" in providers["configured_sentiment"]["required_env"]
+    assert "PORTFOLIO_VOLATILITY_PROVIDER" in providers["configured_volatility"]["required_env"]
+    assert "PORTFOLIO_VOLATILITY_JSON_PATH" in providers["configured_volatility"]["required_env"]
     assert "api_key" not in str(result).lower()
     assert "token" not in str(result).lower()
 
@@ -322,6 +394,66 @@ def test_configured_json_fundamentals_provider_preserves_metrics_shape(tmp_path)
     assert "token" not in combined
 
 
+def test_configured_json_sentiment_provider_preserves_metrics_shape(tmp_path) -> None:
+    json_path = _write_configured_sentiment(tmp_path)
+    registry = build_data_provider_registry(
+        {
+            "PORTFOLIO_SENTIMENT_PROVIDER": "json_file",
+            "PORTFOLIO_SENTIMENT_JSON_PATH": json_path,
+        }
+    )
+
+    descriptor = registry.sentiment.descriptor().to_dict()
+    health = registry.sentiment.health().to_dict()
+    sentiment = registry.sentiment.get_context("demodata").to_dict()
+
+    assert descriptor["provider_id"] == "configured_sentiment"
+    assert descriptor["status"] == "available"
+    assert descriptor["configured"] is True
+    assert health["status"] == "available"
+    assert sentiment["provider_id"] == "configured_sentiment"
+    assert sentiment["source"] == "configured_json_file"
+    assert sentiment["symbol"] == "DEMODATA"
+    assert sentiment["metrics"]["news_score"] == 0.71
+    assert sentiment["metrics"]["contradiction_score"] == 0.18
+    assert registry.providers_used()["sentiment"] == "configured_sentiment"
+
+    combined = f"{descriptor} {health} {sentiment}".lower()
+    assert str(json_path).lower() not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
+def test_configured_json_volatility_provider_preserves_metrics_shape(tmp_path) -> None:
+    json_path = _write_configured_volatility(tmp_path)
+    registry = build_data_provider_registry(
+        {
+            "PORTFOLIO_VOLATILITY_PROVIDER": "json_file",
+            "PORTFOLIO_VOLATILITY_JSON_PATH": json_path,
+        }
+    )
+
+    descriptor = registry.volatility.descriptor().to_dict()
+    health = registry.volatility.health().to_dict()
+    volatility = registry.volatility.get_context("demodata").to_dict()
+
+    assert descriptor["provider_id"] == "configured_volatility"
+    assert descriptor["status"] == "available"
+    assert descriptor["configured"] is True
+    assert health["status"] == "available"
+    assert volatility["provider_id"] == "configured_volatility"
+    assert volatility["source"] == "configured_json_file"
+    assert volatility["symbol"] == "DEMODATA"
+    assert volatility["metrics"]["india_vix"] == 13.8
+    assert volatility["metrics"]["risk_multiplier"] == 0.82
+    assert registry.providers_used()["volatility"] == "configured_volatility"
+
+    combined = f"{descriptor} {health} {volatility}".lower()
+    assert str(json_path).lower() not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
 def test_market_data_tool_caches_configured_json_snapshot(
     monkeypatch,
     tmp_path,
@@ -353,12 +485,18 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     market_path = _write_configured_screener_snapshots(tmp_path)
     universe_path = _write_configured_universe(tmp_path)
     fundamentals_path = _write_configured_fundamentals(tmp_path)
+    sentiment_path = _write_configured_sentiment(tmp_path)
+    volatility_path = _write_configured_volatility(tmp_path)
     monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
     monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", market_path)
     monkeypatch.setenv("PORTFOLIO_UNIVERSE_PROVIDER", "json_file")
     monkeypatch.setenv("PORTFOLIO_UNIVERSE_JSON_PATH", universe_path)
     monkeypatch.setenv("PORTFOLIO_FUNDAMENTALS_PROVIDER", "json_file")
     monkeypatch.setenv("PORTFOLIO_FUNDAMENTALS_JSON_PATH", fundamentals_path)
+    monkeypatch.setenv("PORTFOLIO_SENTIMENT_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_SENTIMENT_JSON_PATH", sentiment_path)
+    monkeypatch.setenv("PORTFOLIO_VOLATILITY_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_VOLATILITY_JSON_PATH", volatility_path)
 
     universe = get_universe_members("configured_growth")
     result = run_screener("configured_growth", "momentum", 5)
@@ -374,6 +512,8 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     assert run["run_summary"]["providers_used"]["market_data"] == "configured_market_data"
     assert run["run_summary"]["providers_used"]["universe"] == "configured_universe"
     assert run["run_summary"]["providers_used"]["fundamentals"] == "configured_fundamentals"
+    assert run["run_summary"]["providers_used"]["sentiment"] == "configured_sentiment"
+    assert run["run_summary"]["providers_used"]["volatility"] == "configured_volatility"
     assert run["run_summary"]["total_screened"] == 3
     assert run["run_summary"]["candidate_count"] == 2
     assert run["run_summary"]["rejected_count"] == 1
@@ -384,12 +524,14 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     assert {component["name"] for component in run["candidates"][0]["score_components"]} >= {
         "technical",
         "fundamental",
+        "sentiment",
         "volatility",
         "liquidity",
         "pattern",
     }
     assert "configured_fundamentals" not in run["candidates"][0]["missing_data"]
-    assert "configured_sentiment" in run["candidates"][0]["missing_data"]
+    assert "configured_sentiment" not in run["candidates"][0]["missing_data"]
+    assert "configured_volatility" not in run["candidates"][0]["missing_data"]
     assert run["candidates"][0]["next_allowed_actions"] == [
         "explain_evidence",
         "draft_paper_strategy",
@@ -398,12 +540,21 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     assert explanation["factor_stack"]["symbol"] == "DEMODATA"
     assert explanation["factor_stack"]["sections"]["technical"]["evidence"]
     assert explanation["factor_stack"]["sections"]["fundamental"]["evidence"]
+    assert explanation["factor_stack"]["sections"]["sentiment"]["evidence"]
+    assert any(
+        "India VIX" in item
+        for item in explanation["factor_stack"]["sections"]["volatility"]["evidence"]
+    )
     assert "configured_fundamentals" not in explanation["factor_stack"]["missing_data"]
+    assert "configured_sentiment" not in explanation["factor_stack"]["missing_data"]
+    assert "configured_volatility" not in explanation["factor_stack"]["missing_data"]
 
     combined = f"{universe} {result} {explanation}".lower()
     assert str(market_path).lower() not in combined
     assert str(universe_path).lower() not in combined
     assert str(fundamentals_path).lower() not in combined
+    assert str(sentiment_path).lower() not in combined
+    assert str(volatility_path).lower() not in combined
     assert "api_key" not in combined
     assert "token" not in combined
 
