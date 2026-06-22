@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .models import (
     FactorStackExplanation,
+    FundamentalsSnapshot,
     GateResult,
     MarketDataSnapshot,
     PatternCard,
@@ -12,7 +13,7 @@ from .models import (
     StrategyEvidencePack,
     UniverseDefinition,
 )
-from .providers import get_data_provider_registry
+from .providers import DataProviderRegistry, get_data_provider_registry
 
 OFFLINE_SOURCE = "offline_fixture"
 
@@ -438,6 +439,18 @@ def _metric(snapshot: MarketDataSnapshot, name: str, default: float = 0.0) -> fl
         return default
 
 
+def _fundamental_metric(
+    fundamentals: FundamentalsSnapshot,
+    name: str,
+    default: float = 0.0,
+) -> float:
+    value = fundamentals.metrics.get(name, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _bounded(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
     return max(minimum, min(maximum, value))
 
@@ -492,6 +505,7 @@ def _configured_setup(passed_screeners: list[str]) -> str:
 def _configured_components(
     snapshot: MarketDataSnapshot,
     passed_screeners: list[str],
+    fundamentals: FundamentalsSnapshot | None,
 ) -> list[ScoreComponent]:
     roc20 = _metric(snapshot, "roc20_pct")
     rsi14 = _metric(snapshot, "rsi14")
@@ -501,11 +515,17 @@ def _configured_components(
     volatility_score = _bounded(1.0 - abs(atr_pct - 2.5) / 8.0)
     liquidity_score = _bounded(turnover / 10.0)
     pattern_score = 0.82 if "breakout" in passed_screeners else 0.68
-    return [
+    pattern_counterevidence = ["Configured sentiment adapter is not available for this symbol."]
+    if fundamentals is None:
+        pattern_counterevidence.insert(
+            0,
+            "Configured fundamentals are unavailable for this symbol.",
+        )
+    components = [
         ScoreComponent(
             "technical",
             round(technical_score, 3),
-            0.45,
+            0.35,
             [
                 f"Configured 20-day momentum proxy is {roc20:.2f}%.",
                 f"Configured RSI proxy is {rsi14:.2f}.",
@@ -513,42 +533,90 @@ def _configured_components(
             [],
             [TA_LIB.source_id, FAMA_FRENCH_MOMENTUM.source_id],
         ),
-        ScoreComponent(
-            "volatility",
-            round(volatility_score, 3),
-            0.20,
-            [f"Configured ATR proxy is {atr_pct:.2f}%."],
-            [
-                "Volatility controls can still downgrade sizing or candidate count.",
-            ],
-            [NSE_INDIA_VIX.source_id, CBOE_VIX.source_id],
-        ),
-        ScoreComponent(
-            "liquidity",
-            round(liquidity_score, 3),
-            0.20,
-            [f"Configured median turnover proxy is {turnover:.2f} crore."],
-            [],
-            ["portfolio-policy-paper-only"],
-        ),
-        ScoreComponent(
-            "pattern",
-            pattern_score,
-            0.15,
-            [f"Configured metrics passed: {', '.join(passed_screeners) or 'none'}."],
-            ["Fundamental and sentiment adapters are not yet configured for this symbol."],
-            [_configured_setup(passed_screeners) + "-v1"],
-        ),
     ]
+    if fundamentals is not None:
+        quality = _fundamental_metric(fundamentals, "quality_score")
+        value = _fundamental_metric(fundamentals, "value_score")
+        growth = _fundamental_metric(fundamentals, "growth_score")
+        revision = _fundamental_metric(fundamentals, "earnings_revision_score")
+        leverage = _fundamental_metric(fundamentals, "leverage_score")
+        fundamental_score = _bounded(
+            (quality * 0.30)
+            + (growth * 0.25)
+            + (value * 0.20)
+            + (revision * 0.15)
+            + (leverage * 0.10)
+        )
+        fundamental_counterevidence: list[str] = []
+        if quality < 0.55:
+            fundamental_counterevidence.append("Quality score is below confirmation range.")
+        if revision < 0.50:
+            fundamental_counterevidence.append(
+                "Earnings revision score does not confirm momentum."
+            )
+        if leverage < 0.50:
+            fundamental_counterevidence.append("Leverage score weakens risk quality.")
+        components.append(
+            ScoreComponent(
+                "fundamental",
+                round(fundamental_score, 3),
+                0.20,
+                [
+                    f"Configured fundamentals are as of {fundamentals.as_of}.",
+                    f"Quality, value, and growth scores are {quality:.2f}, {value:.2f}, and {growth:.2f}.",
+                    f"Earnings revision and leverage scores are {revision:.2f} and {leverage:.2f}.",
+                ],
+                fundamental_counterevidence,
+                [FAMA_FRENCH_FACTORS.source_id, SP_QVM.source_id],
+            )
+        )
+    components.extend(
+        [
+            ScoreComponent(
+                "volatility",
+                round(volatility_score, 3),
+                0.15,
+                [f"Configured ATR proxy is {atr_pct:.2f}%."],
+                [
+                    "Volatility controls can still downgrade sizing or candidate count.",
+                ],
+                [NSE_INDIA_VIX.source_id, CBOE_VIX.source_id],
+            ),
+            ScoreComponent(
+                "liquidity",
+                round(liquidity_score, 3),
+                0.15,
+                [f"Configured median turnover proxy is {turnover:.2f} crore."],
+                [],
+                ["portfolio-policy-paper-only"],
+            ),
+            ScoreComponent(
+                "pattern",
+                pattern_score,
+                0.15,
+                [f"Configured metrics passed: {', '.join(passed_screeners) or 'none'}."],
+                pattern_counterevidence,
+                [_configured_setup(passed_screeners) + "-v1"],
+            ),
+        ]
+    )
+    return components
 
 
 def _configured_candidate(
     snapshot: MarketDataSnapshot,
     rank: int,
+    fundamentals: FundamentalsSnapshot | None = None,
 ) -> RankedScreenerCandidate:
     passed_screeners = _configured_passed_screeners(snapshot)
-    components = _configured_components(snapshot, passed_screeners)
+    components = _configured_components(snapshot, passed_screeners, fundamentals)
     gates = _configured_gates(snapshot)
+    missing_data = [
+        "configured_sentiment",
+        "intraday_spread",
+    ]
+    if fundamentals is None:
+        missing_data.insert(0, "configured_fundamentals")
     return RankedScreenerCandidate(
         rank=rank,
         symbol=snapshot.symbol,
@@ -567,14 +635,20 @@ def _configured_candidate(
             for component in components
             for item in component.counterevidence
         ],
-        missing_data=[
-            "configured_fundamentals",
-            "configured_sentiment",
-            "intraday_spread",
-        ],
+        missing_data=missing_data,
         citations=_citations_for_components(components),
         next_allowed_actions=["explain_evidence", "draft_paper_strategy"],
     )
+
+
+def _fundamentals_for_symbol(
+    registry: DataProviderRegistry,
+    symbol: str,
+) -> FundamentalsSnapshot | None:
+    try:
+        return registry.fundamentals.get_metrics(symbol)
+    except ValueError:
+        return None
 
 
 def run_fixture_screener(
@@ -590,17 +664,20 @@ def run_fixture_screener(
     providers_used = registry.providers_used()
     run_source = (
         "configured_json_file"
-        if "configured_" in providers_used["market_data"]
-        or "configured_" in providers_used["universe"]
+        if any(
+            "configured_" in providers_used[name]
+            for name in ("market_data", "universe", "fundamentals")
+        )
         else OFFLINE_SOURCE
     )
 
     for symbol in universe.symbols:
         snapshot = registry.market_data.get_snapshot(symbol)
+        fundamentals = _fundamentals_for_symbol(registry, symbol)
         candidate = (
             _candidate(symbol, 0)
             if symbol in _COMPONENTS
-            else _configured_candidate(snapshot, 0)
+            else _configured_candidate(snapshot, 0, fundamentals)
         )
         gates = candidate.gates
         if any(gate.status != "pass" for gate in gates):
@@ -719,13 +796,14 @@ def _candidate_for_symbol(symbol: str) -> RankedScreenerCandidate:
     normalized = symbol.upper().strip()
     if normalized in _COMPONENTS:
         return _candidate(normalized, 1)
+    registry = get_data_provider_registry()
     try:
-        snapshot = get_data_provider_registry().market_data.get_snapshot(normalized)
+        snapshot = registry.market_data.get_snapshot(normalized)
     except ValueError as exc:
         if "Unknown fixture symbol" in str(exc):
             raise ValueError(str(exc)) from exc
         raise ValueError(f"Unknown symbol: {symbol}") from exc
-    return _configured_candidate(snapshot, 1)
+    return _configured_candidate(snapshot, 1, _fundamentals_for_symbol(registry, normalized))
 
 
 def build_strategy_evidence_pack(symbol: str, setup: str) -> StrategyEvidencePack:

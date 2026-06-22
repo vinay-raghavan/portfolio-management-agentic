@@ -146,6 +146,43 @@ def _write_configured_screener_snapshots(tmp_path) -> str:
     return str(json_path)
 
 
+def _write_configured_fundamentals(tmp_path) -> str:
+    json_path = tmp_path / "fundamentals.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "fundamentals": [
+                    {
+                        "symbol": "DEMODATA",
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "quality_score": 0.82,
+                            "value_score": 0.58,
+                            "growth_score": 0.74,
+                            "earnings_revision_score": 0.66,
+                            "leverage_score": 0.77,
+                        },
+                        "notes": ["Configured fundamentals for tests."],
+                    },
+                    {
+                        "symbol": "SLOWDATA",
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "quality_score": 0.48,
+                            "value_score": 0.52,
+                            "growth_score": 0.44,
+                            "earnings_revision_score": 0.41,
+                            "leverage_score": 0.55,
+                        },
+                        "notes": ["Weaker configured fundamentals for tests."],
+                    },
+                ]
+            }
+        )
+    )
+    return str(json_path)
+
+
 def test_data_provider_catalog_defaults_to_fixture_providers() -> None:
     result = list_data_providers()
 
@@ -162,6 +199,8 @@ def test_data_provider_catalog_defaults_to_fixture_providers() -> None:
     assert "PORTFOLIO_MARKET_DATA_JSON_PATH" in providers["configured_market_data"]["required_env"]
     assert "PORTFOLIO_UNIVERSE_PROVIDER" in providers["configured_universe"]["required_env"]
     assert "PORTFOLIO_UNIVERSE_JSON_PATH" in providers["configured_universe"]["required_env"]
+    assert "PORTFOLIO_FUNDAMENTALS_PROVIDER" in providers["configured_fundamentals"]["required_env"]
+    assert "PORTFOLIO_FUNDAMENTALS_JSON_PATH" in providers["configured_fundamentals"]["required_env"]
     assert "api_key" not in str(result).lower()
     assert "token" not in str(result).lower()
 
@@ -253,6 +292,36 @@ def test_configured_json_universe_provider_preserves_universe_shape(tmp_path) ->
     assert "token" not in combined
 
 
+def test_configured_json_fundamentals_provider_preserves_metrics_shape(tmp_path) -> None:
+    json_path = _write_configured_fundamentals(tmp_path)
+    registry = build_data_provider_registry(
+        {
+            "PORTFOLIO_FUNDAMENTALS_PROVIDER": "json_file",
+            "PORTFOLIO_FUNDAMENTALS_JSON_PATH": json_path,
+        }
+    )
+
+    descriptor = registry.fundamentals.descriptor().to_dict()
+    health = registry.fundamentals.health().to_dict()
+    fundamentals = registry.fundamentals.get_metrics("demodata").to_dict()
+
+    assert descriptor["provider_id"] == "configured_fundamentals"
+    assert descriptor["status"] == "available"
+    assert descriptor["configured"] is True
+    assert health["status"] == "available"
+    assert fundamentals["provider_id"] == "configured_fundamentals"
+    assert fundamentals["source"] == "configured_json_file"
+    assert fundamentals["symbol"] == "DEMODATA"
+    assert fundamentals["metrics"]["quality_score"] == 0.82
+    assert fundamentals["metrics"]["growth_score"] == 0.74
+    assert registry.providers_used()["fundamentals"] == "configured_fundamentals"
+
+    combined = f"{descriptor} {health} {fundamentals}".lower()
+    assert str(json_path).lower() not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
 def test_market_data_tool_caches_configured_json_snapshot(
     monkeypatch,
     tmp_path,
@@ -283,10 +352,13 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
 ) -> None:
     market_path = _write_configured_screener_snapshots(tmp_path)
     universe_path = _write_configured_universe(tmp_path)
+    fundamentals_path = _write_configured_fundamentals(tmp_path)
     monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
     monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", market_path)
     monkeypatch.setenv("PORTFOLIO_UNIVERSE_PROVIDER", "json_file")
     monkeypatch.setenv("PORTFOLIO_UNIVERSE_JSON_PATH", universe_path)
+    monkeypatch.setenv("PORTFOLIO_FUNDAMENTALS_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_FUNDAMENTALS_JSON_PATH", fundamentals_path)
 
     universe = get_universe_members("configured_growth")
     result = run_screener("configured_growth", "momentum", 5)
@@ -301,6 +373,7 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     assert run["source"] == "configured_json_file"
     assert run["run_summary"]["providers_used"]["market_data"] == "configured_market_data"
     assert run["run_summary"]["providers_used"]["universe"] == "configured_universe"
+    assert run["run_summary"]["providers_used"]["fundamentals"] == "configured_fundamentals"
     assert run["run_summary"]["total_screened"] == 3
     assert run["run_summary"]["candidate_count"] == 2
     assert run["run_summary"]["rejected_count"] == 1
@@ -310,10 +383,13 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     assert "momentum" in run["candidates"][0]["passed_screeners"]
     assert {component["name"] for component in run["candidates"][0]["score_components"]} >= {
         "technical",
+        "fundamental",
         "volatility",
         "liquidity",
         "pattern",
     }
+    assert "configured_fundamentals" not in run["candidates"][0]["missing_data"]
+    assert "configured_sentiment" in run["candidates"][0]["missing_data"]
     assert run["candidates"][0]["next_allowed_actions"] == [
         "explain_evidence",
         "draft_paper_strategy",
@@ -321,10 +397,13 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     assert explanation["status"] == "success"
     assert explanation["factor_stack"]["symbol"] == "DEMODATA"
     assert explanation["factor_stack"]["sections"]["technical"]["evidence"]
+    assert explanation["factor_stack"]["sections"]["fundamental"]["evidence"]
+    assert "configured_fundamentals" not in explanation["factor_stack"]["missing_data"]
 
     combined = f"{universe} {result} {explanation}".lower()
     assert str(market_path).lower() not in combined
     assert str(universe_path).lower() not in combined
+    assert str(fundamentals_path).lower() not in combined
     assert "api_key" not in combined
     assert "token" not in combined
 

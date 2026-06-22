@@ -83,7 +83,7 @@ Use a layered approach:
 
 ## Implementation Status
 
-Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot and screener-run persistence, configured read-only JSON market-data and universe adapters, configured metric-based screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot and screener-run persistence, configured read-only JSON market-data, universe, and fundamentals adapters, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
 
 The implementation sequence for this foundation was:
 
@@ -97,11 +97,12 @@ The implementation sequence for this foundation was:
 8. Add eval cases for factor-grounded explanations, missing data, high-volatility regime downgrades, and refusal of live trading.
 9. Add a configured JSON market-data adapter that reads local-only snapshot payloads through the same provider boundary and cache shape as fixtures.
 10. Add a configured JSON universe adapter and metric-backed configured screener path that ranks configured symbols without network or broker access.
+11. Add a configured JSON fundamentals adapter and factor-backed configured screener scoring that uses quality, value, growth, earnings revision, and leverage metrics when available.
 
 ## Acceptance Criteria
 
 - Deterministic tests pass without model, broker, or market-data credentials.
-- The screener can run against offline-safe fixtures or configured local JSON market/universe inputs and return ranked candidates with filter-level reasons.
+- The screener can run against offline-safe fixtures or configured local JSON market/universe/fundamentals inputs and return ranked candidates with filter-level reasons.
 - Candidate explanations include technical, fundamental, sentiment, volatility, portfolio-fit, and pattern evidence sections when data exists.
 - Public citations are present for pattern and factor definitions.
 - Missing data is visible in outputs and lowers confidence where appropriate.
@@ -140,6 +141,6 @@ And the retrieved pattern remains advisory context only.
 
 Read `.agents-cli-spec.md`, this document, `references/reference-map.md`, `docs/decisions/0005-rag-pattern-memory-boundary.md`, and `docs/architecture/tool-catalog.md`.
 
-First test to write: a contract test for a fixture-backed screener run that verifies hard gates, component scores, multi-hit tags, citations, and no live-trading tool exposure.
+Next test to write: a contract test for configured sentiment or volatility context that verifies missing-data disclosure is replaced by factor evidence only when the configured adapter is active.
 
 Do not copy source-system code. Recreate the behavior as typed domain contracts and deterministic services with tests.
