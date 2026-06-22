@@ -12,6 +12,13 @@ This catalog documents the first MCP-style tool slice. The MCP server must expos
 | `get_research_digest` | read-only | Return synthetic research notes, counterevidence, and pattern citations. |
 | `create_pre_market_briefing` | read-only | Compose portfolio, watchlist, signal, research, and risk sections into a briefing. |
 | `run_momentum_screener` | read-only | Return synthetic screener candidates and evidence. |
+| `list_universes` | read-only | Return fixture-backed tradable universes with source metadata. |
+| `run_screener` | read-only | Run a deterministic screener over a selected universe using hard gates and weighted score components. |
+| `explain_candidate_evidence` | read-only | Explain technical, fundamental, sentiment, volatility, market-regime, portfolio-fit, and missing-data evidence for a candidate. |
+| `search_pattern_library` | read-only | Search public-safe pattern cards and playbooks. |
+| `get_pattern_playbook` | read-only | Retrieve one versioned pattern card with citation metadata. |
+| `cite_strategy_evidence` | read-only | Return citation-backed evidence for a strategy explanation or draft paper proposal. |
+| `explain_factor_stack` | read-only | Compose deterministic factor evidence, retrieved citations, counterevidence, and paper-only next actions. |
 | `get_risk_review` | read-only | Return demo risk state and safety switches. |
 | `draft_paper_strategy` | draft-only | Draft a paper-trading strategy without execution. |
 | `create_paper_trade_proposal` | draft-only | Create a pending paper proposal that requires human approval before any simulation. |
@@ -29,21 +36,7 @@ These functions exist only for deterministic policy tests and must not be regist
 
 Unknown tools are forbidden by default. Every new tool must be classified before exposure.
 
-## Planned Product Data And Pattern Tools
-
-The next product foundation should add these only after policy classification and contract tests:
-
-| Tool | Tier | Purpose |
-| --- | --- | --- |
-| `list_universes` | read-only | Return configured and fixture-backed tradable universes with source metadata. |
-| `run_screener` | read-only | Run a deterministic screener over a selected universe using hard gates and weighted score components. |
-| `explain_candidate_evidence` | read-only | Explain technical, fundamental, sentiment, volatility, macro, portfolio-fit, and missing-data evidence for a candidate. |
-| `search_pattern_library` | read-only | Search public-safe pattern cards and playbooks. |
-| `get_pattern_playbook` | read-only | Retrieve one versioned pattern card with citation metadata. |
-| `cite_strategy_evidence` | read-only | Return citation-backed evidence for a strategy explanation or draft paper proposal. |
-| `explain_factor_stack` | read-only | Compose deterministic factor evidence, retrieved citations, counterevidence, and paper-only next actions. |
-
-These tools must not write orders, authorize trades, retrieve broker trading tokens, or bypass paper-trading approval gates.
+The product data and pattern tools do not write orders, authorize trades, retrieve broker trading tokens, or bypass paper-trading approval gates.
 
 ## Reference Boundary
 

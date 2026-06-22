@@ -6,13 +6,20 @@ from .tools import (
     assert_exposed_tools_are_safe,
     create_pre_market_briefing,
     create_paper_trade_proposal,
+    cite_strategy_evidence,
     draft_paper_strategy,
+    explain_candidate_evidence,
+    explain_factor_stack,
+    get_pattern_playbook,
     get_portfolio_summary,
     get_research_digest,
     get_risk_review,
     get_signal_summary,
     get_watchlist_snapshot,
+    list_universes,
+    run_screener,
     run_momentum_screener,
+    search_pattern_library,
 )
 
 try:
@@ -49,6 +56,13 @@ def build_server():
     server.tool()(get_research_digest)
     server.tool()(create_pre_market_briefing)
     server.tool()(run_momentum_screener)
+    server.tool()(list_universes)
+    server.tool()(run_screener)
+    server.tool()(explain_candidate_evidence)
+    server.tool()(search_pattern_library)
+    server.tool()(get_pattern_playbook)
+    server.tool()(cite_strategy_evidence)
+    server.tool()(explain_factor_stack)
     server.tool()(get_risk_review)
     server.tool()(draft_paper_strategy)
     server.tool()(create_paper_trade_proposal)

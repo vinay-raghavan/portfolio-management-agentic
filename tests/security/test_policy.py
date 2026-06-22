@@ -24,6 +24,13 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
         "get_signal_summary",
         "get_research_digest",
         "create_pre_market_briefing",
+        "list_universes",
+        "run_screener",
+        "explain_candidate_evidence",
+        "search_pattern_library",
+        "get_pattern_playbook",
+        "cite_strategy_evidence",
+        "explain_factor_stack",
         "draft_paper_strategy",
     ):
         decision = authorize_tool_call(tool_name)

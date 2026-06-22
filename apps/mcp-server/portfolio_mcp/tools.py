@@ -3,14 +3,20 @@ from __future__ import annotations
 from typing import Any
 
 from portfolio_domain import (
+    build_factor_stack_explanation,
+    build_strategy_evidence_pack,
     create_demo_pre_market_briefing,
     draft_strategy,
+    get_pattern_card,
     get_demo_portfolio_summary,
     get_demo_research_digest,
     get_demo_risk_review,
     get_demo_signal_summary,
     get_demo_watchlist_snapshot,
+    list_fixture_universes,
+    run_fixture_screener,
     run_demo_momentum_screener,
+    search_pattern_cards,
 )
 from portfolio_policy import ActionTier, authorize_tool_call, redact_sensitive
 
@@ -21,6 +27,13 @@ EXPOSED_TOOL_NAMES = {
     "get_research_digest",
     "create_pre_market_briefing",
     "run_momentum_screener",
+    "list_universes",
+    "run_screener",
+    "explain_candidate_evidence",
+    "search_pattern_library",
+    "get_pattern_playbook",
+    "cite_strategy_evidence",
+    "explain_factor_stack",
     "get_risk_review",
     "draft_paper_strategy",
     "create_paper_trade_proposal",
@@ -116,6 +129,152 @@ def run_momentum_screener(limit: int) -> dict[str, Any]:
         "candidates": [
             candidate.to_dict() for candidate in run_demo_momentum_screener(limit)
         ],
+    }
+
+
+def list_universes() -> dict[str, Any]:
+    """Return fixture-backed universes with source metadata."""
+    tool_name = "list_universes"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "universes": [universe.to_dict() for universe in list_fixture_universes()],
+    }
+
+
+def run_screener(
+    universe_id: str = "fixture_nifty50",
+    preset: str = "momentum",
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Run a deterministic read-only screener over fixture data."""
+    tool_name = "run_screener"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        screener_run = run_fixture_screener(universe_id, preset, limit)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "screener_run": screener_run.to_dict(),
+    }
+
+
+def explain_candidate_evidence(
+    symbol: str,
+    setup: str = "",
+) -> dict[str, Any]:
+    """Explain deterministic fixture evidence for a screener candidate."""
+    tool_name = "explain_candidate_evidence"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        factor_stack = build_factor_stack_explanation(symbol, setup or None)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "factor_stack": factor_stack.to_dict(),
+    }
+
+
+def search_pattern_library(
+    query: str,
+    tags: str = "",
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Search public-safe pattern cards and playbooks."""
+    tool_name = "search_pattern_library"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    tag_values = [tag.strip() for tag in tags.split(",") if tag.strip()]
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "patterns": [
+            pattern.to_dict()
+            for pattern in search_pattern_cards(query, tag_values, limit)
+        ],
+    }
+
+
+def get_pattern_playbook(pattern_id: str) -> dict[str, Any]:
+    """Retrieve one versioned public-safe pattern card."""
+    tool_name = "get_pattern_playbook"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        pattern = get_pattern_card(pattern_id)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "pattern": pattern.to_dict(),
+    }
+
+
+def cite_strategy_evidence(symbol: str, setup: str) -> dict[str, Any]:
+    """Return citation-backed evidence for a paper-strategy explanation."""
+    tool_name = "cite_strategy_evidence"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        evidence_pack = build_strategy_evidence_pack(symbol, setup)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "evidence_pack": evidence_pack.to_dict(),
+    }
+
+
+def explain_factor_stack(symbol: str, setup: str = "") -> dict[str, Any]:
+    """Compose deterministic factors, citations, and paper-only next actions."""
+    tool_name = "explain_factor_stack"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        factor_stack = build_factor_stack_explanation(symbol, setup or None)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "factor_stack": factor_stack.to_dict(),
     }
 
 

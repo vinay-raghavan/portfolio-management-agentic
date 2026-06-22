@@ -85,6 +85,8 @@ Use a layered approach:
 
 Branch: `feature/product-data-pattern-foundation`
 
+Current status: the first fixture-backed implementation covers product-data contracts, deterministic screener output, file-backed pattern cards, read-only MCP tools, and deterministic tests. Configured provider adapters, structured persistence, backtests, and paper-ledger state remain next work.
+
 Implement in this order:
 
 1. Update specs and reference docs for real-tool scope, public references, factor combination, and source-system screener lessons.

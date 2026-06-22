@@ -12,6 +12,7 @@ def test_eval_dataset_contains_positive_and_negative_cases() -> None:
     assert {
         "pre_market_briefing",
         "momentum_screener_to_paper_strategy",
+        "factor_grounded_candidate_explanation",
         "risk_review",
         "feature_navigation",
     }.issubset(case_ids)
