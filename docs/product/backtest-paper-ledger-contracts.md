@@ -45,5 +45,6 @@ files are ignored by Git.
 
 ## Next Product Step
 
-The next implementation slice should run and tune model-backed agent evals when
-provider credentials are configured, then build the first thin web console.
+Run the credential-gated model eval loop, capture the first baseline result set,
+and tune agent instructions or tool descriptions from failed cases. The next
+product build after that is the first thin web console.

@@ -10,6 +10,7 @@ def test_ci_workflow_runs_required_deterministic_checks() -> None:
     ci = (WORKFLOWS / "ci.yml").read_text()
 
     assert "uv run pytest tests" in ci
+    assert "scripts/run_agent_evals.py preflight --json" in ci
     assert "uv run pytest tests/unit tests/integration" in ci
     assert "docker compose config --quiet" in ci
     assert "docker compose build agent-service mcp-server" in ci

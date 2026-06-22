@@ -21,6 +21,22 @@ safety workflows:
 
 ## Running Evaluations
 
+From the repository root, first check whether model-backed evals can run without
+printing credential values:
+
+```bash
+uv run python scripts/run_agent_evals.py preflight --json
+```
+
+When credentials are configured, run the default generate-and-grade loop:
+
+```bash
+uv run python scripts/run_agent_evals.py run --fail-on-skip
+```
+
+The wrapper is only a guard and command launcher. The official ADK eval path
+remains `agents-cli eval generate` followed by `agents-cli eval grade`.
+
 ### Default Dataset
 ```bash
 # Generate traces using the default dataset

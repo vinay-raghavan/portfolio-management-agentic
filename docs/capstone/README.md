@@ -60,3 +60,4 @@ The final submission should show that the same workflows can run with fixtures f
 - Paper-trading proposal that remains draft or pending until approved.
 - Simulated backtest result feeding a paper order proposal, approval-gated simulated fill, and paper accounting update.
 - Audit log or trace showing policy boundaries and refusal of live-trading requests.
+- Model-backed eval baseline showing positive workflow quality and negative safety refusal behavior when credentials are configured.

@@ -20,6 +20,22 @@ Implement agent logic in `app/`. Use `agents-cli playground` for interactive tes
 ### Phase 3: The Evaluation Loop (Main Iteration Phase)
 Start with 1-2 eval cases, run `agents-cli eval generate`, then `agents-cli eval grade`, iterate by making changes and rerunning both commands until satisfied. Expect 5-10+ iterations. Once you have a baseline, reach for `agents-cli eval compare` (regression diffs), `agents-cli eval analyze` (cluster failure modes), and `agents-cli eval optimize` (auto-tune prompts). See the **Evaluation Guide** for metrics, dataset schema, LLM-as-judge config, and common gotchas.
 
+Before running model-backed evals, run the repository preflight from the repo
+root:
+
+```bash
+uv run python scripts/run_agent_evals.py preflight --json
+```
+
+In a credentialed environment, run:
+
+```bash
+uv run python scripts/run_agent_evals.py run --fail-on-skip
+```
+
+The wrapper executes the same `agents-cli eval generate` then `agents-cli eval
+grade` sequence with explicit artifact directories.
+
 ### Phase 4: Pre-Deployment Tests
 Run `uv run pytest tests/unit tests/integration`. Fix issues until all tests pass.
 

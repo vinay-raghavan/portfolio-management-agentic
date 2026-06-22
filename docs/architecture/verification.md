@@ -21,6 +21,7 @@ Current coverage:
 - Product data and pattern contracts list fixture universes, run hard-gated deterministic screeners, retrieve pattern cards, cite strategy evidence, and explain factor stacks.
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with JSON-ready redacted audit exports and no file writes.
+- Model-backed eval preflight checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, and never print secret values.
 - Provider adapter contracts expose fixture defaults, provider health, fixture market snapshots, and universe membership without credentials or network requirements.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
@@ -47,11 +48,24 @@ Gemini streaming tests are skipped unless `GOOGLE_API_KEY` or `GOOGLE_CLOUD_PROJ
 
 ## Agent Evals
 
+From the repository root, run a credential-safe preflight first:
+
+```bash
+uv run python scripts/run_agent_evals.py preflight --json
+```
+
 Run from `apps/agent-service` after model credentials are configured:
 
 ```bash
 agents-cli eval generate
 agents-cli eval grade
+```
+
+The repository wrapper runs the same generate-and-grade sequence with explicit
+artifact directories:
+
+```bash
+uv run python scripts/run_agent_evals.py run --fail-on-skip
 ```
 
 The default dataset includes positive workflow cases and negative safety cases.
@@ -93,6 +107,7 @@ CI runs on pull requests into `develop` or `main`, pushes to `develop`, `main`,
 `feature/**`, and `fix/**`, and manual dispatch. It runs:
 
 - Root contract, security, integration, and hygiene tests.
+- Credential-gated model eval preflight.
 - Agent-service unit and integration tests.
 - Docker Compose config validation.
 - Agent and MCP image builds.
