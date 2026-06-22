@@ -9,6 +9,7 @@ from typing import Any
 from typing import Protocol
 
 from .models import (
+    FundamentalsSnapshot,
     MarketDataSnapshot,
     OHLCVBar,
     ProviderDescriptor,
@@ -23,6 +24,8 @@ MARKET_DATA_PROVIDER_ENV = "PORTFOLIO_MARKET_DATA_PROVIDER"
 MARKET_DATA_JSON_PATH_ENV = "PORTFOLIO_MARKET_DATA_JSON_PATH"
 UNIVERSE_PROVIDER_ENV = "PORTFOLIO_UNIVERSE_PROVIDER"
 UNIVERSE_JSON_PATH_ENV = "PORTFOLIO_UNIVERSE_JSON_PATH"
+FUNDAMENTALS_PROVIDER_ENV = "PORTFOLIO_FUNDAMENTALS_PROVIDER"
+FUNDAMENTALS_JSON_PATH_ENV = "PORTFOLIO_FUNDAMENTALS_JSON_PATH"
 JSON_FILE_PROVIDER = "json_file"
 
 
@@ -48,6 +51,8 @@ class FundamentalsProvider(Protocol):
     def descriptor(self) -> ProviderDescriptor: ...
 
     def health(self) -> ProviderHealth: ...
+
+    def get_metrics(self, symbol: str) -> FundamentalsSnapshot: ...
 
 
 class SentimentProvider(Protocol):
@@ -129,6 +134,37 @@ FIXTURE_METRICS: dict[str, dict[str, float | int | str]] = {
         "median_turnover_cr": 0.02,
         "roc20_pct": -3.3,
         "rsi14": 41.2,
+    },
+}
+
+FIXTURE_FUNDAMENTALS: dict[str, dict[str, float | int | str]] = {
+    "TATAMOTORS": {
+        "quality_score": 0.66,
+        "value_score": 0.54,
+        "growth_score": 0.70,
+        "earnings_revision_score": 0.52,
+        "leverage_score": 0.61,
+    },
+    "SBIN": {
+        "quality_score": 0.68,
+        "value_score": 0.62,
+        "growth_score": 0.58,
+        "earnings_revision_score": 0.55,
+        "leverage_score": 0.57,
+    },
+    "SUNPHARMA": {
+        "quality_score": 0.72,
+        "value_score": 0.59,
+        "growth_score": 0.64,
+        "earnings_revision_score": 0.60,
+        "leverage_score": 0.74,
+    },
+    "LOWLIQ": {
+        "quality_score": 0.42,
+        "value_score": 0.45,
+        "growth_score": 0.36,
+        "earnings_revision_score": 0.33,
+        "leverage_score": 0.40,
     },
 }
 
@@ -235,6 +271,31 @@ def _universe_from_payload(payload: Mapping[str, Any]) -> UniverseDefinition:
         symbols=[str(symbol).upper().strip() for symbol in symbols_payload],
         notes=[
             "Read-only configured universe.",
+            *notes,
+        ],
+    )
+
+
+def _fundamentals_from_payload(
+    payload: Mapping[str, Any],
+    provider_id: str,
+) -> FundamentalsSnapshot:
+    symbol = str(payload["symbol"]).upper().strip()
+    if not symbol:
+        raise ValueError("Configured fundamentals requires symbol.")
+    metrics_payload = payload.get("metrics", {})
+    if not isinstance(metrics_payload, Mapping) or not metrics_payload:
+        raise ValueError("Configured fundamentals metrics must be a non-empty object.")
+    notes_payload = payload.get("notes", [])
+    notes = [str(item) for item in notes_payload if str(item).strip()]
+    return FundamentalsSnapshot(
+        provider_id=provider_id,
+        source=str(payload.get("source") or CONFIGURED_JSON_SOURCE),
+        symbol=symbol,
+        as_of=str(payload.get("as_of") or ""),
+        metrics=dict(metrics_payload),
+        notes=[
+            "Read-only configured fundamentals snapshot.",
             *notes,
         ],
     )
@@ -397,6 +458,78 @@ class JsonFileUniverseProvider:
 
 
 @dataclass(frozen=True)
+class JsonFileFundamentalsProvider:
+    json_path: Path
+    provider_id: str = "configured_fundamentals"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="fundamentals",
+            display_name="Configured JSON Fundamentals",
+            status="available" if self.json_path.is_file() else "error",
+            configured=True,
+            capabilities=["company_facts", "factor_inputs", "json_fundamentals_file"],
+            required_env=[FUNDAMENTALS_PROVIDER_ENV, FUNDAMENTALS_JSON_PATH_ENV],
+            notes=[
+                "Read-only fundamentals adapter using a configured JSON file.",
+                "Fixture fundamentals remain the default when this adapter is not configured.",
+            ],
+        )
+
+    def health(self) -> ProviderHealth:
+        try:
+            self._fundamentals_payloads()
+        except ValueError as exc:
+            return ProviderHealth(
+                provider_id=self.provider_id,
+                kind="fundamentals",
+                status="error",
+                configured=True,
+                message=f"Configured JSON fundamentals is not usable: {exc}",
+            )
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="fundamentals",
+            status="available",
+            configured=True,
+            message="Configured JSON fundamentals is readable.",
+        )
+
+    def get_metrics(self, symbol: str) -> FundamentalsSnapshot:
+        normalized = symbol.upper().strip()
+        for payload in self._fundamentals_payloads():
+            fundamentals = _fundamentals_from_payload(payload, self.provider_id)
+            if fundamentals.symbol == normalized:
+                return fundamentals
+        raise ValueError(f"Unknown configured fundamentals symbol: {symbol}")
+
+    def _fundamentals_payloads(self) -> list[Mapping[str, Any]]:
+        if not self.json_path.is_file():
+            raise ValueError("configured JSON file is missing or unreadable")
+        try:
+            payload = json.loads(self.json_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise ValueError("configured JSON file is not valid JSON") from exc
+        fundamentals: Any
+        if isinstance(payload, list):
+            fundamentals = payload
+        elif isinstance(payload, Mapping) and "fundamentals" in payload:
+            fundamentals = payload["fundamentals"]
+            if isinstance(fundamentals, Mapping):
+                fundamentals = list(fundamentals.values())
+        elif isinstance(payload, Mapping) and "symbol" in payload:
+            fundamentals = [payload]
+        else:
+            raise ValueError("configured JSON must contain fundamentals payloads")
+        if not isinstance(fundamentals, list) or not fundamentals:
+            raise ValueError("configured JSON contains no fundamentals")
+        if not all(isinstance(item, Mapping) for item in fundamentals):
+            raise ValueError("configured JSON fundamentals must be objects")
+        return fundamentals
+
+
+@dataclass(frozen=True)
 class FixtureUniverseProvider:
     provider_id: str = "fixture_universe"
 
@@ -436,6 +569,49 @@ class FixtureUniverseProvider:
                     notes=universe.notes,
                 )
         raise ValueError(f"Unknown universe_id: {universe_id}")
+
+
+@dataclass(frozen=True)
+class FixtureFundamentalsProvider:
+    provider_id: str = "fixture_fundamentals"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="fundamentals",
+            display_name="Fixture Fundamentals",
+            status="available",
+            configured=True,
+            capabilities=["factor_proxies", "company_facts"],
+            required_env=[],
+            notes=["Offline-safe deterministic fundamentals proxies."],
+        )
+
+    def health(self) -> ProviderHealth:
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="fundamentals",
+            status="available",
+            configured=True,
+            message="Fixture fundamentals are available without network access.",
+        )
+
+    def get_metrics(self, symbol: str) -> FundamentalsSnapshot:
+        normalized = symbol.upper().strip()
+        metrics = FIXTURE_FUNDAMENTALS.get(normalized)
+        if not metrics:
+            raise ValueError(f"Unknown fixture fundamentals symbol: {symbol}")
+        return FundamentalsSnapshot(
+            provider_id=self.provider_id,
+            source=OFFLINE_SOURCE,
+            symbol=normalized,
+            as_of="2026-06-22",
+            metrics=metrics,
+            notes=[
+                "Offline fixture fundamentals proxy.",
+                "No network or broker connection was used.",
+            ],
+        )
 
 
 @dataclass(frozen=True)
@@ -535,6 +711,16 @@ def _configured_universe_provider(
     return JsonFileUniverseProvider(Path(json_path))
 
 
+def _configured_fundamentals_provider(
+    config: Mapping[str, str],
+) -> JsonFileFundamentalsProvider | None:
+    provider_name = config.get(FUNDAMENTALS_PROVIDER_ENV, "").strip().lower()
+    json_path = config.get(FUNDAMENTALS_JSON_PATH_ENV, "").strip()
+    if provider_name != JSON_FILE_PROVIDER or not json_path:
+        return None
+    return JsonFileFundamentalsProvider(Path(json_path))
+
+
 @dataclass(frozen=True)
 class DataProviderRegistry:
     market_data: MarketDataProvider
@@ -584,8 +770,12 @@ def build_data_provider_registry(
     config = env if env is not None else os.environ
     configured_market_data = _configured_market_data_provider(config)
     configured_universe = _configured_universe_provider(config)
+    configured_fundamentals = _configured_fundamentals_provider(config)
     market_data: MarketDataProvider = configured_market_data or FixtureMarketDataProvider()
     universe: UniverseProvider = configured_universe or FixtureUniverseProvider()
+    fundamentals: FundamentalsProvider = (
+        configured_fundamentals or FixtureFundamentalsProvider()
+    )
     configured_placeholders: list[ConfiguredProviderPlaceholder] = []
     if configured_market_data is None:
         configured_placeholders.append(
@@ -609,16 +799,19 @@ def build_data_provider_registry(
                 env=config,
             )
         )
-    configured_placeholders.extend(
-        [
+    if configured_fundamentals is None:
+        configured_placeholders.append(
             ConfiguredProviderPlaceholder(
                 provider_id="configured_fundamentals",
                 kind="fundamentals",
                 display_name="Configured Fundamentals",
                 capabilities=["company_facts", "factor_inputs"],
-                required_env=["PORTFOLIO_FUNDAMENTALS_PROVIDER"],
+                required_env=[FUNDAMENTALS_PROVIDER_ENV, FUNDAMENTALS_JSON_PATH_ENV],
                 env=config,
-            ),
+            )
+        )
+    configured_placeholders.extend(
+        [
             ConfiguredProviderPlaceholder(
                 provider_id="configured_sentiment",
                 kind="sentiment",
@@ -648,12 +841,7 @@ def build_data_provider_registry(
     return DataProviderRegistry(
         market_data=market_data,
         universe=universe,
-        fundamentals=FixtureReferenceProvider(
-            provider_id="fixture_fundamentals",
-            kind="fundamentals",
-            display_name="Fixture Fundamentals",
-            capabilities=["factor_proxies"],
-        ),
+        fundamentals=fundamentals,
         sentiment=FixtureReferenceProvider(
             provider_id="fixture_sentiment",
             kind="sentiment",

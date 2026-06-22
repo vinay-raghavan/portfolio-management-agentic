@@ -10,8 +10,8 @@ This is a standalone repository boundary. Implementation should use documented A
 - Platform-neutral policy, domain, model-provider, and agent-platform contracts started.
 - MCP-style safe portfolio tools started in `apps/mcp-server` with streamable HTTP runtime support.
 - Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
-- Product data foundation adds fixture/configured universes, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
-- Provider adapter contracts expose fixture defaults, configured read-only JSON market-data and universe adapters, provider catalog, health, market snapshot, and universe-member tools.
+- Product data foundation adds fixture/configured universes, configured fundamentals, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
+- Provider adapter contracts expose fixture defaults, configured read-only JSON market-data, universe, and fundamentals adapters, provider catalog, health, market snapshot, and universe-member tools.
 - Recommendation explanations join screener/factor evidence, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
@@ -67,7 +67,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Add the first configured fundamentals adapter and extend configured-candidate scoring beyond market metrics while preserving fixture-backed deterministic tests.
+2. Add configured sentiment and volatility adapters, then use them to refine regime-aware candidate scoring while preserving fixture-backed deterministic tests.
 
 ## Verification
 
@@ -123,13 +123,15 @@ and `/data/market-data.db` on the `paper-ledger-data` volume; the local
 `.env.example` defaults are `data/paper-ledger.db` and `data/market-data.db`.
 
 The default data-provider mode is offline-safe fixtures. To enable the first
-configured read-only market-data and universe adapters, set:
+configured read-only market-data, universe, and fundamentals adapters, set:
 
 ```bash
 PORTFOLIO_MARKET_DATA_PROVIDER=json_file
 PORTFOLIO_MARKET_DATA_JSON_PATH=data/market-snapshots.json
 PORTFOLIO_UNIVERSE_PROVIDER=json_file
 PORTFOLIO_UNIVERSE_JSON_PATH=data/universes.json
+PORTFOLIO_FUNDAMENTALS_PROVIDER=json_file
+PORTFOLIO_FUNDAMENTALS_JSON_PATH=data/fundamentals.json
 ```
 
 The JSON files are local-only and should stay under ignored data paths. Market
@@ -137,9 +139,13 @@ data may contain either one snapshot object, a list of snapshots, or
 `{"snapshots": [...]}` using the same `MarketDataSnapshot` payload shape
 returned by the MCP tools. Universe data may contain one universe object, a
 list of universes, or `{"universes": [...]}` using the same
-`UniverseDefinition` payload shape returned by the provider tools. Configured
-screeners remain read-only and paper-only; they rank candidates from configured
-market metrics and do not create trades.
+`UniverseDefinition` payload shape returned by the provider tools.
+Fundamentals data may contain one fundamentals object, a list of objects, or
+`{"fundamentals": [...]}` with `symbol`, `as_of`, and factor metric keys such
+as `quality_score`, `value_score`, `growth_score`,
+`earnings_revision_score`, and `leverage_score`. Configured screeners remain
+read-only and paper-only; they rank candidates from configured market and
+fundamental metrics and do not create trades.
 
 The optional Ollama service is profile-gated:
 
