@@ -9,6 +9,7 @@ This slice establishes the safe contract between research, simulation, and the f
 - Persist and retrieve paper backtest request history.
 - Return deterministic simulated backtest metrics and closed simulated trades.
 - Explain paper-only recommendations by joining factor evidence, strategy history, backtest history, risk gates, ledger context, and citations.
+- Generate read-only paper-trading review reports with redacted audit export rows.
 - Create a paper order proposal that remains `pending_approval`.
 - Approve a paper order for simulated execution through an approval-required tool.
 - Simulate a paper fill only after approval.
@@ -16,6 +17,7 @@ This slice establishes the safe contract between research, simulation, and the f
 - List fixture-backed paper positions for exposure review.
 - Show pending human approvals.
 - Show redacted audit events for paper-ledger actions.
+- Export audit rows as JSON-ready, redacted report data without writing files.
 - Persist strategy drafts, backtest requests, paper orders, paper positions, approval requests, simulated fills, and audit events in SQLite when `PAPER_LEDGER_DB_PATH` is configured.
 
 ## Safety Boundary
@@ -28,6 +30,7 @@ This slice establishes the safe contract between research, simulation, and the f
 - Broker trading-token access and live order placement remain forbidden.
 - Fixture stores use offline-safe data and do not require provider credentials.
 - Persisted rows contain paper-only strategy drafts, backtest requests, proposals, approvals, fixture positions, and redacted audit payloads; no broker credentials or live account identifiers are stored.
+- Report generation is read-only and returns structured data for the caller to render or store outside the tool boundary.
 
 ## Runtime Storage
 
@@ -42,5 +45,5 @@ files are ignored by Git.
 
 ## Next Product Step
 
-The next implementation slice should add report-generation contracts for
-paper-trading review and audit export.
+The next implementation slice should run and tune model-backed agent evals when
+provider credentials are configured, then build the first thin web console.

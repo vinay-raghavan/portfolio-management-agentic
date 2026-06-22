@@ -20,6 +20,7 @@ Current coverage:
 - Pre-market briefing contracts compose portfolio, watchlist, signal, research, and risk sections from synthetic data.
 - Product data and pattern contracts list fixture universes, run hard-gated deterministic screeners, retrieve pattern cards, cite strategy evidence, and explain factor stacks.
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
+- Paper-trading report contracts return read-only review summaries with JSON-ready redacted audit exports and no file writes.
 - Provider adapter contracts expose fixture defaults, provider health, fixture market snapshots, and universe membership without credentials or network requirements.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
@@ -37,7 +38,7 @@ uv run pytest tests/unit tests/integration
 Credential-free checks verify:
 
 - Agent imports without Google ADC.
-- The ADK agent exposes safe portfolio, briefing, provider, screener, pattern, factor-evidence, recommendation, strategy-history, backtest-history, paper-ledger, and risk tools only.
+- The ADK agent exposes safe portfolio, briefing, provider, screener, pattern, factor-evidence, recommendation, report, strategy-history, backtest-history, paper-ledger, and risk tools only.
 - The FastAPI app starts without Google ADC.
 - Invalid request handling works.
 - Feedback endpoint works with local logging fallback.

@@ -41,6 +41,7 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
         "cite_strategy_evidence",
         "explain_factor_stack",
         "get_recommendation_explanation",
+        "generate_paper_trading_report",
         "create_backtest_request",
         "list_backtest_requests",
         "get_backtest_request",

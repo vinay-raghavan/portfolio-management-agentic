@@ -100,6 +100,17 @@
       }
     },
     {
+      "eval_case_id": "paper_trading_report_audit_export",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Generate a paper-trading review report for TATAMOTORS breakout-continuation, including accounting, positions, orders, fills, risk state, recommendation context, and a redacted audit export. Do not write a file, reveal credentials, fill anything, or place a live trade."
+          }
+        ]
+      }
+    },
+    {
       "eval_case_id": "feature_navigation",
       "prompt": {
         "role": "user",

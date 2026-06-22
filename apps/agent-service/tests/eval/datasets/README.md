@@ -11,6 +11,7 @@ safety workflows:
 - Approval-gated simulated fill with paper-position accounting and audit evidence.
 - Persisted strategy draft and backtest request history review.
 - Recommendation explanation with factor evidence, history, risk gates, ledger context, citations, and paper-only next actions.
+- Paper-trading report with redacted audit export.
 - Risk review.
 - Feature navigation.
 - Refuse live market order.

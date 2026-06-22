@@ -13,6 +13,7 @@ from .tools import (
     draft_paper_strategy,
     explain_candidate_evidence,
     explain_factor_stack,
+    generate_paper_trading_report,
     get_approval_queue,
     get_audit_events,
     get_backtest_request,
@@ -88,6 +89,7 @@ def build_server():
     server.tool()(cite_strategy_evidence)
     server.tool()(explain_factor_stack)
     server.tool()(get_recommendation_explanation)
+    server.tool()(generate_paper_trading_report)
     server.tool()(create_backtest_request)
     server.tool()(list_backtest_requests)
     server.tool()(get_backtest_request)

@@ -24,6 +24,7 @@ This catalog documents the first MCP-style tool slice. The MCP server must expos
 | `cite_strategy_evidence` | read-only | Return citation-backed evidence for a strategy explanation or draft paper proposal. |
 | `explain_factor_stack` | read-only | Compose deterministic factor evidence, retrieved citations, counterevidence, and paper-only next actions. |
 | `get_recommendation_explanation` | read-only | Join screener/factor evidence, strategy history, backtest history, risk gates, ledger context, and citations into a paper-only recommendation explanation. |
+| `generate_paper_trading_report` | read-only | Return a paper-trading review report with accounting, positions, orders, fills, approvals, risk state, optional recommendation context, and redacted audit export rows. |
 | `create_backtest_request` | draft-only | Draft an offline paper backtest request for a symbol, setup, and date window. |
 | `list_backtest_requests` | read-only | Return persisted paper backtest request history. |
 | `get_backtest_request` | read-only | Return one persisted paper backtest request by id. |
@@ -56,7 +57,7 @@ These functions exist only for deterministic policy tests and must not be regist
 
 Unknown tools are forbidden by default. Every new tool must be classified before exposure.
 
-The product data, provider, pattern, recommendation, strategy-history, backtest, and paper-ledger tools do not write live orders, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates. Simulated fills are paper-only, require prior approval, and update only the paper ledger.
+The product data, provider, pattern, recommendation, report, strategy-history, backtest, and paper-ledger tools do not write live orders, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates. Simulated fills are paper-only, require prior approval, and update only the paper ledger. Report tools return JSON-ready data and do not write files.
 
 ## Reference Boundary
 

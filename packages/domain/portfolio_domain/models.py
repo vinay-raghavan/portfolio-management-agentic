@@ -364,6 +364,58 @@ class RecommendationExplanation:
 
 
 @dataclass(frozen=True)
+class PaperAuditExport:
+    schema_version: str
+    export_id: str
+    mode: str
+    source: str
+    generated_at: str
+    row_count: int
+    rows: list[dict[str, Any]]
+    redaction_status: str
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class PaperTradingReport:
+    report_id: str
+    report_type: str
+    scope: str
+    mode: str
+    source: str
+    generated_at: str
+    summary: dict[str, Any]
+    sections: dict[str, Any]
+    recommendation: RecommendationExplanation | None
+    audit_export: PaperAuditExport
+    next_allowed_actions: list[str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "report_id": self.report_id,
+            "report_type": self.report_type,
+            "scope": self.scope,
+            "mode": self.mode,
+            "source": self.source,
+            "generated_at": self.generated_at,
+            "summary": self.summary,
+            "sections": self.sections,
+            "recommendation": (
+                self.recommendation.to_dict()
+                if self.recommendation is not None
+                else None
+            ),
+            "audit_export": self.audit_export.to_dict(),
+            "next_allowed_actions": self.next_allowed_actions,
+            "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True)
 class WatchlistItem:
     symbol: str
     last_price: float
