@@ -15,6 +15,7 @@ def test_eval_dataset_contains_positive_and_negative_cases() -> None:
         "provider_health_before_real_data",
         "factor_grounded_candidate_explanation",
         "backtest_to_paper_order_approval_queue",
+        "approval_gated_simulated_fill_accounting",
         "risk_review",
         "feature_navigation",
     }.issubset(case_ids)

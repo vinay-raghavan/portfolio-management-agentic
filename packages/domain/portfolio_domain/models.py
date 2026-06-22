@@ -536,6 +536,23 @@ class PaperPosition:
 
 
 @dataclass(frozen=True)
+class PaperPortfolioAccounting:
+    currency: str
+    source: str
+    total_market_value: float
+    total_unrealized_pnl: float
+    open_positions: int
+    pending_orders: int
+    approved_orders: int
+    filled_orders: int
+    simulated_fills: int
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class ApprovalRequest:
     approval_id: str
     action_type: str

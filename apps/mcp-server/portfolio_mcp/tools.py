@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from portfolio_domain import (
+    approve_fixture_paper_order_simulation,
     build_factor_stack_explanation,
     build_strategy_evidence_pack,
     create_demo_pre_market_briefing,
@@ -10,6 +11,7 @@ from portfolio_domain import (
     create_fixture_paper_order_proposal,
     draft_strategy,
     get_fixture_backtest_result,
+    get_fixture_paper_portfolio_accounting,
     get_data_provider_registry,
     get_pattern_card,
     get_demo_portfolio_summary,
@@ -19,12 +21,14 @@ from portfolio_domain import (
     get_demo_watchlist_snapshot,
     list_fixture_approval_queue,
     list_fixture_audit_events,
+    list_fixture_paper_fills,
     list_fixture_paper_orders,
     list_fixture_paper_positions,
     list_fixture_universes,
     run_fixture_screener,
     run_demo_momentum_screener,
     search_pattern_cards,
+    simulate_fixture_approved_paper_fill,
 )
 from portfolio_policy import ActionTier, authorize_tool_call, redact_sensitive
 
@@ -51,6 +55,10 @@ EXPOSED_TOOL_NAMES = {
     "list_paper_orders",
     "list_paper_positions",
     "create_paper_order_proposal",
+    "approve_paper_order_simulation",
+    "simulate_approved_paper_fill",
+    "list_paper_fills",
+    "get_paper_portfolio_accounting",
     "get_approval_queue",
     "get_audit_events",
     "get_risk_review",
@@ -451,6 +459,33 @@ def list_paper_positions() -> dict[str, Any]:
     }
 
 
+def list_paper_fills() -> dict[str, Any]:
+    """Return simulated paper fills without touching any broker provider."""
+    tool_name = "list_paper_fills"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "source": "offline_fixture",
+        "fills": [fill.to_dict() for fill in list_fixture_paper_fills()],
+    }
+
+
+def get_paper_portfolio_accounting() -> dict[str, Any]:
+    """Return paper portfolio accounting after simulated fills."""
+    tool_name = "get_paper_portfolio_accounting"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "accounting": get_fixture_paper_portfolio_accounting().to_dict(),
+    }
+
+
 def create_paper_order_proposal(
     strategy_id: str,
     symbol: str,
@@ -486,6 +521,68 @@ def create_paper_order_proposal(
         "approval_request": approval.to_dict(),
         "audit_event": audit_event.to_dict(),
         "next_step": "human_approval_required",
+    }
+
+
+def approve_paper_order_simulation(
+    order_id: str,
+    approved_by: str,
+    approval_note: str = "",
+) -> dict[str, Any]:
+    """Mark a paper order as approved for simulated fill processing only."""
+    tool_name = "approve_paper_order_simulation"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name, {"order_id": order_id})
+    try:
+        order, approval, audit_event = approve_fixture_paper_order_simulation(
+            order_id,
+            approved_by,
+            approval_note,
+        )
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "approved",
+        "policy": decision.to_dict(),
+        "paper_order": order.to_dict(),
+        "approval_request": approval.to_dict(),
+        "audit_event": audit_event.to_dict(),
+        "next_step": "simulate_approved_paper_fill",
+    }
+
+
+def simulate_approved_paper_fill(
+    order_id: str,
+    fill_price: float | None = None,
+) -> dict[str, Any]:
+    """Create a simulated paper fill only after human approval."""
+    tool_name = "simulate_approved_paper_fill"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name, {"order_id": order_id})
+    try:
+        fill, order, position, audit_event = simulate_fixture_approved_paper_fill(
+            order_id,
+            fill_price,
+        )
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "filled",
+        "policy": decision.to_dict(),
+        "paper_fill": fill.to_dict(),
+        "paper_order": order.to_dict(),
+        "paper_position": position.to_dict(),
+        "audit_event": audit_event.to_dict(),
     }
 
 

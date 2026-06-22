@@ -4,6 +4,7 @@ configure_monorepo_paths()
 
 from .tools import (
     EXPOSED_TOOL_NAMES,
+    approve_paper_order_simulation,
     create_backtest_request,
     create_pre_market_briefing,
     create_paper_order_proposal,
@@ -18,6 +19,7 @@ from .tools import (
     get_data_provider_health,
     get_market_data_snapshot,
     get_pattern_playbook,
+    get_paper_portfolio_accounting,
     get_broker_trading_token,
     get_portfolio_summary,
     get_research_digest,
@@ -26,6 +28,7 @@ from .tools import (
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_paper_fills,
     list_paper_orders,
     list_paper_positions,
     list_universes,
@@ -33,10 +36,12 @@ from .tools import (
     run_screener,
     run_momentum_screener,
     search_pattern_library,
+    simulate_approved_paper_fill,
 )
 
 __all__ = [
     "EXPOSED_TOOL_NAMES",
+    "approve_paper_order_simulation",
     "create_backtest_request",
     "create_pre_market_briefing",
     "create_paper_order_proposal",
@@ -51,6 +56,7 @@ __all__ = [
     "get_data_provider_health",
     "get_market_data_snapshot",
     "get_pattern_playbook",
+    "get_paper_portfolio_accounting",
     "get_broker_trading_token",
     "get_portfolio_summary",
     "get_research_digest",
@@ -59,6 +65,7 @@ __all__ = [
     "get_watchlist_snapshot",
     "get_universe_members",
     "list_data_providers",
+    "list_paper_fills",
     "list_paper_orders",
     "list_paper_positions",
     "list_universes",
@@ -66,4 +73,5 @@ __all__ = [
     "run_screener",
     "run_momentum_screener",
     "search_pattern_library",
+    "simulate_approved_paper_fill",
 ]

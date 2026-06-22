@@ -75,7 +75,11 @@ def test_paper_order_proposal_enters_approval_queue_without_fill() -> None:
         and event["event_type"] == "paper_order_proposed"
         for event in audit["audit_events"]
     )
-    assert all(item["status"] != "filled" for item in orders["orders"])
+    assert all(
+        item["status"] != "filled"
+        for item in orders["orders"]
+        if item["order_id"] == order["order_id"]
+    )
 
 
 def test_paper_positions_are_read_only_and_fixture_backed() -> None:

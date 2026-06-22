@@ -52,7 +52,7 @@ def test_sqlite_paper_ledger_seeds_fixture_positions_once(tmp_path) -> None:
     ]
 
 
-def test_sqlite_paper_ledger_schema_reserves_future_simulated_fills(tmp_path) -> None:
+def test_sqlite_paper_ledger_schema_includes_simulated_fills(tmp_path) -> None:
     db_path = tmp_path / "paper-ledger.db"
     SQLitePaperLedgerStore(db_path)
 

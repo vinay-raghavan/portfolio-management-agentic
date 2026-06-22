@@ -57,6 +57,6 @@ The final submission should show that the same workflows can run with fixtures f
 - Screener run summary with hard gates, component scores, and multi-hit ranking.
 - Factor-stack explanation with technical, fundamental, sentiment, volatility, macro, and portfolio-fit sections.
 - Pattern-card citations from public references.
-- Paper-trading proposal that remains draft or pending.
-- Simulated backtest result feeding a paper order proposal that remains pending approval.
+- Paper-trading proposal that remains draft or pending until approved.
+- Simulated backtest result feeding a paper order proposal, approval-gated simulated fill, and paper accounting update.
 - Audit log or trace showing policy boundaries and refusal of live-trading requests.

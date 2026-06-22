@@ -33,6 +33,7 @@ for relative_path in (
         sys.path.insert(0, package_path)
 
 from portfolio_mcp.tools import (  # noqa: E402
+    approve_paper_order_simulation,
     create_backtest_request,
     create_pre_market_briefing,
     create_paper_order_proposal,
@@ -47,6 +48,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     get_data_provider_health,
     get_market_data_snapshot,
     get_pattern_playbook,
+    get_paper_portfolio_accounting,
     get_portfolio_summary,
     get_research_digest,
     get_risk_review,
@@ -54,12 +56,14 @@ from portfolio_mcp.tools import (  # noqa: E402
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_paper_fills,
     list_paper_orders,
     list_paper_positions,
     list_universes,
     run_screener,
     run_momentum_screener,
     search_pattern_library,
+    simulate_approved_paper_fill,
 )
 
 
@@ -126,7 +130,7 @@ Core rules:
 - Never place live trades.
 - Never enable live strategies.
 - Never request, reveal, or use broker trading tokens.
-- Draft strategies may be created, but simulated execution must remain pending human approval.
+- Draft strategies and paper orders may be created, but simulated fills require human approval first.
 - Explain uncertainty, counterevidence, and risk in plain language.
 """,
     tools=[
@@ -151,7 +155,11 @@ Core rules:
         get_backtest_result,
         list_paper_orders,
         list_paper_positions,
+        list_paper_fills,
+        get_paper_portfolio_accounting,
         create_paper_order_proposal,
+        approve_paper_order_simulation,
+        simulate_approved_paper_fill,
         get_approval_queue,
         get_audit_events,
         get_risk_review,

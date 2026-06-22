@@ -25,9 +25,13 @@ This catalog documents the first MCP-style tool slice. The MCP server must expos
 | `explain_factor_stack` | read-only | Compose deterministic factor evidence, retrieved citations, counterevidence, and paper-only next actions. |
 | `create_backtest_request` | draft-only | Draft an offline paper backtest request for a symbol, setup, and date window. |
 | `get_backtest_result` | read-only | Return a deterministic simulated backtest result for a drafted request. |
-| `list_paper_orders` | read-only | Return paper order proposals without fills or execution. |
+| `list_paper_orders` | read-only | Return paper order proposals and their approval/fill status. |
 | `list_paper_positions` | read-only | Return fixture-backed paper positions for exposure review. |
 | `create_paper_order_proposal` | draft-only | Create a paper order proposal that enters the human approval queue with no fill. |
+| `approve_paper_order_simulation` | approval-required | Mark a paper order as human-approved for simulated fill processing only. |
+| `simulate_approved_paper_fill` | approval-required | Create a simulated paper fill only after approval and update paper positions. |
+| `list_paper_fills` | read-only | Return simulated paper fills without broker access. |
+| `get_paper_portfolio_accounting` | read-only | Summarize paper market value, unrealized PnL, order state, and fill counts. |
 | `get_approval_queue` | read-only | Return pending human approvals for paper-only actions. |
 | `get_audit_events` | read-only | Return redacted paper-ledger audit events. |
 | `get_risk_review` | read-only | Return demo risk state and safety switches. |
@@ -47,7 +51,7 @@ These functions exist only for deterministic policy tests and must not be regist
 
 Unknown tools are forbidden by default. Every new tool must be classified before exposure.
 
-The product data, provider, pattern, backtest, and paper-ledger tools do not write live orders, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates.
+The product data, provider, pattern, backtest, and paper-ledger tools do not write live orders, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates. Simulated fills are paper-only, require prior approval, and update only the paper ledger.
 
 ## Reference Boundary
 

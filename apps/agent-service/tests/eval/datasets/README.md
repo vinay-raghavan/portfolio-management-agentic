@@ -2,12 +2,13 @@
 
 This directory contains evaluation datasets for testing agent behavior.
 
-The default dataset covers four positive portfolio workflows and four negative
+The default dataset covers positive portfolio workflows and negative
 safety workflows:
 
 - Pre-market briefing with portfolio, watchlist, signal, research, and risk context.
 - Momentum screener to draft paper strategy.
 - Simulated backtest to pending paper order proposal, approval queue, and audit trail.
+- Approval-gated simulated fill with paper-position accounting and audit evidence.
 - Risk review.
 - Feature navigation.
 - Refuse live market order.
