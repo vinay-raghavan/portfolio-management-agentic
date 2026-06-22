@@ -4,6 +4,7 @@ from .models import (
     FactorStackExplanation,
     FundamentalsSnapshot,
     GateResult,
+    MacroSnapshot,
     MarketDataSnapshot,
     PatternCard,
     PatternCitation,
@@ -60,6 +61,12 @@ AAII_SENTIMENT = PatternCitation(
     title="AAII Investor Sentiment Survey",
     url="https://www.aaii.com/sentimentsurvey",
     usage_notes="Public reference for bullish, neutral, and bearish investor sentiment survey framing.",
+)
+FRED_API = PatternCitation(
+    source_id="fred-api",
+    title="Federal Reserve Economic Data API",
+    url="https://fred.stlouisfed.org/docs/api/fred/",
+    usage_notes="Reference for economic series, release calendars, and historical observations used in macro context.",
 )
 
 UNIVERSES = [
@@ -477,6 +484,18 @@ def _volatility_metric(
         return default
 
 
+def _macro_metric(
+    macro: MacroSnapshot,
+    name: str,
+    default: float = 0.0,
+) -> float:
+    value = macro.metrics.get(name, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _bounded(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
     return max(minimum, min(maximum, value))
 
@@ -534,6 +553,7 @@ def _configured_components(
     fundamentals: FundamentalsSnapshot | None,
     sentiment: SentimentSnapshot | None,
     volatility: VolatilitySnapshot | None,
+    macro: MacroSnapshot | None,
 ) -> list[ScoreComponent]:
     roc20 = _metric(snapshot, "roc20_pct")
     rsi14 = _metric(snapshot, "rsi14")
@@ -552,11 +572,15 @@ def _configured_components(
         pattern_counterevidence.append(
             "Configured volatility context is unavailable for this symbol."
         )
+    if macro is None:
+        pattern_counterevidence.append(
+            "Configured macro/regime context is unavailable for this symbol."
+        )
     components = [
         ScoreComponent(
             "technical",
             round(technical_score, 3),
-            0.30,
+            0.25,
             [
                 f"Configured 20-day momentum proxy is {roc20:.2f}%.",
                 f"Configured RSI proxy is {rsi14:.2f}.",
@@ -653,6 +677,47 @@ def _configured_components(
             volatility_counterevidence.append(
                 "Configured volatility context calls for smaller paper sizing."
             )
+    if macro is not None:
+        market_regime = _macro_metric(macro, "market_regime_score")
+        breadth = _macro_metric(macro, "breadth_score")
+        rate_pressure = _macro_metric(macro, "rate_pressure_score")
+        event_risk = _macro_metric(macro, "event_risk_score")
+        liquidity_condition = _macro_metric(macro, "liquidity_condition_score")
+        macro_score = _bounded(
+            (market_regime * 0.35)
+            + (breadth * 0.25)
+            + (rate_pressure * 0.15)
+            + (liquidity_condition * 0.15)
+            + ((1.0 - event_risk) * 0.10)
+        )
+        macro_counterevidence: list[str] = []
+        if event_risk >= 0.50:
+            macro_counterevidence.append(
+                "Event risk score is elevated enough to reduce conviction."
+            )
+        if breadth < 0.50:
+            macro_counterevidence.append(
+                "Breadth score does not confirm a broad risk-on regime."
+            )
+        if rate_pressure < 0.45:
+            macro_counterevidence.append(
+                "Rate-pressure score weakens the macro backdrop."
+            )
+        components.append(
+            ScoreComponent(
+                "macro",
+                round(macro_score, 3),
+                0.10,
+                [
+                    f"Configured macro context is as of {macro.as_of}.",
+                    f"Market regime and breadth scores are {market_regime:.2f} and {breadth:.2f}.",
+                    f"Rate-pressure and liquidity-condition scores are {rate_pressure:.2f} and {liquidity_condition:.2f}.",
+                    f"Event risk score is {event_risk:.2f}.",
+                ],
+                macro_counterevidence,
+                [FRED_API.source_id],
+            )
+        )
     components.extend(
         [
             ScoreComponent(
@@ -674,7 +739,7 @@ def _configured_components(
             ScoreComponent(
                 "pattern",
                 pattern_score,
-                0.15,
+                0.10,
                 [f"Configured metrics passed: {', '.join(passed_screeners) or 'none'}."],
                 pattern_counterevidence,
                 [_configured_setup(passed_screeners) + "-v1"],
@@ -690,6 +755,7 @@ def _configured_candidate(
     fundamentals: FundamentalsSnapshot | None = None,
     sentiment: SentimentSnapshot | None = None,
     volatility: VolatilitySnapshot | None = None,
+    macro: MacroSnapshot | None = None,
 ) -> RankedScreenerCandidate:
     passed_screeners = _configured_passed_screeners(snapshot)
     components = _configured_components(
@@ -698,6 +764,7 @@ def _configured_candidate(
         fundamentals,
         sentiment,
         volatility,
+        macro,
     )
     gates = _configured_gates(snapshot)
     missing_data = ["intraday_spread"]
@@ -707,6 +774,8 @@ def _configured_candidate(
         missing_data.insert(0, "configured_sentiment")
     if volatility is None:
         missing_data.insert(0, "configured_volatility")
+    if macro is None:
+        missing_data.insert(0, "configured_macro")
     return RankedScreenerCandidate(
         rank=rank,
         symbol=snapshot.symbol,
@@ -761,6 +830,16 @@ def _volatility_for_symbol(
         return None
 
 
+def _macro_for_symbol(
+    registry: DataProviderRegistry,
+    symbol: str,
+) -> MacroSnapshot | None:
+    try:
+        return registry.macro.get_context(symbol)
+    except ValueError:
+        return None
+
+
 def run_fixture_screener(
     universe_id: str = "fixture_nifty50",
     preset: str = "momentum",
@@ -776,7 +855,14 @@ def run_fixture_screener(
         "configured_json_file"
         if any(
             "configured_" in providers_used[name]
-            for name in ("market_data", "universe", "fundamentals", "sentiment", "volatility")
+            for name in (
+                "market_data",
+                "universe",
+                "fundamentals",
+                "sentiment",
+                "volatility",
+                "macro",
+            )
         )
         else OFFLINE_SOURCE
     )
@@ -786,10 +872,18 @@ def run_fixture_screener(
         fundamentals = _fundamentals_for_symbol(registry, symbol)
         sentiment = _sentiment_for_symbol(registry, symbol)
         volatility = _volatility_for_symbol(registry, symbol)
+        macro = _macro_for_symbol(registry, symbol)
         candidate = (
             _candidate(symbol, 0)
             if symbol in _COMPONENTS
-            else _configured_candidate(snapshot, 0, fundamentals, sentiment, volatility)
+            else _configured_candidate(
+                snapshot,
+                0,
+                fundamentals,
+                sentiment,
+                volatility,
+                macro,
+            )
         )
         gates = candidate.gates
         if any(gate.status != "pass" for gate in gates):
@@ -921,6 +1015,7 @@ def _candidate_for_symbol(symbol: str) -> RankedScreenerCandidate:
         _fundamentals_for_symbol(registry, normalized),
         _sentiment_for_symbol(registry, normalized),
         _volatility_for_symbol(registry, normalized),
+        _macro_for_symbol(registry, normalized),
     )
 
 
@@ -980,11 +1075,19 @@ def build_factor_stack_explanation(
         "counterevidence": [],
         "citations": [],
     }
-    sections["market_regime"] = {
-        "evidence": ["Fixture regime is constructive but not broad enough to ignore risk."],
-        "counterevidence": ["Live breadth and macro adapters are not configured."],
-        "citations": [NSE_INDIA_VIX.source_id],
-    }
+    macro_section = sections.get("macro")
+    if macro_section:
+        sections["market_regime"] = {
+            "evidence": macro_section["evidence"],
+            "counterevidence": macro_section["counterevidence"],
+            "citations": macro_section["citations"],
+        }
+    else:
+        sections["market_regime"] = {
+            "evidence": ["Fixture regime is constructive but not broad enough to ignore risk."],
+            "counterevidence": ["Configured macro adapter is not available."],
+            "citations": [NSE_INDIA_VIX.source_id],
+        }
     return FactorStackExplanation(
         symbol=candidate.symbol,
         setup=selected_setup,
