@@ -16,6 +16,10 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "get_research_digest" in tool_names
     assert "create_pre_market_briefing" in tool_names
     assert "run_momentum_screener" in tool_names
+    assert "list_data_providers" in tool_names
+    assert "get_data_provider_health" in tool_names
+    assert "get_market_data_snapshot" in tool_names
+    assert "get_universe_members" in tool_names
     assert "list_universes" in tool_names
     assert "run_screener" in tool_names
     assert "search_pattern_library" in tool_names

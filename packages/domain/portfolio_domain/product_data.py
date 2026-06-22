@@ -11,6 +11,7 @@ from .models import (
     StrategyEvidencePack,
     UniverseDefinition,
 )
+from .providers import get_data_provider_registry
 
 OFFLINE_SOURCE = "offline_fixture"
 
@@ -375,11 +376,11 @@ _GATES = {
 
 
 def list_fixture_universes() -> list[UniverseDefinition]:
-    return UNIVERSES
+    return get_data_provider_registry().universe.list_universes()
 
 
 def _universe_by_id(universe_id: str) -> UniverseDefinition:
-    for universe in UNIVERSES:
+    for universe in list_fixture_universes():
         if universe.universe_id == universe_id:
             return universe
     raise ValueError(f"Unknown universe_id: {universe_id}")
@@ -433,12 +434,14 @@ def run_fixture_screener(
     preset: str = "momentum",
     limit: int = 10,
 ) -> ScreenerRunResult:
-    universe = _universe_by_id(universe_id)
+    registry = get_data_provider_registry()
+    universe = registry.universe.get_members(universe_id)
     normalized_preset = preset.strip().lower() or "momentum"
     rejected_symbols: list[str] = []
     candidates: list[RankedScreenerCandidate] = []
 
     for symbol in universe.symbols:
+        registry.market_data.get_snapshot(symbol)
         gates = _GATES.get(symbol, [])
         if any(gate.status != "pass" for gate in gates):
             rejected_symbols.append(symbol)
@@ -485,6 +488,7 @@ def run_fixture_screener(
             "candidate_count": len(ranked),
             "rejected_count": len(rejected_symbols),
             "hard_gates": ["data_quality", "tradability", "paper_only"],
+            "providers_used": registry.providers_used(),
         },
         candidates=ranked,
         rejected_symbols=rejected_symbols,

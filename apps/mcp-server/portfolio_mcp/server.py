@@ -10,12 +10,16 @@ from .tools import (
     draft_paper_strategy,
     explain_candidate_evidence,
     explain_factor_stack,
+    get_data_provider_health,
+    get_market_data_snapshot,
     get_pattern_playbook,
     get_portfolio_summary,
     get_research_digest,
     get_risk_review,
     get_signal_summary,
     get_watchlist_snapshot,
+    get_universe_members,
+    list_data_providers,
     list_universes,
     run_screener,
     run_momentum_screener,
@@ -56,6 +60,10 @@ def build_server():
     server.tool()(get_research_digest)
     server.tool()(create_pre_market_briefing)
     server.tool()(run_momentum_screener)
+    server.tool()(list_data_providers)
+    server.tool()(get_data_provider_health)
+    server.tool()(get_market_data_snapshot)
+    server.tool()(get_universe_members)
     server.tool()(list_universes)
     server.tool()(run_screener)
     server.tool()(explain_candidate_evidence)

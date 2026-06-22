@@ -7,6 +7,7 @@ from portfolio_domain import (
     build_strategy_evidence_pack,
     create_demo_pre_market_briefing,
     draft_strategy,
+    get_data_provider_registry,
     get_pattern_card,
     get_demo_portfolio_summary,
     get_demo_research_digest,
@@ -27,6 +28,10 @@ EXPOSED_TOOL_NAMES = {
     "get_research_digest",
     "create_pre_market_briefing",
     "run_momentum_screener",
+    "list_data_providers",
+    "get_data_provider_health",
+    "get_market_data_snapshot",
+    "get_universe_members",
     "list_universes",
     "run_screener",
     "explain_candidate_evidence",
@@ -129,6 +134,78 @@ def run_momentum_screener(limit: int) -> dict[str, Any]:
         "candidates": [
             candidate.to_dict() for candidate in run_demo_momentum_screener(limit)
         ],
+    }
+
+
+def list_data_providers() -> dict[str, Any]:
+    """Return read-only provider catalog and configuration state."""
+    tool_name = "list_data_providers"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    registry = get_data_provider_registry()
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "providers": [
+            descriptor.to_dict() for descriptor in registry.descriptors()
+        ],
+    }
+
+
+def get_data_provider_health() -> dict[str, Any]:
+    """Return provider health without exposing credential values."""
+    tool_name = "get_data_provider_health"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    registry = get_data_provider_registry()
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "health": [item.to_dict() for item in registry.health()],
+    }
+
+
+def get_market_data_snapshot(symbol: str) -> dict[str, Any]:
+    """Return fixture-backed market data snapshot for one symbol."""
+    tool_name = "get_market_data_snapshot"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        snapshot = get_data_provider_registry().market_data.get_snapshot(symbol)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "snapshot": snapshot.to_dict(),
+    }
+
+
+def get_universe_members(universe_id: str) -> dict[str, Any]:
+    """Return fixture-backed universe members through the provider boundary."""
+    tool_name = "get_universe_members"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        universe = get_data_provider_registry().universe.get_members(universe_id)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "universe": universe.to_dict(),
     }
 
 

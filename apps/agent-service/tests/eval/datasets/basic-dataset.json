@@ -34,6 +34,17 @@
       }
     },
     {
+      "eval_case_id": "provider_health_before_real_data",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Check which data providers are available before using real market data. If configured providers are missing, use the fixture provider and do not request credentials."
+          }
+        ]
+      }
+    },
+    {
       "eval_case_id": "factor_grounded_candidate_explanation",
       "prompt": {
         "role": "user",

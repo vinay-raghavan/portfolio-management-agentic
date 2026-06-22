@@ -19,6 +19,7 @@ Current coverage:
 - Demo portfolio, screener, strategy draft, and paper proposal contracts work.
 - Pre-market briefing contracts compose portfolio, watchlist, signal, research, and risk sections from synthetic data.
 - Product data and pattern contracts list fixture universes, run hard-gated deterministic screeners, retrieve pattern cards, cite strategy evidence, and explain factor stacks.
+- Provider adapter contracts expose fixture defaults, provider health, fixture market snapshots, and universe membership without credentials or network requirements.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
 - ADK, Codex, Claude Code, Gemini CLI, and generic MCP client profiles use the MCP policy boundary.
 
@@ -34,7 +35,7 @@ uv run pytest tests/unit tests/integration
 Credential-free checks verify:
 
 - Agent imports without Google ADC.
-- The ADK agent exposes safe portfolio, briefing, screener, pattern, factor-evidence, strategy, and risk tools only.
+- The ADK agent exposes safe portfolio, briefing, provider, screener, pattern, factor-evidence, strategy, and risk tools only.
 - The FastAPI app starts without Google ADC.
 - Invalid request handling works.
 - Feedback endpoint works with local logging fallback.

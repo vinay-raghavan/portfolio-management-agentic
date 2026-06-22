@@ -71,6 +71,83 @@ class UniverseDefinition:
 
 
 @dataclass(frozen=True)
+class UniverseMembers:
+    provider_id: str
+    universe_id: str
+    source: str
+    as_of: str
+    symbols: list[str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ProviderDescriptor:
+    provider_id: str
+    kind: str
+    display_name: str
+    status: str
+    configured: bool
+    capabilities: list[str]
+    required_env: list[str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ProviderHealth:
+    provider_id: str
+    kind: str
+    status: str
+    configured: bool
+    message: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class OHLCVBar:
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class MarketDataSnapshot:
+    provider_id: str
+    source: str
+    symbol: str
+    as_of: str
+    bars: list[OHLCVBar]
+    latest_close: float
+    metrics: dict[str, float | int | str]
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "provider_id": self.provider_id,
+            "source": self.source,
+            "symbol": self.symbol,
+            "as_of": self.as_of,
+            "bars": [bar.to_dict() for bar in self.bars],
+            "latest_close": self.latest_close,
+            "metrics": self.metrics,
+            "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True)
 class GateResult:
     name: str
     status: str

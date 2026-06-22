@@ -12,6 +12,10 @@ This catalog documents the first MCP-style tool slice. The MCP server must expos
 | `get_research_digest` | read-only | Return synthetic research notes, counterevidence, and pattern citations. |
 | `create_pre_market_briefing` | read-only | Compose portfolio, watchlist, signal, research, and risk sections into a briefing. |
 | `run_momentum_screener` | read-only | Return synthetic screener candidates and evidence. |
+| `list_data_providers` | read-only | Return provider catalog, capabilities, and configuration state without credential values. |
+| `get_data_provider_health` | read-only | Return provider availability and not-configured statuses without network side effects. |
+| `get_market_data_snapshot` | read-only | Return fixture-backed OHLCV snapshot and metrics for one symbol. |
+| `get_universe_members` | read-only | Return fixture-backed universe members through the provider boundary. |
 | `list_universes` | read-only | Return fixture-backed tradable universes with source metadata. |
 | `run_screener` | read-only | Run a deterministic screener over a selected universe using hard gates and weighted score components. |
 | `explain_candidate_evidence` | read-only | Explain technical, fundamental, sentiment, volatility, market-regime, portfolio-fit, and missing-data evidence for a candidate. |
@@ -36,7 +40,7 @@ These functions exist only for deterministic policy tests and must not be regist
 
 Unknown tools are forbidden by default. Every new tool must be classified before exposure.
 
-The product data and pattern tools do not write orders, authorize trades, retrieve broker trading tokens, or bypass paper-trading approval gates.
+The product data, provider, and pattern tools do not write orders, authorize trades, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates.
 
 ## Reference Boundary
 
