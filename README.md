@@ -13,6 +13,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - Product data foundation adds fixture universes, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
 - Provider adapter contracts expose fixture defaults plus read-only provider catalog, health, market snapshot, and universe-member tools.
 - Recommendation explanations join screener/factor evidence, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
+- Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, and optional Ollama profile.
@@ -62,9 +63,8 @@ Primary constraints:
 
 Next implementation milestones:
 
-1. Add report-generation contracts for paper-trading review and audit export.
-2. Run and tune model-backed agent evals when provider credentials are configured.
-3. Build the first thin web console after the matching MCP/domain workflows are tested.
+1. Run and tune model-backed agent evals when provider credentials are configured.
+2. Build the first thin web console after the matching MCP/domain workflows are tested.
 
 ## Verification
 

@@ -20,10 +20,12 @@ from .models import (
     MarketDataSnapshot,
     MarketSignal,
     OHLCVBar,
+    PaperAuditExport,
     PaperFill,
     PaperOrder,
     PaperPortfolioAccounting,
     PaperPosition,
+    PaperTradingReport,
     PatternCard,
     PatternCitation,
     PortfolioSummary,
@@ -85,6 +87,7 @@ from .product_data import (
     search_pattern_cards,
 )
 from .recommendations import build_recommendation_explanation
+from .reports import build_paper_trading_report
 
 __all__ = [
     "ApprovalRequest",
@@ -98,10 +101,12 @@ __all__ = [
     "MarketDataSnapshot",
     "MarketSignal",
     "OHLCVBar",
+    "PaperAuditExport",
     "PaperFill",
     "PaperOrder",
     "PaperPortfolioAccounting",
     "PaperPosition",
+    "PaperTradingReport",
     "PatternCard",
     "PatternCitation",
     "PortfolioSummary",
@@ -133,6 +138,7 @@ __all__ = [
     "build_factor_stack_explanation",
     "build_data_provider_registry",
     "build_paper_ledger_store",
+    "build_paper_trading_report",
     "build_recommendation_explanation",
     "build_strategy_evidence_pack",
     "create_demo_pre_market_briefing",

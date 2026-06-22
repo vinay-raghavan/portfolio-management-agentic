@@ -118,6 +118,7 @@ jobs:
               "explain_candidate_evidence",
               "explain_factor_stack",
               "get_recommendation_explanation",
+              "generate_paper_trading_report",
               "get_approval_queue",
               "get_audit_events",
               "get_backtest_request",

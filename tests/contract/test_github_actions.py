@@ -16,6 +16,7 @@ def test_ci_workflow_runs_required_deterministic_checks() -> None:
     assert "streamable_http_client" in ci
     assert "create_pre_market_briefing" in ci
     assert "get_recommendation_explanation" in ci
+    assert "generate_paper_trading_report" in ci
     assert "list_strategy_drafts" in ci
     assert "list_backtest_requests" in ci
     assert "place_live_order" in ci

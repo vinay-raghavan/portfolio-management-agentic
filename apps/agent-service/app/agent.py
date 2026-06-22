@@ -42,6 +42,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     draft_paper_strategy,
     explain_candidate_evidence,
     explain_factor_stack,
+    generate_paper_trading_report,
     get_approval_queue,
     get_audit_events,
     get_backtest_request,
@@ -131,6 +132,7 @@ Core rules:
 - Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
 - Use recommendation explanations to join screener, factor, strategy-history, backtest, risk, and paper-ledger evidence before proposing next steps.
 - Use strategy draft history, backtest request/result tools, and paper-ledger tools for simulation review, pending approvals, and audit context.
+- Use paper-trading reports for read-only review summaries and redacted audit exports.
 - Keep deterministic tool outputs, citations, risk checks, and policy ahead of model intuition.
 - Paper trading and simulation only.
 - Never place live trades.
@@ -158,6 +160,7 @@ Core rules:
         cite_strategy_evidence,
         explain_factor_stack,
         get_recommendation_explanation,
+        generate_paper_trading_report,
         create_backtest_request,
         list_backtest_requests,
         get_backtest_request,

@@ -45,6 +45,7 @@ ACTION_TIERS: dict[str, ActionTier] = {
     "cite_strategy_evidence": ActionTier.READ_ONLY,
     "explain_factor_stack": ActionTier.READ_ONLY,
     "get_recommendation_explanation": ActionTier.READ_ONLY,
+    "generate_paper_trading_report": ActionTier.READ_ONLY,
     "create_backtest_request": ActionTier.DRAFT_ONLY,
     "list_backtest_requests": ActionTier.READ_ONLY,
     "get_backtest_request": ActionTier.READ_ONLY,
