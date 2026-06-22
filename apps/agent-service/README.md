@@ -58,6 +58,10 @@ The agent exposes only policy-classified tools:
 
 Forbidden live-order and broker-token functions are not exposed to the agent.
 
+When `PAPER_LEDGER_DB_PATH` is configured, paper-ledger tools use SQLite-backed
+state. The repository Compose file mounts `/data/paper-ledger.db` on a named
+volume for local container runs.
+
 ## Commands
 
 | Command              | Description                                                                                 |

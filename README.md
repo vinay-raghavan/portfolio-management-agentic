@@ -13,6 +13,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - Product data foundation adds fixture universes, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
 - Provider adapter contracts expose fixture defaults plus read-only provider catalog, health, market snapshot, and universe-member tools.
 - Backtest and paper-ledger contracts draft simulated backtest requests, return offline results, create pending paper order proposals, expose approval queues, and emit redacted audit events.
+- SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, and optional Ollama profile.
 - No copied portfolio data.
 - No broker trading credentials.
@@ -60,8 +61,8 @@ Primary constraints:
 
 Next implementation milestones:
 
-1. Add structured persistence for paper orders, simulated fills, approvals, and audit events.
-2. Add approval-gated simulated fills and paper portfolio accounting.
+1. Add approval-gated simulated fills and paper portfolio accounting.
+2. Add repository-backed strategy drafts and backtest request history.
 3. Add recommendation-explanation contracts that join screener, backtest, risk, and ledger evidence.
 4. Run and tune model-backed agent evals when provider credentials are configured.
 5. Build the first thin web console after the matching MCP/domain workflows are tested.
@@ -100,6 +101,10 @@ The default services expose:
 
 - Agent service: `http://localhost:8000`
 - MCP server: `http://localhost:8081/mcp`
+
+Both services use the same paper-ledger database when `PAPER_LEDGER_DB_PATH` is
+set. The Compose default is `/data/paper-ledger.db` on the `paper-ledger-data`
+volume; the local `.env.example` default is `data/paper-ledger.db`.
 
 The optional Ollama service is profile-gated:
 

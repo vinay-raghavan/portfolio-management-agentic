@@ -20,7 +20,7 @@ Current coverage:
 - Pre-market briefing contracts compose portfolio, watchlist, signal, research, and risk sections from synthetic data.
 - Product data and pattern contracts list fixture universes, run hard-gated deterministic screeners, retrieve pattern cards, cite strategy evidence, and explain factor stacks.
 - Provider adapter contracts expose fixture defaults, provider health, fixture market snapshots, and universe membership without credentials or network requirements.
-- Backtest and paper-ledger contracts draft simulated requests, return offline results, create pending paper order proposals, expose approval queues, and emit redacted audit events without fills.
+- Backtest and paper-ledger contracts draft simulated requests, return offline results, create pending paper order proposals, expose approval queues, emit redacted audit events without fills, and persist paper-ledger state when SQLite is configured.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
 - ADK, Codex, Claude Code, Gemini CLI, and generic MCP client profiles use the MCP policy boundary.
 
@@ -74,6 +74,10 @@ Default endpoints:
 
 - Agent service: `http://localhost:8000`
 - MCP server: `http://localhost:8081/mcp`
+
+Compose config also validates the shared `paper-ledger-data` volume and
+`PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` default for durable local ledger
+state.
 
 The optional local LLM profile is disabled by default:
 
