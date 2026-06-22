@@ -56,7 +56,9 @@ def run_demo_momentum_screener(limit: int) -> list[ScreenerCandidate]:
                 "Higher-low structure remains intact.",
                 "Relative strength is improving versus the index.",
             ],
-            counterevidence=["Financial sector exposure is already present in demo portfolio."],
+            counterevidence=[
+                "Financial sector exposure is already present in demo portfolio."
+            ],
         ),
         ScreenerCandidate(
             symbol="SUNPHARMA",
@@ -202,17 +204,21 @@ def create_demo_pre_market_briefing() -> PreMarketBriefing:
 
 def draft_strategy(symbol: str, rationale: str) -> StrategyDraft:
     normalized_symbol = symbol.upper().strip()
+    normalized_rationale = rationale.strip()
     return StrategyDraft(
         strategy_id=f"paper-{normalized_symbol.lower()}-momentum-001",
         symbol=normalized_symbol,
         mode="paper",
         status="draft",
+        source="offline_fixture",
+        created_at="2026-06-22T09:15:00+05:30",
+        rationale=normalized_rationale,
         entry_rule="Enter paper position only after price confirms above prior day high.",
         exit_rule="Exit paper position on 2 percent stop loss or failed breakout close.",
         risk_notes=[
             "Paper trading only.",
             "Requires human approval before simulated execution.",
-            f"Rationale: {rationale}",
+            f"Rationale: {normalized_rationale}",
         ],
     )
 

@@ -7,7 +7,8 @@ def test_agent_imports_without_google_credentials() -> None:
 
 def test_agent_exposes_only_safe_portfolio_tools() -> None:
     tool_names = {
-        getattr(tool, "name", getattr(tool, "__name__", "")) for tool in root_agent.tools
+        getattr(tool, "name", getattr(tool, "__name__", ""))
+        for tool in root_agent.tools
     }
 
     assert "get_portfolio_summary" in tool_names
@@ -27,6 +28,8 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "cite_strategy_evidence" in tool_names
     assert "explain_factor_stack" in tool_names
     assert "create_backtest_request" in tool_names
+    assert "list_backtest_requests" in tool_names
+    assert "get_backtest_request" in tool_names
     assert "get_backtest_result" in tool_names
     assert "list_paper_orders" in tool_names
     assert "list_paper_positions" in tool_names
@@ -38,5 +41,7 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "get_approval_queue" in tool_names
     assert "get_audit_events" in tool_names
     assert "draft_paper_strategy" in tool_names
+    assert "list_strategy_drafts" in tool_names
+    assert "get_strategy_draft" in tool_names
     assert "place_live_order" not in tool_names
     assert "get_broker_trading_token" not in tool_names

@@ -51,16 +51,16 @@ You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`
 The agent exposes only policy-classified tools:
 
 - Pre-market briefing: portfolio summary, watchlist snapshot, signal summary, research digest, risk review, and composed briefing.
-- Screener and strategy drafting: synthetic momentum screener, fixture-backed deterministic screener, draft paper strategy, and pending paper proposal.
+- Screener and strategy drafting: synthetic momentum screener, fixture-backed deterministic screener, persisted paper strategy drafts, strategy history retrieval, and pending paper proposal.
 - Provider checks: read-only provider catalog, provider health, fixture market snapshots, and fixture universe members.
 - Pattern and factor evidence: universe listing, pattern search, pattern playbook retrieval, strategy evidence citations, and factor-stack explanations.
-- Backtest and ledger review: simulated backtest requests and results, paper order proposals, approval-gated simulated fills, paper positions, paper accounting, approval queue, and redacted audit events.
+- Backtest and ledger review: persisted simulated backtest requests, backtest history retrieval, deterministic results, paper order proposals, approval-gated simulated fills, paper positions, paper accounting, approval queue, and redacted audit events.
 
 Forbidden live-order and broker-token functions are not exposed to the agent.
 
-When `PAPER_LEDGER_DB_PATH` is configured, paper-ledger tools use SQLite-backed
-state. The repository Compose file mounts `/data/paper-ledger.db` on a named
-volume for local container runs.
+When `PAPER_LEDGER_DB_PATH` is configured, strategy, backtest, and paper-ledger
+tools use SQLite-backed state. The repository Compose file mounts
+`/data/paper-ledger.db` on a named volume for local container runs.
 
 ## Commands
 

@@ -8,7 +8,9 @@ from portfolio_domain.paper_ledger import (
 )
 
 
-def test_sqlite_paper_ledger_persists_orders_approvals_and_audit_events(tmp_path) -> None:
+def test_sqlite_paper_ledger_persists_orders_approvals_and_audit_events(
+    tmp_path,
+) -> None:
     db_path = tmp_path / "paper-ledger.db"
     store = SQLitePaperLedgerStore(db_path)
 
@@ -27,9 +29,7 @@ def test_sqlite_paper_ledger_persists_orders_approvals_and_audit_events(tmp_path
     assert [item.approval_id for item in reloaded.approval_queue()] == [
         approval.approval_id
     ]
-    assert [item.event_id for item in reloaded.audit_events()] == [
-        audit_event.event_id
-    ]
+    assert [item.event_id for item in reloaded.audit_events()] == [audit_event.event_id]
     persisted_order = reloaded.list_orders()[0]
     assert persisted_order.status == "pending_approval"
     assert persisted_order.filled_quantity == 0
@@ -65,12 +65,47 @@ def test_sqlite_paper_ledger_schema_includes_simulated_fills(tmp_path) -> None:
         }
 
     assert {
+        "strategy_drafts",
+        "backtest_requests",
         "paper_orders",
         "paper_positions",
         "paper_fills",
         "approval_requests",
         "audit_events",
     }.issubset(table_names)
+
+
+def test_sqlite_paper_ledger_persists_strategy_and_backtest_history(tmp_path) -> None:
+    db_path = tmp_path / "paper-ledger.db"
+    store = SQLitePaperLedgerStore(db_path)
+
+    strategy = store.create_strategy_draft(
+        "TATAMOTORS",
+        "Top ranked fixture candidate with evidence-backed paper setup.",
+    )
+    backtest_request = store.create_backtest_request(
+        "TATAMOTORS",
+        "breakout-continuation",
+        "2026-01-02",
+        "2026-06-22",
+    )
+
+    reloaded = SQLitePaperLedgerStore(db_path)
+    backtest_result = reloaded.get_backtest_result(backtest_request.request_id)
+
+    assert [item.strategy_id for item in reloaded.list_strategy_drafts()] == [
+        strategy.strategy_id
+    ]
+    assert reloaded.get_strategy_draft(strategy.strategy_id) == strategy
+    assert [item.request_id for item in reloaded.list_backtest_requests()] == [
+        backtest_request.request_id
+    ]
+    assert (
+        reloaded.get_backtest_request(backtest_request.request_id) == backtest_request
+    )
+    assert backtest_result.request_id == backtest_request.request_id
+    assert backtest_result.status == "simulated"
+    assert backtest_result.mode == "paper"
 
 
 def test_paper_ledger_store_uses_sqlite_when_db_path_is_configured(

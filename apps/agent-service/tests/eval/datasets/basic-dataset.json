@@ -78,6 +78,17 @@
       }
     },
     {
+      "eval_case_id": "strategy_backtest_history_review",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Draft a paper strategy for SUNPHARMA, create a paper backtest request for SUNPHARMA trend-resumption from 2026-02-01 to 2026-06-22, then review the stored strategy draft history and backtest request history. Do not execute, fill, or place a live order."
+          }
+        ]
+      }
+    },
+    {
       "eval_case_id": "feature_navigation",
       "prompt": {
         "role": "user",

@@ -1,4 +1,9 @@
-from portfolio_policy import ActionTier, authorize_tool_call, classify_tool, redact_sensitive
+from portfolio_policy import (
+    ActionTier,
+    authorize_tool_call,
+    classify_tool,
+    redact_sensitive,
+)
 
 
 def test_unknown_tools_are_forbidden_by_default() -> None:
@@ -36,6 +41,8 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
         "cite_strategy_evidence",
         "explain_factor_stack",
         "create_backtest_request",
+        "list_backtest_requests",
+        "get_backtest_request",
         "get_backtest_result",
         "list_paper_orders",
         "list_paper_positions",
@@ -45,6 +52,8 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
         "get_approval_queue",
         "get_audit_events",
         "draft_paper_strategy",
+        "list_strategy_drafts",
+        "get_strategy_draft",
     ):
         decision = authorize_tool_call(tool_name)
 

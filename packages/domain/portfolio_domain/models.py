@@ -290,7 +290,9 @@ class StrategyEvidencePack:
             "symbol": self.symbol,
             "setup": self.setup,
             "paper_only_status": self.paper_only_status,
-            "matched_patterns": [pattern.to_dict() for pattern in self.matched_patterns],
+            "matched_patterns": [
+                pattern.to_dict() for pattern in self.matched_patterns
+            ],
             "factor_summary": self.factor_summary,
             "citations": [citation.to_dict() for citation in self.citations],
             "next_allowed_actions": self.next_allowed_actions,
@@ -314,9 +316,7 @@ class FactorStackExplanation:
             "setup": self.setup,
             "paper_only_status": self.paper_only_status,
             "sections": self.sections,
-            "pattern_matches": [
-                pattern.to_dict() for pattern in self.pattern_matches
-            ],
+            "pattern_matches": [pattern.to_dict() for pattern in self.pattern_matches],
             "missing_data": self.missing_data,
             "citations": [citation.to_dict() for citation in self.citations],
             "next_allowed_actions": self.next_allowed_actions,
@@ -399,6 +399,9 @@ class StrategyDraft:
     symbol: str
     mode: str
     status: str
+    source: str
+    created_at: str
+    rationale: str
     entry_rule: str
     exit_rule: str
     risk_notes: list[str]

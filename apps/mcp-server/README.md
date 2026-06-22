@@ -2,9 +2,9 @@
 
 Policy-enforced MCP tools for portfolio analysis and paper-trading workflows.
 
-The server exposes only policy-classified tools. Current paper-ledger tools can draft backtest requests, return simulated results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, list paper positions and fills, show accounting summaries, show approval requests, and return redacted audit events. Forbidden live-trading and broker-token helpers remain unregistered compatibility traps for tests.
+The server exposes only policy-classified tools. Current strategy, backtest, and paper-ledger tools can persist paper strategy drafts, list strategy history, draft backtest requests, list backtest history, return simulated results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, list paper positions and fills, show accounting summaries, show approval requests, and return redacted audit events. Forbidden live-trading and broker-token helpers remain unregistered compatibility traps for tests.
 
-Set `PAPER_LEDGER_DB_PATH` to enable SQLite-backed paper-ledger persistence. Docker or Podman Compose uses `/data/paper-ledger.db` on a named volume.
+Set `PAPER_LEDGER_DB_PATH` to enable SQLite-backed strategy, backtest, and paper-ledger persistence. Docker or Podman Compose uses `/data/paper-ledger.db` on a named volume.
 
 ## Local Runtime
 

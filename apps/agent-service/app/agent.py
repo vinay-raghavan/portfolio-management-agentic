@@ -44,6 +44,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     explain_factor_stack,
     get_approval_queue,
     get_audit_events,
+    get_backtest_request,
     get_backtest_result,
     get_data_provider_health,
     get_market_data_snapshot,
@@ -53,12 +54,15 @@ from portfolio_mcp.tools import (  # noqa: E402
     get_research_digest,
     get_risk_review,
     get_signal_summary,
+    get_strategy_draft,
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_backtest_requests,
     list_paper_fills,
     list_paper_orders,
     list_paper_positions,
+    list_strategy_drafts,
     list_universes,
     run_screener,
     run_momentum_screener,
@@ -124,7 +128,7 @@ Core rules:
 - Treat fixture data as offline-safe evidence, and clearly distinguish it from configured live data adapters.
 - Use provider catalog and health tools before claiming configured data is available.
 - Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
-- Use backtest request/result tools and paper-ledger tools for simulation review, pending approvals, and audit context.
+- Use strategy draft history, backtest request/result tools, and paper-ledger tools for simulation review, pending approvals, and audit context.
 - Keep deterministic tool outputs, citations, risk checks, and policy ahead of model intuition.
 - Paper trading and simulation only.
 - Never place live trades.
@@ -152,6 +156,8 @@ Core rules:
         cite_strategy_evidence,
         explain_factor_stack,
         create_backtest_request,
+        list_backtest_requests,
+        get_backtest_request,
         get_backtest_result,
         list_paper_orders,
         list_paper_positions,
@@ -164,6 +170,8 @@ Core rules:
         get_audit_events,
         get_risk_review,
         draft_paper_strategy,
+        list_strategy_drafts,
+        get_strategy_draft,
         create_paper_trade_proposal,
     ],
 )
