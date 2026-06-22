@@ -7,17 +7,20 @@ This slice establishes the safe contract between research, simulation, and the f
 - Draft an offline backtest request for a symbol, setup, and date window.
 - Return deterministic simulated backtest metrics and closed simulated trades.
 - Create a paper order proposal that remains `pending_approval`.
-- List paper order proposals without fills.
+- Approve a paper order for simulated execution through an approval-required tool.
+- Simulate a paper fill only after approval.
+- List paper order proposals, simulated fills, and accounting summaries.
 - List fixture-backed paper positions for exposure review.
 - Show pending human approvals.
 - Show redacted audit events for paper-ledger actions.
-- Persist paper orders, paper positions, approval requests, audit events, and the reserved simulated-fill table in SQLite when `PAPER_LEDGER_DB_PATH` is configured.
+- Persist paper orders, paper positions, approval requests, simulated fills, and audit events in SQLite when `PAPER_LEDGER_DB_PATH` is configured.
 
 ## Safety Boundary
 
 - Backtest output is simulated and not predictive.
-- Paper order proposals do not create fills.
-- Human approval is required before any future simulated execution.
+- Paper order proposals do not create fills by themselves.
+- Human approval is required before simulated execution.
+- Simulated fills update only the paper ledger and paper positions.
 - Approval cannot authorize live trading.
 - Broker trading-token access and live order placement remain forbidden.
 - Fixture stores use offline-safe data and do not require provider credentials.
@@ -36,6 +39,6 @@ files are ignored by Git.
 
 ## Next Product Step
 
-The next implementation slice should add approval-gated simulated fills and
-paper portfolio accounting. The MCP contract should remain stable while fill
-creation stays behind policy and human approval.
+The next implementation slice should add repository-backed strategy drafts and
+backtest request history, then recommendation explanations that join screener,
+backtest, risk, and ledger evidence.

@@ -39,6 +39,8 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
         "get_backtest_result",
         "list_paper_orders",
         "list_paper_positions",
+        "list_paper_fills",
+        "get_paper_portfolio_accounting",
         "create_paper_order_proposal",
         "get_approval_queue",
         "get_audit_events",
@@ -52,11 +54,16 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
 
 
 def test_approval_required_tools_are_marked_for_human_review() -> None:
-    decision = authorize_tool_call("request_paper_trade_approval")
+    for tool_name in (
+        "request_paper_trade_approval",
+        "approve_paper_order_simulation",
+        "simulate_approved_paper_fill",
+    ):
+        decision = authorize_tool_call(tool_name)
 
-    assert decision.allowed is True
-    assert decision.requires_approval is True
-    assert decision.tier == ActionTier.APPROVAL_REQUIRED
+        assert decision.allowed is True
+        assert decision.requires_approval is True
+        assert decision.tier == ActionTier.APPROVAL_REQUIRED
 
 
 def test_redaction_removes_sensitive_values() -> None:

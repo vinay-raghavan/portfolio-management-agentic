@@ -108,6 +108,7 @@ jobs:
           from mcp.client.streamable_http import streamable_http_client
 
           EXPECTED = {
+              "approve_paper_order_simulation",
               "create_backtest_request",
               "create_pre_market_briefing",
               "create_paper_order_proposal",
@@ -122,6 +123,7 @@ jobs:
               "get_data_provider_health",
               "get_market_data_snapshot",
               "get_pattern_playbook",
+              "get_paper_portfolio_accounting",
               "get_portfolio_summary",
               "get_research_digest",
               "get_risk_review",
@@ -129,12 +131,14 @@ jobs:
               "get_watchlist_snapshot",
               "get_universe_members",
               "list_data_providers",
+              "list_paper_fills",
               "list_paper_orders",
               "list_paper_positions",
               "list_universes",
               "run_screener",
               "run_momentum_screener",
               "search_pattern_library",
+              "simulate_approved_paper_fill",
           }
           FORBIDDEN = {"place_live_order", "get_broker_trading_token"}
 

@@ -30,7 +30,11 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "get_backtest_result" in tool_names
     assert "list_paper_orders" in tool_names
     assert "list_paper_positions" in tool_names
+    assert "list_paper_fills" in tool_names
+    assert "get_paper_portfolio_accounting" in tool_names
     assert "create_paper_order_proposal" in tool_names
+    assert "approve_paper_order_simulation" in tool_names
+    assert "simulate_approved_paper_fill" in tool_names
     assert "get_approval_queue" in tool_names
     assert "get_audit_events" in tool_names
     assert "draft_paper_strategy" in tool_names

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from .tools import (
+    approve_paper_order_simulation,
     assert_exposed_tools_are_safe,
     create_backtest_request,
     create_pre_market_briefing,
@@ -18,6 +19,7 @@ from .tools import (
     get_data_provider_health,
     get_market_data_snapshot,
     get_pattern_playbook,
+    get_paper_portfolio_accounting,
     get_portfolio_summary,
     get_research_digest,
     get_risk_review,
@@ -25,12 +27,14 @@ from .tools import (
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_paper_fills,
     list_paper_orders,
     list_paper_positions,
     list_universes,
     run_screener,
     run_momentum_screener,
     search_pattern_library,
+    simulate_approved_paper_fill,
 )
 
 try:
@@ -82,7 +86,11 @@ def build_server():
     server.tool()(get_backtest_result)
     server.tool()(list_paper_orders)
     server.tool()(list_paper_positions)
+    server.tool()(list_paper_fills)
+    server.tool()(get_paper_portfolio_accounting)
     server.tool()(create_paper_order_proposal)
+    server.tool()(approve_paper_order_simulation)
+    server.tool()(simulate_approved_paper_fill)
     server.tool()(get_approval_queue)
     server.tool()(get_audit_events)
     server.tool()(get_risk_review)

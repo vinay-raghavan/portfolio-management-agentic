@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ from .models import (
     BacktestTrade,
     PaperFill,
     PaperOrder,
+    PaperPortfolioAccounting,
     PaperPosition,
 )
 
@@ -168,6 +170,168 @@ def _build_order_proposal_artifacts(
     return order, approval, event
 
 
+def _approval_event(
+    order_id: str,
+    approved_by: str,
+    approval_note: str,
+) -> AuditEvent:
+    reviewer = approved_by.strip()
+    if not reviewer:
+        raise ValueError("approved_by is required for paper simulation approval.")
+    return AuditEvent(
+        event_id=f"audit-approval-{order_id}",
+        event_type="paper_order_approved",
+        entity_type="paper_order",
+        entity_id=order_id,
+        message="Paper order simulation was approved by a human reviewer.",
+        created_at=FIXTURE_TIMESTAMP,
+        actor=reviewer,
+        redacted_payload={
+            "order_id": order_id,
+            "approved_by": reviewer,
+            "approval_note": approval_note.strip(),
+            "mode": "paper",
+            "live_trading": "forbidden",
+        },
+    )
+
+
+def _fill_event(fill: PaperFill) -> AuditEvent:
+    return AuditEvent(
+        event_id=f"audit-{fill.fill_id}",
+        event_type="paper_fill_simulated",
+        entity_type="paper_fill",
+        entity_id=fill.fill_id,
+        message="Approved paper order was simulated as a paper fill.",
+        created_at=fill.filled_at,
+        actor="agent",
+        redacted_payload={
+            "fill_id": fill.fill_id,
+            "order_id": fill.order_id,
+            "symbol": fill.symbol,
+            "side": fill.side,
+            "quantity": fill.quantity,
+            "fill_price": fill.fill_price,
+            "mode": "paper",
+            "live_trading": "forbidden",
+        },
+    )
+
+
+def _resolve_fill_price(
+    order: PaperOrder,
+    fill_price: float | None,
+    current_position: PaperPosition | None,
+) -> float:
+    resolved = fill_price
+    if resolved is None:
+        resolved = order.requested_price
+    if resolved is None and current_position is not None:
+        resolved = current_position.last_price
+    if resolved is None or resolved <= 0:
+        raise ValueError("A positive fill_price is required for simulated fills.")
+    return round(resolved, 2)
+
+
+def _build_fill(
+    order: PaperOrder,
+    fill_price: float,
+) -> PaperFill:
+    return PaperFill(
+        fill_id=f"fill-{order.order_id}",
+        order_id=order.order_id,
+        symbol=order.symbol,
+        side=order.side,
+        quantity=order.quantity,
+        fill_price=fill_price,
+        filled_at=FIXTURE_TIMESTAMP,
+        mode="paper",
+        source=OFFLINE_SOURCE,
+        notes=[
+            "Simulated paper fill only.",
+            "No broker API, live order, or trading credential was used.",
+        ],
+    )
+
+
+def _apply_fill_to_position(
+    current_position: PaperPosition | None,
+    fill: PaperFill,
+) -> PaperPosition:
+    if fill.side == "buy":
+        if current_position is None:
+            return PaperPosition(
+                symbol=fill.symbol,
+                quantity=fill.quantity,
+                average_price=fill.fill_price,
+                last_price=fill.fill_price,
+                mode="paper",
+                source=OFFLINE_SOURCE,
+                notes=["Created by simulated paper fill."],
+            )
+        new_quantity = current_position.quantity + fill.quantity
+        new_average = round(
+            (
+                current_position.average_price * current_position.quantity
+                + fill.fill_price * fill.quantity
+            )
+            / new_quantity,
+            2,
+        )
+        return replace(
+            current_position,
+            quantity=new_quantity,
+            average_price=new_average,
+            last_price=fill.fill_price,
+            notes=[
+                *current_position.notes,
+                f"Updated by simulated buy fill {fill.fill_id}.",
+            ],
+        )
+
+    if current_position is None or current_position.quantity < fill.quantity:
+        raise ValueError("Cannot simulate sell fill without sufficient paper position.")
+    new_quantity = current_position.quantity - fill.quantity
+    return replace(
+        current_position,
+        quantity=new_quantity,
+        average_price=current_position.average_price if new_quantity else 0.0,
+        last_price=fill.fill_price,
+        notes=[
+            *current_position.notes,
+            f"Updated by simulated sell fill {fill.fill_id}.",
+        ],
+    )
+
+
+def _build_accounting(
+    positions: list[PaperPosition],
+    orders: list[PaperOrder],
+    fills: list[PaperFill],
+) -> PaperPortfolioAccounting:
+    return PaperPortfolioAccounting(
+        currency="INR",
+        source=OFFLINE_SOURCE,
+        total_market_value=round(
+            sum(position.market_value for position in positions),
+            2,
+        ),
+        total_unrealized_pnl=round(
+            sum(position.unrealized_pnl for position in positions),
+            2,
+        ),
+        open_positions=sum(1 for position in positions if position.quantity != 0),
+        pending_orders=sum(1 for order in orders if order.status == "pending_approval"),
+        approved_orders=sum(1 for order in orders if order.status == "approved"),
+        filled_orders=sum(1 for order in orders if order.status == "filled"),
+        simulated_fills=len(fills),
+        notes=[
+            "Paper accounting is simulated and fixture-backed.",
+            "No live broker order, account, or trading credential is used.",
+        ],
+    )
+
+
 class BacktestStore:
     """Deterministic offline backtest contract store."""
 
@@ -266,6 +430,7 @@ class PaperLedgerStore:
         self._approvals: dict[str, ApprovalRequest] = {}
         self._audit_events: list[AuditEvent] = []
         self._positions = _fixture_positions()
+        self._fills: dict[str, PaperFill] = {}
 
     def create_order_proposal(
         self,
@@ -295,8 +460,68 @@ class PaperLedgerStore:
         self._audit_events.append(event)
         return order, approval, event
 
+    def approve_order_simulation(
+        self,
+        order_id: str,
+        approved_by: str,
+        approval_note: str = "",
+    ) -> tuple[PaperOrder, ApprovalRequest, AuditEvent]:
+        order = self._orders.get(order_id)
+        if order is None:
+            raise ValueError(f"Unknown paper order_id: {order_id}")
+        approval = self._approvals.get(order.approval_request_id)
+        if approval is None:
+            raise ValueError(f"Missing approval request for order_id: {order_id}")
+        event = _approval_event(order_id, approved_by, approval_note)
+        if approval.status != "approved":
+            approval = replace(approval, status="approved")
+            self._approvals[approval.approval_id] = approval
+        if order.status == "pending_approval":
+            order = replace(order, status="approved")
+            self._orders[order.order_id] = order
+        if not any(item.event_id == event.event_id for item in self._audit_events):
+            self._audit_events.append(event)
+        return order, approval, event
+
+    def simulate_approved_fill(
+        self,
+        order_id: str,
+        fill_price: float | None = None,
+    ) -> tuple[PaperFill, PaperOrder, PaperPosition, AuditEvent]:
+        order = self._orders.get(order_id)
+        if order is None:
+            raise ValueError(f"Unknown paper order_id: {order_id}")
+        approval = self._approvals.get(order.approval_request_id)
+        if approval is None or approval.status != "approved":
+            raise ValueError("Paper order simulation requires human approval first.")
+        existing_fill = self._fills.get(f"fill-{order.order_id}")
+        if existing_fill is not None:
+            position = self._position_for_symbol(existing_fill.symbol)
+            event = self._event_by_id(f"audit-{existing_fill.fill_id}")
+            return existing_fill, order, position, event
+
+        current_position = self._position_for_symbol(order.symbol, required=False)
+        resolved_price = _resolve_fill_price(order, fill_price, current_position)
+        fill = _build_fill(order, resolved_price)
+        position = _apply_fill_to_position(current_position, fill)
+        fill_event = _fill_event(fill)
+        filled_order = replace(
+            order,
+            status="filled",
+            filled_quantity=order.quantity,
+            fill_ids=[fill.fill_id],
+        )
+        self._fills[fill.fill_id] = fill
+        self._orders[filled_order.order_id] = filled_order
+        self._upsert_position(position)
+        self._audit_events.append(fill_event)
+        return fill, filled_order, position, fill_event
+
     def list_orders(self) -> list[PaperOrder]:
         return list(self._orders.values())
+
+    def list_fills(self) -> list[PaperFill]:
+        return list(self._fills.values())
 
     def list_positions(self) -> list[PaperPosition]:
         return list(self._positions)
@@ -311,11 +536,44 @@ class PaperLedgerStore:
     def audit_events(self) -> list[AuditEvent]:
         return list(self._audit_events)
 
+    def portfolio_accounting(self) -> PaperPortfolioAccounting:
+        return _build_accounting(
+            self.list_positions(),
+            self.list_orders(),
+            self.list_fills(),
+        )
+
     def _event_for_order(self, order_id: str) -> AuditEvent:
         for event in self._audit_events:
             if event.entity_id == order_id:
                 return event
         raise ValueError(f"Missing audit event for order_id: {order_id}")
+
+    def _event_by_id(self, event_id: str) -> AuditEvent:
+        for event in self._audit_events:
+            if event.event_id == event_id:
+                return event
+        raise ValueError(f"Missing audit event: {event_id}")
+
+    def _position_for_symbol(
+        self,
+        symbol: str,
+        required: bool = True,
+    ) -> PaperPosition | None:
+        normalized_symbol = _normalize_symbol(symbol)
+        for position in self._positions:
+            if position.symbol == normalized_symbol:
+                return position
+        if required:
+            raise ValueError(f"Missing paper position for symbol: {normalized_symbol}")
+        return None
+
+    def _upsert_position(self, position: PaperPosition) -> None:
+        for index, existing in enumerate(self._positions):
+            if existing.symbol == position.symbol:
+                self._positions[index] = position
+                return
+        self._positions.append(position)
 
 
 class SQLitePaperLedgerStore:
@@ -445,6 +703,178 @@ class SQLitePaperLedgerStore:
             connection.commit()
         return order, approval, event
 
+    def approve_order_simulation(
+        self,
+        order_id: str,
+        approved_by: str,
+        approval_note: str = "",
+    ) -> tuple[PaperOrder, ApprovalRequest, AuditEvent]:
+        event = _approval_event(order_id, approved_by, approval_note)
+        with self._connect() as connection:
+            order = self._get_order(connection, order_id)
+            if order is None:
+                raise ValueError(f"Unknown paper order_id: {order_id}")
+            approval = self._get_approval(connection, order.approval_request_id)
+            if approval is None:
+                raise ValueError(f"Missing approval request for order_id: {order_id}")
+
+            if approval.status != "approved":
+                approval = replace(approval, status="approved")
+                connection.execute(
+                    """
+                    update approval_requests
+                    set status = ?
+                    where approval_id = ?
+                    """,
+                    (approval.status, approval.approval_id),
+                )
+            if order.status == "pending_approval":
+                order = replace(order, status="approved")
+                connection.execute(
+                    """
+                    update paper_orders
+                    set status = ?
+                    where order_id = ?
+                    """,
+                    (order.status, order.order_id),
+                )
+            connection.execute(
+                """
+                insert into audit_events (
+                    event_id,
+                    event_type,
+                    entity_type,
+                    entity_id,
+                    message,
+                    created_at,
+                    actor,
+                    redacted_payload_json
+                ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(event_id) do nothing
+                """,
+                (
+                    event.event_id,
+                    event.event_type,
+                    event.entity_type,
+                    event.entity_id,
+                    event.message,
+                    event.created_at,
+                    event.actor,
+                    _to_json(event.redacted_payload),
+                ),
+            )
+            connection.commit()
+        return order, approval, event
+
+    def simulate_approved_fill(
+        self,
+        order_id: str,
+        fill_price: float | None = None,
+    ) -> tuple[PaperFill, PaperOrder, PaperPosition, AuditEvent]:
+        with self._connect() as connection:
+            order = self._get_order(connection, order_id)
+            if order is None:
+                raise ValueError(f"Unknown paper order_id: {order_id}")
+            approval = self._get_approval(connection, order.approval_request_id)
+            if approval is None or approval.status != "approved":
+                raise ValueError("Paper order simulation requires human approval first.")
+
+            fill_id = f"fill-{order.order_id}"
+            existing_fill = self._get_fill(connection, fill_id)
+            if existing_fill is not None:
+                current_order = self._get_order(connection, order.order_id)
+                current_position = self._get_position(connection, existing_fill.symbol)
+                fill_event = self._get_audit_event(
+                    connection,
+                    f"audit-{existing_fill.fill_id}",
+                )
+                if current_order is None or current_position is None or fill_event is None:
+                    raise ValueError("Persisted paper fill is missing related state.")
+                return existing_fill, current_order, current_position, fill_event
+
+            current_position = self._get_position(connection, order.symbol)
+            resolved_price = _resolve_fill_price(order, fill_price, current_position)
+            fill = _build_fill(order, resolved_price)
+            position = _apply_fill_to_position(current_position, fill)
+            fill_event = _fill_event(fill)
+            filled_order = replace(
+                order,
+                status="filled",
+                filled_quantity=order.quantity,
+                fill_ids=[fill.fill_id],
+            )
+            connection.execute(
+                """
+                insert into paper_fills (
+                    fill_id,
+                    order_id,
+                    symbol,
+                    side,
+                    quantity,
+                    fill_price,
+                    filled_at,
+                    mode,
+                    source,
+                    notes_json
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    fill.fill_id,
+                    fill.order_id,
+                    fill.symbol,
+                    fill.side,
+                    fill.quantity,
+                    fill.fill_price,
+                    fill.filled_at,
+                    fill.mode,
+                    fill.source,
+                    _to_json(fill.notes),
+                ),
+            )
+            connection.execute(
+                """
+                update paper_orders
+                set status = ?,
+                    filled_quantity = ?,
+                    fill_ids_json = ?
+                where order_id = ?
+                """,
+                (
+                    filled_order.status,
+                    filled_order.filled_quantity,
+                    _to_json(filled_order.fill_ids),
+                    filled_order.order_id,
+                ),
+            )
+            self._upsert_position(connection, position)
+            connection.execute(
+                """
+                insert into audit_events (
+                    event_id,
+                    event_type,
+                    entity_type,
+                    entity_id,
+                    message,
+                    created_at,
+                    actor,
+                    redacted_payload_json
+                ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(event_id) do nothing
+                """,
+                (
+                    fill_event.event_id,
+                    fill_event.event_type,
+                    fill_event.entity_type,
+                    fill_event.entity_id,
+                    fill_event.message,
+                    fill_event.created_at,
+                    fill_event.actor,
+                    _to_json(fill_event.redacted_payload),
+                ),
+            )
+            connection.commit()
+        return fill, filled_order, position, fill_event
+
     def list_orders(self) -> list[PaperOrder]:
         with self._connect() as connection:
             rows = connection.execute(
@@ -495,6 +925,13 @@ class SQLitePaperLedgerStore:
                 """
             ).fetchall()
         return [_row_to_fill(row) for row in rows]
+
+    def portfolio_accounting(self) -> PaperPortfolioAccounting:
+        return _build_accounting(
+            self.list_positions(),
+            self.list_orders(),
+            self.list_fills(),
+        )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
@@ -630,6 +1067,64 @@ class SQLitePaperLedgerStore:
             (event_id,),
         ).fetchone()
         return _row_to_audit_event(row) if row is not None else None
+
+    def _get_fill(
+        self,
+        connection: sqlite3.Connection,
+        fill_id: str,
+    ) -> PaperFill | None:
+        row = connection.execute(
+            "select * from paper_fills where fill_id = ?",
+            (fill_id,),
+        ).fetchone()
+        return _row_to_fill(row) if row is not None else None
+
+    def _get_position(
+        self,
+        connection: sqlite3.Connection,
+        symbol: str,
+    ) -> PaperPosition | None:
+        row = connection.execute(
+            "select * from paper_positions where symbol = ?",
+            (_normalize_symbol(symbol),),
+        ).fetchone()
+        return _row_to_position(row) if row is not None else None
+
+    def _upsert_position(
+        self,
+        connection: sqlite3.Connection,
+        position: PaperPosition,
+    ) -> None:
+        connection.execute(
+            """
+            insert into paper_positions (
+                symbol,
+                quantity,
+                average_price,
+                last_price,
+                mode,
+                source,
+                notes_json,
+                sort_order
+            ) values (?, ?, ?, ?, ?, ?, ?, 50)
+            on conflict(symbol) do update set
+                quantity = excluded.quantity,
+                average_price = excluded.average_price,
+                last_price = excluded.last_price,
+                mode = excluded.mode,
+                source = excluded.source,
+                notes_json = excluded.notes_json
+            """,
+            (
+                position.symbol,
+                position.quantity,
+                position.average_price,
+                position.last_price,
+                position.mode,
+                position.source,
+                _to_json(position.notes),
+            ),
+        )
 
 
 def _to_json(value: Any) -> str:
@@ -802,8 +1297,31 @@ def create_fixture_paper_order_proposal(
     )
 
 
+def approve_fixture_paper_order_simulation(
+    order_id: str,
+    approved_by: str,
+    approval_note: str = "",
+) -> tuple[PaperOrder, ApprovalRequest, AuditEvent]:
+    return _PAPER_LEDGER_STORE.approve_order_simulation(
+        order_id,
+        approved_by,
+        approval_note,
+    )
+
+
+def simulate_fixture_approved_paper_fill(
+    order_id: str,
+    fill_price: float | None = None,
+) -> tuple[PaperFill, PaperOrder, PaperPosition, AuditEvent]:
+    return _PAPER_LEDGER_STORE.simulate_approved_fill(order_id, fill_price)
+
+
 def list_fixture_paper_orders() -> list[PaperOrder]:
     return _PAPER_LEDGER_STORE.list_orders()
+
+
+def list_fixture_paper_fills() -> list[PaperFill]:
+    return _PAPER_LEDGER_STORE.list_fills()
 
 
 def list_fixture_paper_positions() -> list[PaperPosition]:
@@ -816,3 +1334,7 @@ def list_fixture_approval_queue() -> list[ApprovalRequest]:
 
 def list_fixture_audit_events() -> list[AuditEvent]:
     return _PAPER_LEDGER_STORE.audit_events()
+
+
+def get_fixture_paper_portfolio_accounting() -> PaperPortfolioAccounting:
+    return _PAPER_LEDGER_STORE.portfolio_accounting()

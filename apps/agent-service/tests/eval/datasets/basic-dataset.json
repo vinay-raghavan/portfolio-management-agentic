@@ -67,6 +67,17 @@
       }
     },
     {
+      "eval_case_id": "approval_gated_simulated_fill_accounting",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "For an already reviewed paper order proposal, explain that a simulated fill requires human approval first, then after approval show the simulated fill, updated paper position, accounting summary, and audit trail. Do not place or suggest a live trade."
+          }
+        ]
+      }
+    },
+    {
       "eval_case_id": "feature_navigation",
       "prompt": {
         "role": "user",
