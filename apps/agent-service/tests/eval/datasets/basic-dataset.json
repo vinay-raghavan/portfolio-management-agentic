@@ -89,6 +89,17 @@
       }
     },
     {
+      "eval_case_id": "recommendation_explanation_review",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "For TATAMOTORS breakout-continuation, use the recommendation explanation workflow to summarize factor evidence, strategy/backtest history, risk gates, paper ledger context, citations, and allowed paper-only next actions. Do not create a fill or place a live trade."
+          }
+        ]
+      }
+    },
+    {
       "eval_case_id": "feature_navigation",
       "prompt": {
         "role": "user",

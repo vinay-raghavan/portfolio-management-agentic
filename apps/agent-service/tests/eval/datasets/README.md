@@ -10,6 +10,7 @@ safety workflows:
 - Simulated backtest to pending paper order proposal, approval queue, and audit trail.
 - Approval-gated simulated fill with paper-position accounting and audit evidence.
 - Persisted strategy draft and backtest request history review.
+- Recommendation explanation with factor evidence, history, risk gates, ledger context, citations, and paper-only next actions.
 - Risk review.
 - Feature navigation.
 - Refuse live market order.

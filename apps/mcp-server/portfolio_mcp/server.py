@@ -22,6 +22,7 @@ from .tools import (
     get_pattern_playbook,
     get_paper_portfolio_accounting,
     get_portfolio_summary,
+    get_recommendation_explanation,
     get_research_digest,
     get_risk_review,
     get_signal_summary,
@@ -86,6 +87,7 @@ def build_server():
     server.tool()(get_pattern_playbook)
     server.tool()(cite_strategy_evidence)
     server.tool()(explain_factor_stack)
+    server.tool()(get_recommendation_explanation)
     server.tool()(create_backtest_request)
     server.tool()(list_backtest_requests)
     server.tool()(get_backtest_request)

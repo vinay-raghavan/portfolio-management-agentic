@@ -31,6 +31,7 @@ from .models import (
     ProviderDescriptor,
     ProviderHealth,
     RankedScreenerCandidate,
+    RecommendationExplanation,
     ResearchDigest,
     RiskReview,
     ScreenerCandidate,
@@ -83,6 +84,7 @@ from .product_data import (
     run_fixture_screener,
     search_pattern_cards,
 )
+from .recommendations import build_recommendation_explanation
 
 __all__ = [
     "ApprovalRequest",
@@ -107,6 +109,7 @@ __all__ = [
     "ProviderDescriptor",
     "ProviderHealth",
     "RankedScreenerCandidate",
+    "RecommendationExplanation",
     "ResearchDigest",
     "RiskReview",
     "ScreenerCandidate",
@@ -130,6 +133,7 @@ __all__ = [
     "build_factor_stack_explanation",
     "build_data_provider_registry",
     "build_paper_ledger_store",
+    "build_recommendation_explanation",
     "build_strategy_evidence_pack",
     "create_demo_pre_market_briefing",
     "create_fixture_backtest_request",

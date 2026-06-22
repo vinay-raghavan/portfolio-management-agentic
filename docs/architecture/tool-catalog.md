@@ -23,6 +23,7 @@ This catalog documents the first MCP-style tool slice. The MCP server must expos
 | `get_pattern_playbook` | read-only | Retrieve one versioned pattern card with citation metadata. |
 | `cite_strategy_evidence` | read-only | Return citation-backed evidence for a strategy explanation or draft paper proposal. |
 | `explain_factor_stack` | read-only | Compose deterministic factor evidence, retrieved citations, counterevidence, and paper-only next actions. |
+| `get_recommendation_explanation` | read-only | Join screener/factor evidence, strategy history, backtest history, risk gates, ledger context, and citations into a paper-only recommendation explanation. |
 | `create_backtest_request` | draft-only | Draft an offline paper backtest request for a symbol, setup, and date window. |
 | `list_backtest_requests` | read-only | Return persisted paper backtest request history. |
 | `get_backtest_request` | read-only | Return one persisted paper backtest request by id. |
@@ -55,7 +56,7 @@ These functions exist only for deterministic policy tests and must not be regist
 
 Unknown tools are forbidden by default. Every new tool must be classified before exposure.
 
-The product data, provider, pattern, strategy-history, backtest, and paper-ledger tools do not write live orders, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates. Simulated fills are paper-only, require prior approval, and update only the paper ledger.
+The product data, provider, pattern, recommendation, strategy-history, backtest, and paper-ledger tools do not write live orders, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates. Simulated fills are paper-only, require prior approval, and update only the paper ledger.
 
 ## Reference Boundary
 

@@ -5,6 +5,7 @@ from typing import Any
 from portfolio_domain import (
     approve_fixture_paper_order_simulation,
     build_factor_stack_explanation,
+    build_recommendation_explanation,
     build_strategy_evidence_pack,
     create_demo_pre_market_briefing,
     create_fixture_backtest_request,
@@ -54,6 +55,7 @@ EXPOSED_TOOL_NAMES = {
     "get_pattern_playbook",
     "cite_strategy_evidence",
     "explain_factor_stack",
+    "get_recommendation_explanation",
     "create_backtest_request",
     "list_backtest_requests",
     "get_backtest_request",
@@ -380,6 +382,27 @@ def explain_factor_stack(symbol: str, setup: str = "") -> dict[str, Any]:
         "status": "success",
         "policy": decision.to_dict(),
         "factor_stack": factor_stack.to_dict(),
+    }
+
+
+def get_recommendation_explanation(symbol: str, setup: str) -> dict[str, Any]:
+    """Explain a paper-only recommendation using evidence, history, and ledger state."""
+    tool_name = "get_recommendation_explanation"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        recommendation = build_recommendation_explanation(symbol, setup)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "recommendation": recommendation.to_dict(),
     }
 
 

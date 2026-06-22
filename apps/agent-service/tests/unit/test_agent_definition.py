@@ -27,6 +27,7 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "get_pattern_playbook" in tool_names
     assert "cite_strategy_evidence" in tool_names
     assert "explain_factor_stack" in tool_names
+    assert "get_recommendation_explanation" in tool_names
     assert "create_backtest_request" in tool_names
     assert "list_backtest_requests" in tool_names
     assert "get_backtest_request" in tool_names
