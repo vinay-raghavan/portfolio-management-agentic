@@ -36,6 +36,8 @@ jobs:
             dockerfile: apps/agent-service/Dockerfile
           - service: mcp-server
             dockerfile: apps/mcp-server/Dockerfile
+          - service: web
+            dockerfile: apps/web/Dockerfile
 
     steps:
       - name: Checkout repository
@@ -96,6 +98,7 @@ jobs:
             ```bash
             docker pull ghcr.io/${{ github.repository_owner }}/portfolio-management-agentic-agent-service:${{ github.ref_name }}
             docker pull ghcr.io/${{ github.repository_owner }}/portfolio-management-agentic-mcp-server:${{ github.ref_name }}
+            docker pull ghcr.io/${{ github.repository_owner }}/portfolio-management-agentic-web:${{ github.ref_name }}
             ```
 
-            These images run the paper-trading agent service and the policy-enforced MCP server only. No live-trading or broker-token workflow is enabled by this release.
+            These images run the paper-trading agent service, policy-enforced MCP server, and thin web console. No live-trading or broker-token workflow is enabled by this release.

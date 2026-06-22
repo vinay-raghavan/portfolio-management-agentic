@@ -22,6 +22,7 @@ Current coverage:
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with JSON-ready redacted audit exports and no file writes.
 - Model-backed eval preflight checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, and never print secret values.
+- Web console contracts verify the Vite/React app, safe product surfaces, Compose wiring, and `/console/overview` backend payload.
 - Provider adapter contracts expose fixture defaults, provider health, fixture market snapshots, and universe membership without credentials or network requirements.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
@@ -90,6 +91,7 @@ Default endpoints:
 
 - Agent service: `http://localhost:8000`
 - MCP server: `http://localhost:8081/mcp`
+- Web console: `http://localhost:3000`
 
 Compose config also validates the shared `paper-ledger-data` volume and
 `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` default for durable local ledger
@@ -109,12 +111,15 @@ CI runs on pull requests into `develop` or `main`, pushes to `develop`, `main`,
 - Root contract, security, integration, and hygiene tests.
 - Credential-gated model eval preflight.
 - Agent-service unit and integration tests.
+- Web console install, moderate dependency audit, typecheck, and build.
 - Docker Compose config validation.
-- Agent and MCP image builds.
+- Agent, MCP, and web image builds.
 - Agent readiness check at `/docs`.
+- Web console readiness check at `http://127.0.0.1:3000`.
 - MCP streamable HTTP safe-tool catalog check.
 
 CD runs on `v*` tags or manual dispatch. It builds the agent-service and
-MCP-server images and publishes them to GHCR only when tag-triggered or when
-manual dispatch explicitly enables image publishing. It does not deploy to an
-environment or require model, broker, or data-provider credentials.
+MCP-server and web-console images and publishes them to GHCR only when
+tag-triggered or when manual dispatch explicitly enables image publishing. It
+does not deploy to an environment or require model, broker, or data-provider
+credentials.

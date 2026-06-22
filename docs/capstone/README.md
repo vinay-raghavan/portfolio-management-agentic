@@ -61,3 +61,4 @@ The final submission should show that the same workflows can run with fixtures f
 - Simulated backtest result feeding a paper order proposal, approval-gated simulated fill, and paper accounting update.
 - Audit log or trace showing policy boundaries and refusal of live-trading requests.
 - Model-backed eval baseline showing positive workflow quality and negative safety refusal behavior when credentials are configured.
+- Web console screenshot showing briefing, provider health, screener candidates, paper approvals, risk switches, and report readiness from safe workflows.

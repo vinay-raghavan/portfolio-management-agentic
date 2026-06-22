@@ -12,8 +12,15 @@ def test_ci_workflow_runs_required_deterministic_checks() -> None:
     assert "uv run pytest tests" in ci
     assert "scripts/run_agent_evals.py preflight --json" in ci
     assert "uv run pytest tests/unit tests/integration" in ci
+    assert "working-directory: apps/web" in ci
+    assert "npm ci" in ci
+    assert "npm audit --audit-level=moderate" in ci
+    assert "npm run typecheck" in ci
+    assert "npm run build" in ci
     assert "docker compose config --quiet" in ci
-    assert "docker compose build agent-service mcp-server" in ci
+    assert "docker compose build agent-service mcp-server web" in ci
+    assert "docker compose up -d agent-service mcp-server web" in ci
+    assert "http://127.0.0.1:3000" in ci
     assert "streamable_http_client" in ci
     assert "create_pre_market_briefing" in ci
     assert "get_recommendation_explanation" in ci
@@ -41,5 +48,6 @@ def test_cd_workflow_is_release_gated_and_publishes_only_images() -> None:
     assert "docker/build-push-action" in cd
     assert "portfolio-management-agentic-agent-service" in cd
     assert "portfolio-management-agentic-mcp-server" in cd
+    assert "portfolio-management-agentic-web" in cd
     assert "fyers" not in cd.lower()
     assert "broker-token" in cd
