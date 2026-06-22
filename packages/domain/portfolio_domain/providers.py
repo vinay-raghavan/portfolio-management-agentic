@@ -14,8 +14,10 @@ from .models import (
     OHLCVBar,
     ProviderDescriptor,
     ProviderHealth,
+    SentimentSnapshot,
     UniverseDefinition,
     UniverseMembers,
+    VolatilitySnapshot,
 )
 
 OFFLINE_SOURCE = "offline_fixture"
@@ -26,6 +28,10 @@ UNIVERSE_PROVIDER_ENV = "PORTFOLIO_UNIVERSE_PROVIDER"
 UNIVERSE_JSON_PATH_ENV = "PORTFOLIO_UNIVERSE_JSON_PATH"
 FUNDAMENTALS_PROVIDER_ENV = "PORTFOLIO_FUNDAMENTALS_PROVIDER"
 FUNDAMENTALS_JSON_PATH_ENV = "PORTFOLIO_FUNDAMENTALS_JSON_PATH"
+SENTIMENT_PROVIDER_ENV = "PORTFOLIO_SENTIMENT_PROVIDER"
+SENTIMENT_JSON_PATH_ENV = "PORTFOLIO_SENTIMENT_JSON_PATH"
+VOLATILITY_PROVIDER_ENV = "PORTFOLIO_VOLATILITY_PROVIDER"
+VOLATILITY_JSON_PATH_ENV = "PORTFOLIO_VOLATILITY_JSON_PATH"
 JSON_FILE_PROVIDER = "json_file"
 
 
@@ -60,11 +66,15 @@ class SentimentProvider(Protocol):
 
     def health(self) -> ProviderHealth: ...
 
+    def get_context(self, symbol: str) -> SentimentSnapshot: ...
+
 
 class VolatilityProvider(Protocol):
     def descriptor(self) -> ProviderDescriptor: ...
 
     def health(self) -> ProviderHealth: ...
+
+    def get_context(self, symbol: str) -> VolatilitySnapshot: ...
 
 
 class MacroProvider(Protocol):
@@ -165,6 +175,56 @@ FIXTURE_FUNDAMENTALS: dict[str, dict[str, float | int | str]] = {
         "growth_score": 0.36,
         "earnings_revision_score": 0.33,
         "leverage_score": 0.40,
+    },
+}
+
+FIXTURE_SENTIMENT: dict[str, dict[str, float | int | str]] = {
+    "TATAMOTORS": {
+        "news_score": 0.58,
+        "investor_score": 0.56,
+        "contradiction_score": 0.28,
+    },
+    "SBIN": {
+        "news_score": 0.61,
+        "investor_score": 0.59,
+        "contradiction_score": 0.24,
+    },
+    "SUNPHARMA": {
+        "news_score": 0.54,
+        "investor_score": 0.55,
+        "contradiction_score": 0.22,
+    },
+    "LOWLIQ": {
+        "news_score": 0.38,
+        "investor_score": 0.41,
+        "contradiction_score": 0.52,
+    },
+}
+
+FIXTURE_VOLATILITY: dict[str, dict[str, float | int | str]] = {
+    "TATAMOTORS": {
+        "india_vix": 15.8,
+        "vix_change_pct": 2.4,
+        "regime_score": 0.52,
+        "risk_multiplier": 0.68,
+    },
+    "SBIN": {
+        "india_vix": 14.1,
+        "vix_change_pct": -1.6,
+        "regime_score": 0.64,
+        "risk_multiplier": 0.76,
+    },
+    "SUNPHARMA": {
+        "india_vix": 13.4,
+        "vix_change_pct": -2.2,
+        "regime_score": 0.70,
+        "risk_multiplier": 0.82,
+    },
+    "LOWLIQ": {
+        "india_vix": 21.6,
+        "vix_change_pct": 9.2,
+        "regime_score": 0.32,
+        "risk_multiplier": 0.48,
     },
 }
 
@@ -296,6 +356,56 @@ def _fundamentals_from_payload(
         metrics=dict(metrics_payload),
         notes=[
             "Read-only configured fundamentals snapshot.",
+            *notes,
+        ],
+    )
+
+
+def _sentiment_from_payload(
+    payload: Mapping[str, Any],
+    provider_id: str,
+) -> SentimentSnapshot:
+    symbol = str(payload["symbol"]).upper().strip()
+    if not symbol:
+        raise ValueError("Configured sentiment requires symbol.")
+    metrics_payload = payload.get("metrics", {})
+    if not isinstance(metrics_payload, Mapping) or not metrics_payload:
+        raise ValueError("Configured sentiment metrics must be a non-empty object.")
+    notes_payload = payload.get("notes", [])
+    notes = [str(item) for item in notes_payload if str(item).strip()]
+    return SentimentSnapshot(
+        provider_id=provider_id,
+        source=str(payload.get("source") or CONFIGURED_JSON_SOURCE),
+        symbol=symbol,
+        as_of=str(payload.get("as_of") or ""),
+        metrics=dict(metrics_payload),
+        notes=[
+            "Read-only configured sentiment snapshot.",
+            *notes,
+        ],
+    )
+
+
+def _volatility_from_payload(
+    payload: Mapping[str, Any],
+    provider_id: str,
+) -> VolatilitySnapshot:
+    symbol = str(payload["symbol"]).upper().strip()
+    if not symbol:
+        raise ValueError("Configured volatility requires symbol.")
+    metrics_payload = payload.get("metrics", {})
+    if not isinstance(metrics_payload, Mapping) or not metrics_payload:
+        raise ValueError("Configured volatility metrics must be a non-empty object.")
+    notes_payload = payload.get("notes", [])
+    notes = [str(item) for item in notes_payload if str(item).strip()]
+    return VolatilitySnapshot(
+        provider_id=provider_id,
+        source=str(payload.get("source") or CONFIGURED_JSON_SOURCE),
+        symbol=symbol,
+        as_of=str(payload.get("as_of") or ""),
+        metrics=dict(metrics_payload),
+        notes=[
+            "Read-only configured volatility snapshot.",
             *notes,
         ],
     )
@@ -530,6 +640,150 @@ class JsonFileFundamentalsProvider:
 
 
 @dataclass(frozen=True)
+class JsonFileSentimentProvider:
+    json_path: Path
+    provider_id: str = "configured_sentiment"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="sentiment",
+            display_name="Configured JSON Sentiment",
+            status="available" if self.json_path.is_file() else "error",
+            configured=True,
+            capabilities=["sentiment_context", "json_sentiment_file"],
+            required_env=[SENTIMENT_PROVIDER_ENV, SENTIMENT_JSON_PATH_ENV],
+            notes=[
+                "Read-only sentiment adapter using a configured JSON file.",
+                "Fixture sentiment remains the default when this adapter is not configured.",
+            ],
+        )
+
+    def health(self) -> ProviderHealth:
+        try:
+            self._sentiment_payloads()
+        except ValueError as exc:
+            return ProviderHealth(
+                provider_id=self.provider_id,
+                kind="sentiment",
+                status="error",
+                configured=True,
+                message=f"Configured JSON sentiment is not usable: {exc}",
+            )
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="sentiment",
+            status="available",
+            configured=True,
+            message="Configured JSON sentiment is readable.",
+        )
+
+    def get_context(self, symbol: str) -> SentimentSnapshot:
+        normalized = symbol.upper().strip()
+        for payload in self._sentiment_payloads():
+            sentiment = _sentiment_from_payload(payload, self.provider_id)
+            if sentiment.symbol == normalized:
+                return sentiment
+        raise ValueError(f"Unknown configured sentiment symbol: {symbol}")
+
+    def _sentiment_payloads(self) -> list[Mapping[str, Any]]:
+        if not self.json_path.is_file():
+            raise ValueError("configured JSON file is missing or unreadable")
+        try:
+            payload = json.loads(self.json_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise ValueError("configured JSON file is not valid JSON") from exc
+        sentiment: Any
+        if isinstance(payload, list):
+            sentiment = payload
+        elif isinstance(payload, Mapping) and "sentiment" in payload:
+            sentiment = payload["sentiment"]
+            if isinstance(sentiment, Mapping):
+                sentiment = list(sentiment.values())
+        elif isinstance(payload, Mapping) and "symbol" in payload:
+            sentiment = [payload]
+        else:
+            raise ValueError("configured JSON must contain sentiment payloads")
+        if not isinstance(sentiment, list) or not sentiment:
+            raise ValueError("configured JSON contains no sentiment")
+        if not all(isinstance(item, Mapping) for item in sentiment):
+            raise ValueError("configured JSON sentiment must be objects")
+        return sentiment
+
+
+@dataclass(frozen=True)
+class JsonFileVolatilityProvider:
+    json_path: Path
+    provider_id: str = "configured_volatility"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="volatility",
+            display_name="Configured JSON Volatility",
+            status="available" if self.json_path.is_file() else "error",
+            configured=True,
+            capabilities=["volatility_context", "json_volatility_file"],
+            required_env=[VOLATILITY_PROVIDER_ENV, VOLATILITY_JSON_PATH_ENV],
+            notes=[
+                "Read-only volatility adapter using a configured JSON file.",
+                "Fixture volatility remains the default when this adapter is not configured.",
+            ],
+        )
+
+    def health(self) -> ProviderHealth:
+        try:
+            self._volatility_payloads()
+        except ValueError as exc:
+            return ProviderHealth(
+                provider_id=self.provider_id,
+                kind="volatility",
+                status="error",
+                configured=True,
+                message=f"Configured JSON volatility is not usable: {exc}",
+            )
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="volatility",
+            status="available",
+            configured=True,
+            message="Configured JSON volatility is readable.",
+        )
+
+    def get_context(self, symbol: str) -> VolatilitySnapshot:
+        normalized = symbol.upper().strip()
+        for payload in self._volatility_payloads():
+            volatility = _volatility_from_payload(payload, self.provider_id)
+            if volatility.symbol == normalized:
+                return volatility
+        raise ValueError(f"Unknown configured volatility symbol: {symbol}")
+
+    def _volatility_payloads(self) -> list[Mapping[str, Any]]:
+        if not self.json_path.is_file():
+            raise ValueError("configured JSON file is missing or unreadable")
+        try:
+            payload = json.loads(self.json_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise ValueError("configured JSON file is not valid JSON") from exc
+        volatility: Any
+        if isinstance(payload, list):
+            volatility = payload
+        elif isinstance(payload, Mapping) and "volatility" in payload:
+            volatility = payload["volatility"]
+            if isinstance(volatility, Mapping):
+                volatility = list(volatility.values())
+        elif isinstance(payload, Mapping) and "symbol" in payload:
+            volatility = [payload]
+        else:
+            raise ValueError("configured JSON must contain volatility payloads")
+        if not isinstance(volatility, list) or not volatility:
+            raise ValueError("configured JSON contains no volatility")
+        if not all(isinstance(item, Mapping) for item in volatility):
+            raise ValueError("configured JSON volatility must be objects")
+        return volatility
+
+
+@dataclass(frozen=True)
 class FixtureUniverseProvider:
     provider_id: str = "fixture_universe"
 
@@ -609,6 +863,92 @@ class FixtureFundamentalsProvider:
             metrics=metrics,
             notes=[
                 "Offline fixture fundamentals proxy.",
+                "No network or broker connection was used.",
+            ],
+        )
+
+
+@dataclass(frozen=True)
+class FixtureSentimentProvider:
+    provider_id: str = "fixture_sentiment"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="sentiment",
+            display_name="Fixture Sentiment",
+            status="available",
+            configured=True,
+            capabilities=["sentiment_proxy", "sentiment_context"],
+            required_env=[],
+            notes=["Offline-safe deterministic sentiment proxies."],
+        )
+
+    def health(self) -> ProviderHealth:
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="sentiment",
+            status="available",
+            configured=True,
+            message="Fixture sentiment is available without network access.",
+        )
+
+    def get_context(self, symbol: str) -> SentimentSnapshot:
+        normalized = symbol.upper().strip()
+        metrics = FIXTURE_SENTIMENT.get(normalized)
+        if not metrics:
+            raise ValueError(f"Unknown fixture sentiment symbol: {symbol}")
+        return SentimentSnapshot(
+            provider_id=self.provider_id,
+            source=OFFLINE_SOURCE,
+            symbol=normalized,
+            as_of="2026-06-22",
+            metrics=metrics,
+            notes=[
+                "Offline fixture sentiment proxy.",
+                "No network or broker connection was used.",
+            ],
+        )
+
+
+@dataclass(frozen=True)
+class FixtureVolatilityProvider:
+    provider_id: str = "fixture_volatility"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="volatility",
+            display_name="Fixture Volatility",
+            status="available",
+            configured=True,
+            capabilities=["volatility_proxy", "volatility_context"],
+            required_env=[],
+            notes=["Offline-safe deterministic volatility proxies."],
+        )
+
+    def health(self) -> ProviderHealth:
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="volatility",
+            status="available",
+            configured=True,
+            message="Fixture volatility is available without network access.",
+        )
+
+    def get_context(self, symbol: str) -> VolatilitySnapshot:
+        normalized = symbol.upper().strip()
+        metrics = FIXTURE_VOLATILITY.get(normalized)
+        if not metrics:
+            raise ValueError(f"Unknown fixture volatility symbol: {symbol}")
+        return VolatilitySnapshot(
+            provider_id=self.provider_id,
+            source=OFFLINE_SOURCE,
+            symbol=normalized,
+            as_of="2026-06-22",
+            metrics=metrics,
+            notes=[
+                "Offline fixture volatility proxy.",
                 "No network or broker connection was used.",
             ],
         )
@@ -721,6 +1061,26 @@ def _configured_fundamentals_provider(
     return JsonFileFundamentalsProvider(Path(json_path))
 
 
+def _configured_sentiment_provider(
+    config: Mapping[str, str],
+) -> JsonFileSentimentProvider | None:
+    provider_name = config.get(SENTIMENT_PROVIDER_ENV, "").strip().lower()
+    json_path = config.get(SENTIMENT_JSON_PATH_ENV, "").strip()
+    if provider_name != JSON_FILE_PROVIDER or not json_path:
+        return None
+    return JsonFileSentimentProvider(Path(json_path))
+
+
+def _configured_volatility_provider(
+    config: Mapping[str, str],
+) -> JsonFileVolatilityProvider | None:
+    provider_name = config.get(VOLATILITY_PROVIDER_ENV, "").strip().lower()
+    json_path = config.get(VOLATILITY_JSON_PATH_ENV, "").strip()
+    if provider_name != JSON_FILE_PROVIDER or not json_path:
+        return None
+    return JsonFileVolatilityProvider(Path(json_path))
+
+
 @dataclass(frozen=True)
 class DataProviderRegistry:
     market_data: MarketDataProvider
@@ -771,11 +1131,15 @@ def build_data_provider_registry(
     configured_market_data = _configured_market_data_provider(config)
     configured_universe = _configured_universe_provider(config)
     configured_fundamentals = _configured_fundamentals_provider(config)
+    configured_sentiment = _configured_sentiment_provider(config)
+    configured_volatility = _configured_volatility_provider(config)
     market_data: MarketDataProvider = configured_market_data or FixtureMarketDataProvider()
     universe: UniverseProvider = configured_universe or FixtureUniverseProvider()
     fundamentals: FundamentalsProvider = (
         configured_fundamentals or FixtureFundamentalsProvider()
     )
+    sentiment: SentimentProvider = configured_sentiment or FixtureSentimentProvider()
+    volatility: VolatilityProvider = configured_volatility or FixtureVolatilityProvider()
     configured_placeholders: list[ConfiguredProviderPlaceholder] = []
     if configured_market_data is None:
         configured_placeholders.append(
@@ -810,24 +1174,30 @@ def build_data_provider_registry(
                 env=config,
             )
         )
-    configured_placeholders.extend(
-        [
+    if configured_sentiment is None:
+        configured_placeholders.append(
             ConfiguredProviderPlaceholder(
                 provider_id="configured_sentiment",
                 kind="sentiment",
                 display_name="Configured Sentiment",
                 capabilities=["sentiment_context"],
-                required_env=["PORTFOLIO_SENTIMENT_PROVIDER"],
+                required_env=[SENTIMENT_PROVIDER_ENV, SENTIMENT_JSON_PATH_ENV],
                 env=config,
-            ),
+            )
+        )
+    if configured_volatility is None:
+        configured_placeholders.append(
             ConfiguredProviderPlaceholder(
                 provider_id="configured_volatility",
                 kind="volatility",
                 display_name="Configured Volatility",
                 capabilities=["volatility_context"],
-                required_env=["PORTFOLIO_VOLATILITY_PROVIDER"],
+                required_env=[VOLATILITY_PROVIDER_ENV, VOLATILITY_JSON_PATH_ENV],
                 env=config,
-            ),
+            )
+        )
+    configured_placeholders.extend(
+        [
             ConfiguredProviderPlaceholder(
                 provider_id="configured_macro",
                 kind="macro",
@@ -842,18 +1212,8 @@ def build_data_provider_registry(
         market_data=market_data,
         universe=universe,
         fundamentals=fundamentals,
-        sentiment=FixtureReferenceProvider(
-            provider_id="fixture_sentiment",
-            kind="sentiment",
-            display_name="Fixture Sentiment",
-            capabilities=["sentiment_proxy"],
-        ),
-        volatility=FixtureReferenceProvider(
-            provider_id="fixture_volatility",
-            kind="volatility",
-            display_name="Fixture Volatility",
-            capabilities=["volatility_proxy"],
-        ),
+        sentiment=sentiment,
+        volatility=volatility,
         macro=FixtureReferenceProvider(
             provider_id="fixture_macro",
             kind="macro",

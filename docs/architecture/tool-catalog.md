@@ -13,7 +13,7 @@ This catalog documents the first MCP-style tool slice. The MCP server must expos
 | `create_pre_market_briefing` | read-only | Compose portfolio, watchlist, signal, research, and risk sections into a briefing. |
 | `run_momentum_screener` | read-only | Return synthetic screener candidates and evidence. |
 | `list_data_providers` | read-only | Return provider catalog, capabilities, and configuration state without credential values. |
-| `get_data_provider_health` | read-only | Return provider availability, configured JSON market-data/universe/fundamentals state, and not-configured statuses without credential values. |
+| `get_data_provider_health` | read-only | Return provider availability, configured JSON market-data/universe/fundamentals/sentiment/volatility state, and not-configured statuses without credential values. |
 | `get_market_data_snapshot` | read-only | Return fixture-backed or configured JSON OHLCV snapshot and metrics for one symbol, with optional local cache persistence. |
 | `list_market_data_snapshots` | read-only | Return cached market-data snapshots without exposing storage paths. |
 | `get_universe_members` | read-only | Return fixture-backed or configured JSON universe members through the provider boundary. |
@@ -59,7 +59,7 @@ These functions exist only for deterministic policy tests and must not be regist
 
 Unknown tools are forbidden by default. Every new tool must be classified before exposure.
 
-The product data, provider, pattern, recommendation, report, strategy-history, backtest, and paper-ledger tools do not write live orders, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates. Read-only provider tools may read locally configured JSON snapshot, universe, and fundamentals files when `PORTFOLIO_MARKET_DATA_PROVIDER=json_file` / `PORTFOLIO_MARKET_DATA_JSON_PATH`, `PORTFOLIO_UNIVERSE_PROVIDER=json_file` / `PORTFOLIO_UNIVERSE_JSON_PATH`, and `PORTFOLIO_FUNDAMENTALS_PROVIDER=json_file` / `PORTFOLIO_FUNDAMENTALS_JSON_PATH` are set, and may persist local cache rows when `MARKET_DATA_DB_PATH` is configured. Those writes are limited to market snapshots and screener-run payloads. Simulated fills are paper-only, require prior approval, and update only the paper ledger. Report tools return JSON-ready data and do not write files.
+The product data, provider, pattern, recommendation, report, strategy-history, backtest, and paper-ledger tools do not write live orders, retrieve broker trading tokens, expose provider credential values, or bypass paper-trading approval gates. Read-only provider tools may read locally configured JSON snapshot, universe, fundamentals, sentiment, and volatility files when `PORTFOLIO_MARKET_DATA_PROVIDER=json_file` / `PORTFOLIO_MARKET_DATA_JSON_PATH`, `PORTFOLIO_UNIVERSE_PROVIDER=json_file` / `PORTFOLIO_UNIVERSE_JSON_PATH`, `PORTFOLIO_FUNDAMENTALS_PROVIDER=json_file` / `PORTFOLIO_FUNDAMENTALS_JSON_PATH`, `PORTFOLIO_SENTIMENT_PROVIDER=json_file` / `PORTFOLIO_SENTIMENT_JSON_PATH`, and `PORTFOLIO_VOLATILITY_PROVIDER=json_file` / `PORTFOLIO_VOLATILITY_JSON_PATH` are set, and may persist local cache rows when `MARKET_DATA_DB_PATH` is configured. Those writes are limited to market snapshots and screener-run payloads. Simulated fills are paper-only, require prior approval, and update only the paper ledger. Report tools return JSON-ready data and do not write files.
 
 ## Reference Boundary
 

@@ -10,8 +10,8 @@ This is a standalone repository boundary. Implementation should use documented A
 - Platform-neutral policy, domain, model-provider, and agent-platform contracts started.
 - MCP-style safe portfolio tools started in `apps/mcp-server` with streamable HTTP runtime support.
 - Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
-- Product data foundation adds fixture/configured universes, configured fundamentals, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
-- Provider adapter contracts expose fixture defaults, configured read-only JSON market-data, universe, and fundamentals adapters, provider catalog, health, market snapshot, and universe-member tools.
+- Product data foundation adds fixture/configured universes, configured fundamentals, sentiment, volatility, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
+- Provider adapter contracts expose fixture defaults, configured read-only JSON market-data, universe, fundamentals, sentiment, and volatility adapters, provider catalog, health, market snapshot, and universe-member tools.
 - Recommendation explanations join screener/factor evidence, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
@@ -67,7 +67,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Add configured sentiment and volatility adapters, then use them to refine regime-aware candidate scoring while preserving fixture-backed deterministic tests.
+2. Add a configured macro/regime adapter and broaden multi-factor scoring with macro-event context while preserving fixture-backed deterministic tests.
 
 ## Verification
 
@@ -122,8 +122,9 @@ Both services use shared local databases when `PAPER_LEDGER_DB_PATH` and
 and `/data/market-data.db` on the `paper-ledger-data` volume; the local
 `.env.example` defaults are `data/paper-ledger.db` and `data/market-data.db`.
 
-The default data-provider mode is offline-safe fixtures. To enable the first
-configured read-only market-data, universe, and fundamentals adapters, set:
+The default data-provider mode is offline-safe fixtures. To enable configured
+read-only market-data, universe, fundamentals, sentiment, and volatility
+adapters, set:
 
 ```bash
 PORTFOLIO_MARKET_DATA_PROVIDER=json_file
@@ -132,6 +133,10 @@ PORTFOLIO_UNIVERSE_PROVIDER=json_file
 PORTFOLIO_UNIVERSE_JSON_PATH=data/universes.json
 PORTFOLIO_FUNDAMENTALS_PROVIDER=json_file
 PORTFOLIO_FUNDAMENTALS_JSON_PATH=data/fundamentals.json
+PORTFOLIO_SENTIMENT_PROVIDER=json_file
+PORTFOLIO_SENTIMENT_JSON_PATH=data/sentiment.json
+PORTFOLIO_VOLATILITY_PROVIDER=json_file
+PORTFOLIO_VOLATILITY_JSON_PATH=data/volatility.json
 ```
 
 The JSON files are local-only and should stay under ignored data paths. Market
@@ -143,9 +148,14 @@ list of universes, or `{"universes": [...]}` using the same
 Fundamentals data may contain one fundamentals object, a list of objects, or
 `{"fundamentals": [...]}` with `symbol`, `as_of`, and factor metric keys such
 as `quality_score`, `value_score`, `growth_score`,
-`earnings_revision_score`, and `leverage_score`. Configured screeners remain
-read-only and paper-only; they rank candidates from configured market and
-fundamental metrics and do not create trades.
+`earnings_revision_score`, and `leverage_score`. Sentiment data may contain
+one sentiment object, a list, or `{"sentiment": [...]}` with metrics such as
+`news_score`, `investor_score`, and `contradiction_score`. Volatility data may
+contain one volatility object, a list, or `{"volatility": [...]}` with metrics
+such as `india_vix`, `vix_change_pct`, `regime_score`, and `risk_multiplier`.
+Configured screeners remain read-only and paper-only; they rank candidates
+from configured market, fundamental, sentiment, and volatility metrics and do
+not create trades.
 
 The optional Ollama service is profile-gated:
 
