@@ -15,9 +15,10 @@ This is a standalone repository boundary. Implementation should use documented A
 - Recommendation explanations join screener/factor evidence, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
+- Market-data persistence stores fixture/provider market snapshots and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
 - Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings.
-- SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; Compose mounts a named volume at `/data` for shared local runtime state.
+- SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data snapshot and screener-run persistence is available through `MARKET_DATA_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
 - No copied portfolio data.
 - No broker trading credentials.
@@ -66,7 +67,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Add the first configured read-only market data adapter and durable screener/backtest result storage while preserving fixture-backed deterministic tests.
+2. Add the first configured read-only market data adapter while preserving fixture-backed deterministic tests and durable local market-data storage.
 
 ## Verification
 
@@ -116,9 +117,10 @@ The default services expose:
 - MCP server: `http://localhost:8081/mcp`
 - Web console: `http://localhost:3000`
 
-Both services use the same paper-ledger database when `PAPER_LEDGER_DB_PATH` is
-set. The Compose default is `/data/paper-ledger.db` on the `paper-ledger-data`
-volume; the local `.env.example` default is `data/paper-ledger.db`.
+Both services use shared local databases when `PAPER_LEDGER_DB_PATH` and
+`MARKET_DATA_DB_PATH` are set. The Compose defaults are `/data/paper-ledger.db`
+and `/data/market-data.db` on the `paper-ledger-data` volume; the local
+`.env.example` defaults are `data/paper-ledger.db` and `data/market-data.db`.
 
 The optional Ollama service is profile-gated:
 

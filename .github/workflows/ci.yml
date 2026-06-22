@@ -140,49 +140,22 @@ jobs:
         run: |
           uv run python - <<'PY'
           import asyncio
+          import sys
+          from pathlib import Path
 
           from mcp import ClientSession
           from mcp.client.streamable_http import streamable_http_client
 
-          EXPECTED = {
-              "approve_paper_order_simulation",
-              "create_backtest_request",
-              "create_pre_market_briefing",
-              "create_paper_order_proposal",
-              "create_paper_trade_proposal",
-              "draft_paper_strategy",
-              "cite_strategy_evidence",
-              "explain_candidate_evidence",
-              "explain_factor_stack",
-              "get_recommendation_explanation",
-              "generate_paper_trading_report",
-              "get_approval_queue",
-              "get_audit_events",
-              "get_backtest_request",
-              "get_backtest_result",
-              "get_data_provider_health",
-              "get_market_data_snapshot",
-              "get_pattern_playbook",
-              "get_paper_portfolio_accounting",
-              "get_portfolio_summary",
-              "get_research_digest",
-              "get_risk_review",
-              "get_signal_summary",
-              "get_strategy_draft",
-              "get_watchlist_snapshot",
-              "get_universe_members",
-              "list_data_providers",
-              "list_backtest_requests",
-              "list_paper_fills",
-              "list_paper_orders",
-              "list_paper_positions",
-              "list_strategy_drafts",
-              "list_universes",
-              "run_screener",
-              "run_momentum_screener",
-              "search_pattern_library",
-              "simulate_approved_paper_fill",
-          }
+          root = Path.cwd()
+          for path in (
+              root / "apps/mcp-server",
+              root / "packages/policy",
+              root / "packages/domain",
+          ):
+              sys.path.insert(0, str(path))
+
+          from portfolio_mcp.tools import EXPOSED_TOOL_NAMES
+
           FORBIDDEN = {"place_live_order", "get_broker_trading_token"}
 
           async def main() -> None:
@@ -195,7 +168,7 @@ jobs:
                       await session.initialize()
                       result = await session.list_tools()
                       tool_names = {tool.name for tool in result.tools}
-                      assert tool_names == EXPECTED, tool_names
+                      assert tool_names == EXPOSED_TOOL_NAMES, tool_names
                       assert tool_names.isdisjoint(FORBIDDEN), tool_names
 
           asyncio.run(main())
