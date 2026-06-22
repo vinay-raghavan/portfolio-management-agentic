@@ -11,11 +11,11 @@ This is a standalone repository boundary. Implementation should use documented A
 - MCP-style safe portfolio tools started in `apps/mcp-server` with streamable HTTP runtime support.
 - Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
 - Product data foundation adds fixture universes, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
-- Provider adapter contracts expose fixture defaults plus read-only provider catalog, health, market snapshot, and universe-member tools.
+- Provider adapter contracts expose fixture defaults, a configured read-only JSON market-data adapter, provider catalog, health, market snapshot, and universe-member tools.
 - Recommendation explanations join screener/factor evidence, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
-- Market-data persistence stores fixture/provider market snapshots and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
+- Market-data persistence stores fixture/configured-provider market snapshots and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
 - Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data snapshot and screener-run persistence is available through `MARKET_DATA_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
@@ -67,7 +67,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Add the first configured read-only market data adapter while preserving fixture-backed deterministic tests and durable local market-data storage.
+2. Add the first configured universe adapter and wire configured-market snapshots into a broader batch screener flow while preserving fixture-backed deterministic tests.
 
 ## Verification
 
@@ -121,6 +121,19 @@ Both services use shared local databases when `PAPER_LEDGER_DB_PATH` and
 `MARKET_DATA_DB_PATH` are set. The Compose defaults are `/data/paper-ledger.db`
 and `/data/market-data.db` on the `paper-ledger-data` volume; the local
 `.env.example` defaults are `data/paper-ledger.db` and `data/market-data.db`.
+
+The default data-provider mode is offline-safe fixtures. To enable the first
+configured read-only market-data adapter, set:
+
+```bash
+PORTFOLIO_MARKET_DATA_PROVIDER=json_file
+PORTFOLIO_MARKET_DATA_JSON_PATH=data/market-snapshots.json
+```
+
+The JSON file is local-only and should stay under ignored data paths. It may
+contain either one snapshot object, a list of snapshots, or
+`{"snapshots": [...]}` using the same `MarketDataSnapshot` payload shape
+returned by the MCP tools.
 
 The optional Ollama service is profile-gated:
 

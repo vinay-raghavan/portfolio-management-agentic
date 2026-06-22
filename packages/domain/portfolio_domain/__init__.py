@@ -80,6 +80,7 @@ from .paper_ledger import (
 from .providers import (
     DataProviderRegistry,
     FundamentalsProvider,
+    JsonFileMarketDataProvider,
     MacroProvider,
     MarketDataProvider,
     SentimentProvider,
@@ -141,6 +142,7 @@ __all__ = [
     "approve_fixture_paper_order_simulation",
     "DataProviderRegistry",
     "FundamentalsProvider",
+    "JsonFileMarketDataProvider",
     "MacroProvider",
     "MarketDataProvider",
     "SentimentProvider",

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 from typing import Protocol
 
 from .models import (
@@ -15,6 +18,10 @@ from .models import (
 )
 
 OFFLINE_SOURCE = "offline_fixture"
+CONFIGURED_JSON_SOURCE = "configured_json_file"
+MARKET_DATA_PROVIDER_ENV = "PORTFOLIO_MARKET_DATA_PROVIDER"
+MARKET_DATA_JSON_PATH_ENV = "PORTFOLIO_MARKET_DATA_JSON_PATH"
+JSON_FILE_PROVIDER = "json_file"
 
 
 class MarketDataProvider(Protocol):
@@ -169,6 +176,118 @@ class FixtureMarketDataProvider:
         )
 
 
+def _bar_from_payload(payload: Mapping[str, Any]) -> OHLCVBar:
+    return OHLCVBar(
+        date=str(payload["date"]),
+        open=float(payload["open"]),
+        high=float(payload["high"]),
+        low=float(payload["low"]),
+        close=float(payload["close"]),
+        volume=int(payload["volume"]),
+    )
+
+
+def _snapshot_from_payload(
+    payload: Mapping[str, Any],
+    provider_id: str,
+) -> MarketDataSnapshot:
+    symbol = str(payload["symbol"]).upper().strip()
+    bars = [_bar_from_payload(item) for item in payload.get("bars", [])]
+    if not symbol or not bars:
+        raise ValueError("Configured market snapshot requires symbol and bars.")
+    latest_close = float(payload.get("latest_close", bars[-1].close))
+    metrics_payload = payload.get("metrics", {})
+    if not isinstance(metrics_payload, Mapping):
+        raise ValueError("Configured market snapshot metrics must be an object.")
+    notes_payload = payload.get("notes", [])
+    notes = [str(item) for item in notes_payload if str(item).strip()]
+    return MarketDataSnapshot(
+        provider_id=provider_id,
+        source=str(payload.get("source") or CONFIGURED_JSON_SOURCE),
+        symbol=symbol,
+        as_of=str(payload.get("as_of") or bars[-1].date),
+        bars=bars,
+        latest_close=latest_close,
+        metrics=dict(metrics_payload),
+        notes=[
+            "Read-only configured market data snapshot.",
+            *notes,
+        ],
+    )
+
+
+@dataclass(frozen=True)
+class JsonFileMarketDataProvider:
+    json_path: Path
+    provider_id: str = "configured_market_data"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="market_data",
+            display_name="Configured JSON Market Data",
+            status="available" if self.json_path.is_file() else "error",
+            configured=True,
+            capabilities=["daily_ohlcv", "snapshot_metrics", "json_snapshot_file"],
+            required_env=[MARKET_DATA_PROVIDER_ENV, MARKET_DATA_JSON_PATH_ENV],
+            notes=[
+                "Read-only market data adapter using a configured JSON snapshot file.",
+                "Fixture provider remains the default when this adapter is not configured.",
+            ],
+        )
+
+    def health(self) -> ProviderHealth:
+        try:
+            self._snapshot_payloads()
+        except ValueError as exc:
+            return ProviderHealth(
+                provider_id=self.provider_id,
+                kind="market_data",
+                status="error",
+                configured=True,
+                message=f"Configured JSON market data is not usable: {exc}",
+            )
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="market_data",
+            status="available",
+            configured=True,
+            message="Configured JSON market data is readable.",
+        )
+
+    def get_snapshot(self, symbol: str) -> MarketDataSnapshot:
+        normalized = symbol.upper().strip()
+        for payload in self._snapshot_payloads():
+            snapshot = _snapshot_from_payload(payload, self.provider_id)
+            if snapshot.symbol == normalized:
+                return snapshot
+        raise ValueError(f"Unknown configured market data symbol: {symbol}")
+
+    def _snapshot_payloads(self) -> list[Mapping[str, Any]]:
+        if not self.json_path.is_file():
+            raise ValueError("configured JSON file is missing or unreadable")
+        try:
+            payload = json.loads(self.json_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise ValueError("configured JSON file is not valid JSON") from exc
+        snapshots: Any
+        if isinstance(payload, list):
+            snapshots = payload
+        elif isinstance(payload, Mapping) and "snapshots" in payload:
+            snapshots = payload["snapshots"]
+            if isinstance(snapshots, Mapping):
+                snapshots = list(snapshots.values())
+        elif isinstance(payload, Mapping) and "symbol" in payload:
+            snapshots = [payload]
+        else:
+            raise ValueError("configured JSON must contain snapshot payloads")
+        if not isinstance(snapshots, list) or not snapshots:
+            raise ValueError("configured JSON contains no snapshots")
+        if not all(isinstance(item, Mapping) for item in snapshots):
+            raise ValueError("configured JSON snapshots must be objects")
+        return snapshots
+
+
 @dataclass(frozen=True)
 class FixtureUniverseProvider:
     provider_id: str = "fixture_universe"
@@ -288,6 +407,16 @@ class ConfiguredProviderPlaceholder:
         )
 
 
+def _configured_market_data_provider(
+    config: Mapping[str, str],
+) -> JsonFileMarketDataProvider | None:
+    provider_name = config.get(MARKET_DATA_PROVIDER_ENV, "").strip().lower()
+    json_path = config.get(MARKET_DATA_JSON_PATH_ENV, "").strip()
+    if provider_name != JSON_FILE_PROVIDER or not json_path:
+        return None
+    return JsonFileMarketDataProvider(Path(json_path))
+
+
 @dataclass(frozen=True)
 class DataProviderRegistry:
     market_data: MarketDataProvider
@@ -335,42 +464,22 @@ def build_data_provider_registry(
     env: Mapping[str, str] | None = None,
 ) -> DataProviderRegistry:
     config = env if env is not None else os.environ
-    return DataProviderRegistry(
-        market_data=FixtureMarketDataProvider(),
-        universe=FixtureUniverseProvider(),
-        fundamentals=FixtureReferenceProvider(
-            provider_id="fixture_fundamentals",
-            kind="fundamentals",
-            display_name="Fixture Fundamentals",
-            capabilities=["factor_proxies"],
-        ),
-        sentiment=FixtureReferenceProvider(
-            provider_id="fixture_sentiment",
-            kind="sentiment",
-            display_name="Fixture Sentiment",
-            capabilities=["sentiment_proxy"],
-        ),
-        volatility=FixtureReferenceProvider(
-            provider_id="fixture_volatility",
-            kind="volatility",
-            display_name="Fixture Volatility",
-            capabilities=["volatility_proxy"],
-        ),
-        macro=FixtureReferenceProvider(
-            provider_id="fixture_macro",
-            kind="macro",
-            display_name="Fixture Macro",
-            capabilities=["macro_context"],
-        ),
-        configured_placeholders=[
+    configured_market_data = _configured_market_data_provider(config)
+    market_data: MarketDataProvider = configured_market_data or FixtureMarketDataProvider()
+    configured_placeholders: list[ConfiguredProviderPlaceholder] = []
+    if configured_market_data is None:
+        configured_placeholders.append(
             ConfiguredProviderPlaceholder(
                 provider_id="configured_market_data",
                 kind="market_data",
                 display_name="Configured Market Data",
                 capabilities=["daily_ohlcv", "snapshot_metrics"],
-                required_env=["PORTFOLIO_MARKET_DATA_PROVIDER"],
+                required_env=[MARKET_DATA_PROVIDER_ENV, MARKET_DATA_JSON_PATH_ENV],
                 env=config,
-            ),
+            )
+        )
+    configured_placeholders.extend(
+        [
             ConfiguredProviderPlaceholder(
                 provider_id="configured_universe",
                 kind="universe",
@@ -411,7 +520,36 @@ def build_data_provider_registry(
                 required_env=["PORTFOLIO_MACRO_PROVIDER"],
                 env=config,
             ),
-        ],
+        ]
+    )
+    return DataProviderRegistry(
+        market_data=market_data,
+        universe=FixtureUniverseProvider(),
+        fundamentals=FixtureReferenceProvider(
+            provider_id="fixture_fundamentals",
+            kind="fundamentals",
+            display_name="Fixture Fundamentals",
+            capabilities=["factor_proxies"],
+        ),
+        sentiment=FixtureReferenceProvider(
+            provider_id="fixture_sentiment",
+            kind="sentiment",
+            display_name="Fixture Sentiment",
+            capabilities=["sentiment_proxy"],
+        ),
+        volatility=FixtureReferenceProvider(
+            provider_id="fixture_volatility",
+            kind="volatility",
+            display_name="Fixture Volatility",
+            capabilities=["volatility_proxy"],
+        ),
+        macro=FixtureReferenceProvider(
+            provider_id="fixture_macro",
+            kind="macro",
+            display_name="Fixture Macro",
+            capabilities=["macro_context"],
+        ),
+        configured_placeholders=configured_placeholders,
     )
 
 
