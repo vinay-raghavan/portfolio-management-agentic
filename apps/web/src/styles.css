@@ -656,6 +656,209 @@ p {
   font-size: 13px;
 }
 
+.page-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.page-tab {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--ink-muted);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.page-tab:hover,
+.page-tab:focus-visible,
+.page-tab.active {
+  border-color: #93c5fd;
+  color: var(--ink);
+  background: var(--primary-soft);
+  outline: none;
+}
+
+.page-tab span {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.page-tab small {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.action-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.action-result.good {
+  border-color: #bbf7d0;
+  background: var(--profit-soft);
+}
+
+.action-result.danger {
+  border-color: #fecaca;
+  background: var(--loss-soft);
+}
+
+.action-result span {
+  color: var(--ink-muted);
+}
+
+.focused-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.5fr) minmax(260px, 1fr) minmax(260px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.wide-panel {
+  grid-column: span 1;
+}
+
+.segmented-control,
+.command-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.segment-button,
+.command-button {
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--ink);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.segment-button {
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.segment-button:hover,
+.segment-button:focus-visible,
+.segment-button.active,
+.command-button:hover,
+.command-button:focus-visible {
+  border-color: #93c5fd;
+  background: var(--primary-soft);
+  outline: none;
+}
+
+.command-button {
+  color: #0f172a;
+  background: #eff6ff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.command-button:disabled {
+  color: var(--ink-soft);
+  border-color: var(--border);
+  background: var(--surface-muted);
+  cursor: not-allowed;
+}
+
+.workflow-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.workflow-summary div,
+.result-band {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.workflow-summary span,
+.result-band span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflow-summary strong,
+.result-band strong {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.factor-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.factor-card,
+.detail-row {
+  display: grid;
+  gap: 5px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.factor-card:first-child,
+.detail-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.factor-card span,
+.detail-row span {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.factor-card strong,
+.detail-row strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.factor-card small {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.detail-list {
+  display: grid;
+}
+
 @media (max-width: 1180px) {
   .app-shell {
     grid-template-columns: 220px minmax(0, 1fr);
@@ -667,6 +870,10 @@ p {
   }
 
   .main-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .focused-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -723,8 +930,10 @@ p {
 
   .metrics-grid,
   .main-grid,
+  .focused-grid,
   .index-strip,
-  .ledger-stats {
+  .ledger-stats,
+  .workflow-summary {
     grid-template-columns: 1fr;
   }
 
@@ -736,5 +945,14 @@ p {
     grid-template-columns: 1fr;
     gap: 4px;
     padding: 10px 12px;
+  }
+
+  .page-tab {
+    width: 100%;
+  }
+
+  .action-result {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

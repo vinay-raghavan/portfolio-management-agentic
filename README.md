@@ -16,7 +16,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
-- First thin web console is available in `apps/web`, backed by the agent service `/console/overview` endpoint and the same safe fixture/workflow contracts.
+- Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
 - No copied portfolio data.
@@ -66,7 +66,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Expand web console workflows from overview panels into focused pages for screeners, strategy/backtest review, paper approvals, and reports.
+2. Add the first configured read-only market data adapter and durable screener/backtest result storage while preserving fixture-backed deterministic tests.
 
 ## Verification
 
@@ -130,8 +130,8 @@ podman compose --profile ollama up --build
 
 GitHub Actions are split into CI and CD:
 
-- CI runs deterministic tests, Docker Compose validation, container builds, and MCP safe-tool smoke checks for PRs and topic-branch pushes.
-- CD publishes agent-service and MCP-server images to GHCR only for `v*` tags or explicit manual dispatch.
+- CI runs deterministic tests, Docker Compose validation, container builds, web readiness, and MCP safe-tool smoke checks for PRs and topic-branch pushes.
+- CD publishes agent-service, MCP-server, and web-console images to GHCR only for `v*` tags or explicit manual dispatch.
 
 No workflow requires broker credentials, model provider keys, or live-trading access.
 

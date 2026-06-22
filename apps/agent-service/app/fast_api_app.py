@@ -17,10 +17,19 @@ import os
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 from google.cloud import logging as google_cloud_logging
+from pydantic import BaseModel, Field
 
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
-from app.console import build_console_overview
+from app.console import (
+    approve_console_paper_order,
+    build_console_overview,
+    build_console_workflows,
+    create_console_backtest,
+    create_console_paper_order,
+    draft_console_strategy,
+    simulate_console_paper_fill,
+)
 
 setup_telemetry()
 
@@ -28,6 +37,36 @@ setup_telemetry()
 class LocalLogger:
     def log_struct(self, payload: dict, severity: str = "INFO") -> None:
         logging.log(getattr(logging, severity, logging.INFO), "%s", payload)
+
+
+class StrategyDraftRequest(BaseModel):
+    symbol: str = Field(default="TATAMOTORS", min_length=1, max_length=32)
+    rationale: str = Field(min_length=1, max_length=500)
+
+
+class BacktestRequestPayload(BaseModel):
+    symbol: str = Field(default="TATAMOTORS", min_length=1, max_length=32)
+    setup: str = Field(default="breakout-continuation", min_length=1, max_length=80)
+    start_date: str = Field(default="2026-01-02", min_length=10, max_length=10)
+    end_date: str = Field(default="2026-06-22", min_length=10, max_length=10)
+
+
+class PaperOrderRequest(BaseModel):
+    strategy_id: str = Field(min_length=1, max_length=120)
+    symbol: str = Field(default="TATAMOTORS", min_length=1, max_length=32)
+    side: str = Field(default="buy", min_length=3, max_length=4)
+    quantity: int = Field(default=2, ge=1, le=1000)
+    order_type: str = Field(default="market", min_length=5, max_length=6)
+    requested_price: float | None = Field(default=None, gt=0)
+
+
+class PaperOrderApprovalRequest(BaseModel):
+    approved_by: str = Field(default="web-console-reviewer", min_length=1, max_length=80)
+    approval_note: str = Field(default="", max_length=500)
+
+
+class PaperFillRequest(BaseModel):
+    fill_price: float | None = Field(default=None, gt=0)
 
 
 def build_logger():
@@ -91,6 +130,65 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
 def get_console_overview() -> dict:
     """Return safe, policy-controlled state for the thin web console."""
     return build_console_overview()
+
+
+@app.get("/console/workflows")
+def get_console_workflows(
+    universe_id: str = "fixture_nifty50",
+    preset: str = "momentum",
+    limit: int = 5,
+) -> dict:
+    """Return focused workflow pages for the web console."""
+    return build_console_workflows(universe_id=universe_id, preset=preset, limit=limit)
+
+
+@app.post("/console/workflows/strategy-drafts")
+def post_console_strategy_draft(request: StrategyDraftRequest) -> dict:
+    """Draft a paper strategy from the console without creating an order."""
+    return draft_console_strategy(request.symbol, request.rationale)
+
+
+@app.post("/console/workflows/backtests")
+def post_console_backtest(request: BacktestRequestPayload) -> dict:
+    """Create a simulated backtest request for paper review."""
+    return create_console_backtest(
+        request.symbol,
+        request.setup,
+        request.start_date,
+        request.end_date,
+    )
+
+
+@app.post("/console/workflows/paper-orders")
+def post_console_paper_order(request: PaperOrderRequest) -> dict:
+    """Create a draft paper order proposal that requires approval."""
+    return create_console_paper_order(
+        request.strategy_id,
+        request.symbol,
+        request.side,
+        request.quantity,
+        request.order_type,
+        request.requested_price,
+    )
+
+
+@app.post("/console/workflows/paper-orders/{order_id}/approval")
+def post_console_paper_order_approval(
+    order_id: str,
+    request: PaperOrderApprovalRequest,
+) -> dict:
+    """Approve a paper order for simulated fill processing only."""
+    return approve_console_paper_order(
+        order_id,
+        request.approved_by,
+        request.approval_note,
+    )
+
+
+@app.post("/console/workflows/paper-orders/{order_id}/fill")
+def post_console_paper_order_fill(order_id: str, request: PaperFillRequest) -> dict:
+    """Create a simulated paper fill after approval."""
+    return simulate_console_paper_fill(order_id, request.fill_price)
 
 
 # Main execution
