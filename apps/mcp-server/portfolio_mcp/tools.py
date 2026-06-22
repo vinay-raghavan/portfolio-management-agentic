@@ -6,7 +6,10 @@ from portfolio_domain import (
     build_factor_stack_explanation,
     build_strategy_evidence_pack,
     create_demo_pre_market_briefing,
+    create_fixture_backtest_request,
+    create_fixture_paper_order_proposal,
     draft_strategy,
+    get_fixture_backtest_result,
     get_data_provider_registry,
     get_pattern_card,
     get_demo_portfolio_summary,
@@ -14,6 +17,10 @@ from portfolio_domain import (
     get_demo_risk_review,
     get_demo_signal_summary,
     get_demo_watchlist_snapshot,
+    list_fixture_approval_queue,
+    list_fixture_audit_events,
+    list_fixture_paper_orders,
+    list_fixture_paper_positions,
     list_fixture_universes,
     run_fixture_screener,
     run_demo_momentum_screener,
@@ -39,6 +46,13 @@ EXPOSED_TOOL_NAMES = {
     "get_pattern_playbook",
     "cite_strategy_evidence",
     "explain_factor_stack",
+    "create_backtest_request",
+    "get_backtest_result",
+    "list_paper_orders",
+    "list_paper_positions",
+    "create_paper_order_proposal",
+    "get_approval_queue",
+    "get_audit_events",
     "get_risk_review",
     "draft_paper_strategy",
     "create_paper_trade_proposal",
@@ -352,6 +366,158 @@ def explain_factor_stack(symbol: str, setup: str = "") -> dict[str, Any]:
         "status": "success",
         "policy": decision.to_dict(),
         "factor_stack": factor_stack.to_dict(),
+    }
+
+
+def create_backtest_request(
+    symbol: str,
+    setup: str,
+    start_date: str,
+    end_date: str,
+) -> dict[str, Any]:
+    """Draft an offline paper backtest request without running live systems."""
+    tool_name = "create_backtest_request"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        request = create_fixture_backtest_request(
+            symbol,
+            setup,
+            start_date,
+            end_date,
+        )
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "backtest_request": request.to_dict(),
+    }
+
+
+def get_backtest_result(request_id: str) -> dict[str, Any]:
+    """Return the deterministic simulated result for a draft backtest request."""
+    tool_name = "get_backtest_result"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        result = get_fixture_backtest_result(request_id)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "backtest_result": result.to_dict(),
+    }
+
+
+def list_paper_orders() -> dict[str, Any]:
+    """Return paper order proposals without executing or filling them."""
+    tool_name = "list_paper_orders"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "source": "offline_fixture",
+        "orders": [order.to_dict() for order in list_fixture_paper_orders()],
+    }
+
+
+def list_paper_positions() -> dict[str, Any]:
+    """Return fixture paper positions for analysis and exposure review."""
+    tool_name = "list_paper_positions"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "source": "offline_fixture",
+        "positions": [
+            position.to_dict() for position in list_fixture_paper_positions()
+        ],
+    }
+
+
+def create_paper_order_proposal(
+    strategy_id: str,
+    symbol: str,
+    side: str,
+    quantity: int,
+    order_type: str = "market",
+    requested_price: float | None = None,
+) -> dict[str, Any]:
+    """Create a pending paper order proposal without a fill or live order."""
+    tool_name = "create_paper_order_proposal"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        order, approval, audit_event = create_fixture_paper_order_proposal(
+            strategy_id,
+            symbol,
+            side,
+            quantity,
+            order_type,
+            requested_price,
+        )
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "pending_approval",
+        "policy": decision.to_dict(),
+        "paper_order": order.to_dict(),
+        "approval_request": approval.to_dict(),
+        "audit_event": audit_event.to_dict(),
+        "next_step": "human_approval_required",
+    }
+
+
+def get_approval_queue() -> dict[str, Any]:
+    """Return pending human approvals for paper-only actions."""
+    tool_name = "get_approval_queue"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "source": "offline_fixture",
+        "approval_requests": [
+            approval.to_dict() for approval in list_fixture_approval_queue()
+        ],
+    }
+
+
+def get_audit_events() -> dict[str, Any]:
+    """Return redacted paper-ledger audit events."""
+    tool_name = "get_audit_events"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "source": "offline_fixture",
+        "audit_events": [
+            event.to_dict() for event in list_fixture_audit_events()
+        ],
     }
 
 

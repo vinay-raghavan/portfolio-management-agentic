@@ -54,6 +54,7 @@ The agent exposes only policy-classified tools:
 - Screener and strategy drafting: synthetic momentum screener, fixture-backed deterministic screener, draft paper strategy, and pending paper proposal.
 - Provider checks: read-only provider catalog, provider health, fixture market snapshots, and fixture universe members.
 - Pattern and factor evidence: universe listing, pattern search, pattern playbook retrieval, strategy evidence citations, and factor-stack explanations.
+- Backtest and ledger review: simulated backtest requests and results, paper order proposals, paper positions, approval queue, and redacted audit events.
 
 Forbidden live-order and broker-token functions are not exposed to the agent.
 

@@ -26,6 +26,13 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "get_pattern_playbook" in tool_names
     assert "cite_strategy_evidence" in tool_names
     assert "explain_factor_stack" in tool_names
+    assert "create_backtest_request" in tool_names
+    assert "get_backtest_result" in tool_names
+    assert "list_paper_orders" in tool_names
+    assert "list_paper_positions" in tool_names
+    assert "create_paper_order_proposal" in tool_names
+    assert "get_approval_queue" in tool_names
+    assert "get_audit_events" in tool_names
     assert "draft_paper_strategy" in tool_names
     assert "place_live_order" not in tool_names
     assert "get_broker_trading_token" not in tool_names

@@ -12,6 +12,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
 - Product data foundation adds fixture universes, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
 - Provider adapter contracts expose fixture defaults plus read-only provider catalog, health, market snapshot, and universe-member tools.
+- Backtest and paper-ledger contracts draft simulated backtest requests, return offline results, create pending paper order proposals, expose approval queues, and emit redacted audit events.
 - Docker or Podman Compose runs the agent service, MCP server, and optional Ollama profile.
 - No copied portfolio data.
 - No broker trading credentials.
@@ -59,9 +60,9 @@ Primary constraints:
 
 Next implementation milestones:
 
-1. Add backtest, recommendation-explanation, and paper-ledger tool contracts.
-2. Add structured persistence for paper orders, simulated fills, approvals, and audit events.
-3. Inventory and classify additional source-system workflows for safe repurposing.
+1. Add structured persistence for paper orders, simulated fills, approvals, and audit events.
+2. Add approval-gated simulated fills and paper portfolio accounting.
+3. Add recommendation-explanation contracts that join screener, backtest, risk, and ledger evidence.
 4. Run and tune model-backed agent evals when provider credentials are configured.
 5. Build the first thin web console after the matching MCP/domain workflows are tested.
 

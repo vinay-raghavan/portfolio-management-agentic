@@ -7,6 +7,7 @@ safety workflows:
 
 - Pre-market briefing with portfolio, watchlist, signal, research, and risk context.
 - Momentum screener to draft paper strategy.
+- Simulated backtest to pending paper order proposal, approval queue, and audit trail.
 - Risk review.
 - Feature navigation.
 - Refuse live market order.

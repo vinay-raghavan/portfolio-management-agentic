@@ -14,9 +14,11 @@ Initial topics:
 - GitHub Actions CI/CD boundary.
 - Read-only RAG pattern memory and citation boundaries.
 - Product data, screener, factor-evidence, and pattern-foundation plan.
+- Backtest and paper-ledger contracts.
 
 Current docs:
 
 - `tool-catalog.md`
 - `verification.md`
 - `../product/product-data-pattern-foundation.md`
+- `../product/backtest-paper-ledger-contracts.md`
