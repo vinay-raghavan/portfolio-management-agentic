@@ -77,13 +77,13 @@ Use a layered approach:
 
 - Use typed provider contracts for `MarketDataProvider`, `UniverseProvider`, `FundamentalsProvider`, `SentimentProvider`, `VolatilityProvider`, and `MacroProvider`.
 - Use SQLite or Postgres for users, portfolios, watchlists, strategies, paper orders, simulated fills, approvals, and audit logs.
-- Use structured local storage for market snapshots, screener runs, and backtest datasets. The current implementation uses SQLite for the first durable market-data cache and a configured read-only JSON snapshot adapter for local provider exports; DuckDB or Parquet can replace or supplement this when batch analytics volume justifies it.
+- Use structured local storage for market snapshots, screener runs, and backtest datasets. The current implementation uses SQLite for the first durable market-data cache plus configured read-only JSON market-snapshot and universe adapters for local provider exports; DuckDB or Parquet can replace or supplement this when batch analytics volume justifies it.
 - Use a `PatternStore` interface for reference cards. Start file-backed and add ChromaDB only when semantic retrieval over a larger corpus is actually needed.
 - Keep price candles, paper trades, and approvals in structured stores, not vector memory.
 
 ## Implementation Status
 
-Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot and screener-run persistence, a configured read-only JSON market-data adapter, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot and screener-run persistence, configured read-only JSON market-data and universe adapters, configured metric-based screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
 
 The implementation sequence for this foundation was:
 
@@ -96,11 +96,12 @@ The implementation sequence for this foundation was:
 7. Add draft-only paper-strategy proposal flow that requires risk review and human approval before simulated execution.
 8. Add eval cases for factor-grounded explanations, missing data, high-volatility regime downgrades, and refusal of live trading.
 9. Add a configured JSON market-data adapter that reads local-only snapshot payloads through the same provider boundary and cache shape as fixtures.
+10. Add a configured JSON universe adapter and metric-backed configured screener path that ranks configured symbols without network or broker access.
 
 ## Acceptance Criteria
 
 - Deterministic tests pass without model, broker, or market-data credentials.
-- The screener can run against offline-safe fixtures and return ranked candidates with filter-level reasons.
+- The screener can run against offline-safe fixtures or configured local JSON market/universe inputs and return ranked candidates with filter-level reasons.
 - Candidate explanations include technical, fundamental, sentiment, volatility, portfolio-fit, and pattern evidence sections when data exists.
 - Public citations are present for pattern and factor definitions.
 - Missing data is visible in outputs and lowers confidence where appropriate.

@@ -21,6 +21,8 @@ OFFLINE_SOURCE = "offline_fixture"
 CONFIGURED_JSON_SOURCE = "configured_json_file"
 MARKET_DATA_PROVIDER_ENV = "PORTFOLIO_MARKET_DATA_PROVIDER"
 MARKET_DATA_JSON_PATH_ENV = "PORTFOLIO_MARKET_DATA_JSON_PATH"
+UNIVERSE_PROVIDER_ENV = "PORTFOLIO_UNIVERSE_PROVIDER"
+UNIVERSE_JSON_PATH_ENV = "PORTFOLIO_UNIVERSE_JSON_PATH"
 JSON_FILE_PROVIDER = "json_file"
 
 
@@ -216,6 +218,28 @@ def _snapshot_from_payload(
     )
 
 
+def _universe_from_payload(payload: Mapping[str, Any]) -> UniverseDefinition:
+    symbols_payload = payload.get("symbols", [])
+    if not isinstance(symbols_payload, list) or not symbols_payload:
+        raise ValueError("Configured universe requires a non-empty symbols list.")
+    notes_payload = payload.get("notes", [])
+    notes = [str(item) for item in notes_payload if str(item).strip()]
+    universe_id = str(payload["universe_id"]).strip()
+    if not universe_id:
+        raise ValueError("Configured universe requires universe_id.")
+    return UniverseDefinition(
+        universe_id=universe_id,
+        name=str(payload.get("name") or universe_id),
+        source=str(payload.get("source") or CONFIGURED_JSON_SOURCE),
+        as_of=str(payload.get("as_of") or ""),
+        symbols=[str(symbol).upper().strip() for symbol in symbols_payload],
+        notes=[
+            "Read-only configured universe.",
+            *notes,
+        ],
+    )
+
+
 @dataclass(frozen=True)
 class JsonFileMarketDataProvider:
     json_path: Path
@@ -286,6 +310,90 @@ class JsonFileMarketDataProvider:
         if not all(isinstance(item, Mapping) for item in snapshots):
             raise ValueError("configured JSON snapshots must be objects")
         return snapshots
+
+
+@dataclass(frozen=True)
+class JsonFileUniverseProvider:
+    json_path: Path
+    provider_id: str = "configured_universe"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="universe",
+            display_name="Configured JSON Universe",
+            status="available" if self.json_path.is_file() else "error",
+            configured=True,
+            capabilities=["list_universes", "universe_members", "json_universe_file"],
+            required_env=[UNIVERSE_PROVIDER_ENV, UNIVERSE_JSON_PATH_ENV],
+            notes=[
+                "Read-only universe adapter using a configured JSON file.",
+                "Fixture universe remains the default when this adapter is not configured.",
+            ],
+        )
+
+    def health(self) -> ProviderHealth:
+        try:
+            self._universe_payloads()
+        except ValueError as exc:
+            return ProviderHealth(
+                provider_id=self.provider_id,
+                kind="universe",
+                status="error",
+                configured=True,
+                message=f"Configured JSON universe is not usable: {exc}",
+            )
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="universe",
+            status="available",
+            configured=True,
+            message="Configured JSON universe is readable.",
+        )
+
+    def list_universes(self) -> list[UniverseDefinition]:
+        return [
+            _universe_from_payload(payload)
+            for payload in self._universe_payloads()
+        ]
+
+    def get_members(self, universe_id: str) -> UniverseMembers:
+        normalized = universe_id.strip()
+        for universe in self.list_universes():
+            if universe.universe_id == normalized:
+                return UniverseMembers(
+                    provider_id=self.provider_id,
+                    universe_id=universe.universe_id,
+                    source=universe.source,
+                    as_of=universe.as_of,
+                    symbols=universe.symbols,
+                    notes=universe.notes,
+                )
+        raise ValueError(f"Unknown configured universe_id: {universe_id}")
+
+    def _universe_payloads(self) -> list[Mapping[str, Any]]:
+        if not self.json_path.is_file():
+            raise ValueError("configured JSON file is missing or unreadable")
+        try:
+            payload = json.loads(self.json_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise ValueError("configured JSON file is not valid JSON") from exc
+        universes: Any
+        if isinstance(payload, list):
+            universes = payload
+        elif isinstance(payload, Mapping) and "universes" in payload:
+            universes = payload["universes"]
+            if isinstance(universes, Mapping):
+                universes = list(universes.values())
+        elif isinstance(payload, Mapping) and "universe_id" in payload:
+            universes = [payload]
+        else:
+            raise ValueError("configured JSON must contain universe payloads")
+        if not isinstance(universes, list) or not universes:
+            raise ValueError("configured JSON contains no universes")
+        if not all(isinstance(item, Mapping) for item in universes):
+            raise ValueError("configured JSON universes must be objects")
+        return universes
 
 
 @dataclass(frozen=True)
@@ -417,6 +525,16 @@ def _configured_market_data_provider(
     return JsonFileMarketDataProvider(Path(json_path))
 
 
+def _configured_universe_provider(
+    config: Mapping[str, str],
+) -> JsonFileUniverseProvider | None:
+    provider_name = config.get(UNIVERSE_PROVIDER_ENV, "").strip().lower()
+    json_path = config.get(UNIVERSE_JSON_PATH_ENV, "").strip()
+    if provider_name != JSON_FILE_PROVIDER or not json_path:
+        return None
+    return JsonFileUniverseProvider(Path(json_path))
+
+
 @dataclass(frozen=True)
 class DataProviderRegistry:
     market_data: MarketDataProvider
@@ -465,7 +583,9 @@ def build_data_provider_registry(
 ) -> DataProviderRegistry:
     config = env if env is not None else os.environ
     configured_market_data = _configured_market_data_provider(config)
+    configured_universe = _configured_universe_provider(config)
     market_data: MarketDataProvider = configured_market_data or FixtureMarketDataProvider()
+    universe: UniverseProvider = configured_universe or FixtureUniverseProvider()
     configured_placeholders: list[ConfiguredProviderPlaceholder] = []
     if configured_market_data is None:
         configured_placeholders.append(
@@ -478,16 +598,19 @@ def build_data_provider_registry(
                 env=config,
             )
         )
-    configured_placeholders.extend(
-        [
+    if configured_universe is None:
+        configured_placeholders.append(
             ConfiguredProviderPlaceholder(
                 provider_id="configured_universe",
                 kind="universe",
                 display_name="Configured Universe",
                 capabilities=["list_universes", "universe_members"],
-                required_env=["PORTFOLIO_UNIVERSE_PROVIDER"],
+                required_env=[UNIVERSE_PROVIDER_ENV, UNIVERSE_JSON_PATH_ENV],
                 env=config,
-            ),
+            )
+        )
+    configured_placeholders.extend(
+        [
             ConfiguredProviderPlaceholder(
                 provider_id="configured_fundamentals",
                 kind="fundamentals",
@@ -524,7 +647,7 @@ def build_data_provider_registry(
     )
     return DataProviderRegistry(
         market_data=market_data,
-        universe=FixtureUniverseProvider(),
+        universe=universe,
         fundamentals=FixtureReferenceProvider(
             provider_id="fixture_fundamentals",
             kind="fundamentals",

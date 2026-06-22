@@ -7,6 +7,7 @@ The server exposes only policy-classified tools. Current provider, screener, rec
 Set `PAPER_LEDGER_DB_PATH` to enable SQLite-backed strategy, backtest, and paper-ledger persistence. Docker or Podman Compose uses `/data/paper-ledger.db` on a named volume.
 Set `MARKET_DATA_DB_PATH` to enable SQLite-backed market snapshot and screener-run persistence. Docker or Podman Compose uses `/data/market-data.db` on the same named volume.
 Set `PORTFOLIO_MARKET_DATA_PROVIDER=json_file` and `PORTFOLIO_MARKET_DATA_JSON_PATH` to read configured local market snapshots through the read-only JSON adapter. Keep those JSON exports under ignored local data paths.
+Set `PORTFOLIO_UNIVERSE_PROVIDER=json_file` and `PORTFOLIO_UNIVERSE_JSON_PATH` to read configured local universes through the read-only JSON adapter.
 
 ## Local Runtime
 
