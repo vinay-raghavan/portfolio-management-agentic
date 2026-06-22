@@ -15,6 +15,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - Recommendation explanations join screener/factor evidence, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
+- Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, and optional Ollama profile.
 - No copied portfolio data.
@@ -63,7 +64,7 @@ Primary constraints:
 
 Next implementation milestones:
 
-1. Run and tune model-backed agent evals when provider credentials are configured.
+1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
 2. Build the first thin web console after the matching MCP/domain workflows are tested.
 
 ## Verification
@@ -83,6 +84,18 @@ uv run pytest tests/unit tests/integration
 ```
 
 Without Gemini credentials, model-streaming tests are skipped. Credential-free tests still verify imports, server startup, invalid request handling, feedback, and safe tool exposure.
+
+Model-backed eval readiness from the repo root:
+
+```bash
+uv run python scripts/run_agent_evals.py preflight --json
+```
+
+Credentialed eval run:
+
+```bash
+uv run python scripts/run_agent_evals.py run --fail-on-skip
+```
 
 ## Container Runtime
 

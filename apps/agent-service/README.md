@@ -72,6 +72,17 @@ tools use SQLite-backed state. The repository Compose file mounts
 | `agents-cli eval`    | Evaluate agent behavior (generate, grade, analyze, and more — see `agents-cli eval --help`) |
 | `uv run pytest tests/unit tests/integration` | Run unit and integration tests                                                        |
 
+From the repository root, use the credential-aware wrapper before model-backed
+evals:
+
+```bash
+uv run python scripts/run_agent_evals.py preflight --json
+uv run python scripts/run_agent_evals.py run --fail-on-skip
+```
+
+The wrapper still uses the official ADK path: `agents-cli eval generate`
+followed by `agents-cli eval grade`.
+
 ## 🛠️ Project Management
 
 | Command | What It Does |
