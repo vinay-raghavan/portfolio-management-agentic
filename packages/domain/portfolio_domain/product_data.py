@@ -3,6 +3,7 @@ from __future__ import annotations
 from .models import (
     FactorStackExplanation,
     GateResult,
+    MarketDataSnapshot,
     PatternCard,
     PatternCitation,
     RankedScreenerCandidate,
@@ -429,6 +430,153 @@ def _candidate(symbol: str, rank: int) -> RankedScreenerCandidate:
     )
 
 
+def _metric(snapshot: MarketDataSnapshot, name: str, default: float = 0.0) -> float:
+    value = snapshot.metrics.get(name, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _bounded(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
+    return max(minimum, min(maximum, value))
+
+
+def _configured_gates(snapshot: MarketDataSnapshot) -> list[GateResult]:
+    bar_count = len(snapshot.bars)
+    turnover = _metric(snapshot, "median_turnover_cr")
+    atr_pct = _metric(snapshot, "atr_pct")
+    data_status = "pass" if bar_count >= 3 else "fail"
+    tradability_status = "pass" if turnover >= 1.0 and 0 < atr_pct <= 7.0 else "fail"
+    return [
+        GateResult(
+            "data_quality",
+            data_status,
+            f"{bar_count} configured OHLCV bars available.",
+        ),
+        GateResult(
+            "tradability",
+            tradability_status,
+            f"Median turnover proxy is {turnover:.2f} crore and ATR proxy is {atr_pct:.2f}%.",
+        ),
+        GateResult(
+            "paper_only",
+            "pass",
+            "Only read-only or draft paper actions are allowed.",
+        ),
+    ]
+
+
+def _configured_passed_screeners(snapshot: MarketDataSnapshot) -> list[str]:
+    roc20 = _metric(snapshot, "roc20_pct")
+    rsi14 = _metric(snapshot, "rsi14")
+    prior_high = max((bar.high for bar in snapshot.bars[:-1]), default=snapshot.latest_close)
+    passed: list[str] = []
+    if roc20 >= 3.0 and 45.0 <= rsi14 <= 72.0:
+        passed.append("momentum")
+    if snapshot.latest_close >= prior_high and roc20 >= 5.0:
+        passed.append("breakout")
+    if 0.0 < roc20 < 5.0 and 45.0 <= rsi14 <= 58.0:
+        passed.append("pullback")
+    return passed
+
+
+def _configured_setup(passed_screeners: list[str]) -> str:
+    if "breakout" in passed_screeners:
+        return "breakout-continuation"
+    if "pullback" in passed_screeners:
+        return "pullback-to-support"
+    return "quality-momentum"
+
+
+def _configured_components(
+    snapshot: MarketDataSnapshot,
+    passed_screeners: list[str],
+) -> list[ScoreComponent]:
+    roc20 = _metric(snapshot, "roc20_pct")
+    rsi14 = _metric(snapshot, "rsi14")
+    atr_pct = _metric(snapshot, "atr_pct")
+    turnover = _metric(snapshot, "median_turnover_cr")
+    technical_score = _bounded(0.48 + (roc20 / 20.0) + ((rsi14 - 50.0) / 120.0))
+    volatility_score = _bounded(1.0 - abs(atr_pct - 2.5) / 8.0)
+    liquidity_score = _bounded(turnover / 10.0)
+    pattern_score = 0.82 if "breakout" in passed_screeners else 0.68
+    return [
+        ScoreComponent(
+            "technical",
+            round(technical_score, 3),
+            0.45,
+            [
+                f"Configured 20-day momentum proxy is {roc20:.2f}%.",
+                f"Configured RSI proxy is {rsi14:.2f}.",
+            ],
+            [],
+            [TA_LIB.source_id, FAMA_FRENCH_MOMENTUM.source_id],
+        ),
+        ScoreComponent(
+            "volatility",
+            round(volatility_score, 3),
+            0.20,
+            [f"Configured ATR proxy is {atr_pct:.2f}%."],
+            [
+                "Volatility controls can still downgrade sizing or candidate count.",
+            ],
+            [NSE_INDIA_VIX.source_id, CBOE_VIX.source_id],
+        ),
+        ScoreComponent(
+            "liquidity",
+            round(liquidity_score, 3),
+            0.20,
+            [f"Configured median turnover proxy is {turnover:.2f} crore."],
+            [],
+            ["portfolio-policy-paper-only"],
+        ),
+        ScoreComponent(
+            "pattern",
+            pattern_score,
+            0.15,
+            [f"Configured metrics passed: {', '.join(passed_screeners) or 'none'}."],
+            ["Fundamental and sentiment adapters are not yet configured for this symbol."],
+            [_configured_setup(passed_screeners) + "-v1"],
+        ),
+    ]
+
+
+def _configured_candidate(
+    snapshot: MarketDataSnapshot,
+    rank: int,
+) -> RankedScreenerCandidate:
+    passed_screeners = _configured_passed_screeners(snapshot)
+    components = _configured_components(snapshot, passed_screeners)
+    gates = _configured_gates(snapshot)
+    return RankedScreenerCandidate(
+        rank=rank,
+        symbol=snapshot.symbol,
+        setup=_configured_setup(passed_screeners),
+        score=_weighted_score(components),
+        passed_screeners=passed_screeners,
+        gates=gates,
+        score_components=components,
+        evidence=[
+            evidence
+            for component in components
+            for evidence in component.evidence
+        ],
+        counterevidence=[
+            item
+            for component in components
+            for item in component.counterevidence
+        ],
+        missing_data=[
+            "configured_fundamentals",
+            "configured_sentiment",
+            "intraday_spread",
+        ],
+        citations=_citations_for_components(components),
+        next_allowed_actions=["explain_evidence", "draft_paper_strategy"],
+    )
+
+
 def run_fixture_screener(
     universe_id: str = "fixture_nifty50",
     preset: str = "momentum",
@@ -439,19 +587,31 @@ def run_fixture_screener(
     normalized_preset = preset.strip().lower() or "momentum"
     rejected_symbols: list[str] = []
     candidates: list[RankedScreenerCandidate] = []
+    providers_used = registry.providers_used()
+    run_source = (
+        "configured_json_file"
+        if "configured_" in providers_used["market_data"]
+        or "configured_" in providers_used["universe"]
+        else OFFLINE_SOURCE
+    )
 
     for symbol in universe.symbols:
-        registry.market_data.get_snapshot(symbol)
-        gates = _GATES.get(symbol, [])
+        snapshot = registry.market_data.get_snapshot(symbol)
+        candidate = (
+            _candidate(symbol, 0)
+            if symbol in _COMPONENTS
+            else _configured_candidate(snapshot, 0)
+        )
+        gates = candidate.gates
         if any(gate.status != "pass" for gate in gates):
             rejected_symbols.append(symbol)
             continue
-        if symbol not in _PASSED_SCREENERS:
+        if not candidate.passed_screeners:
             rejected_symbols.append(symbol)
             continue
-        if normalized_preset != "multi_factor" and normalized_preset not in _PASSED_SCREENERS[symbol]:
+        if normalized_preset != "multi_factor" and normalized_preset not in candidate.passed_screeners:
             continue
-        candidates.append(_candidate(symbol, 0))
+        candidates.append(candidate)
 
     candidates.sort(key=lambda candidate: candidate.score, reverse=True)
     ranked = [
@@ -478,9 +638,9 @@ def run_fixture_screener(
         if len(candidate.passed_screeners) >= 2
     ]
     return ScreenerRunResult(
-        run_id=f"fixture-{universe_id}-{normalized_preset}-20260622",
+        run_id=f"{'fixture' if run_source == OFFLINE_SOURCE else 'configured'}-{universe_id}-{normalized_preset}-20260622",
         mode="read_only",
-        source=OFFLINE_SOURCE,
+        source=run_source,
         universe_id=universe.universe_id,
         preset=normalized_preset,
         run_summary={
@@ -488,13 +648,15 @@ def run_fixture_screener(
             "candidate_count": len(ranked),
             "rejected_count": len(rejected_symbols),
             "hard_gates": ["data_quality", "tradability", "paper_only"],
-            "providers_used": registry.providers_used(),
+            "providers_used": providers_used,
         },
         candidates=ranked,
         rejected_symbols=rejected_symbols,
         multi_hit_symbols=multi_hit_symbols,
         notes=[
-            "Fixture-backed deterministic screener; no live provider or broker access.",
+            "Fixture-backed deterministic screener; no live provider or broker access."
+            if run_source == OFFLINE_SOURCE
+            else "Configured JSON screener; read-only provider inputs, no broker access.",
             "Scores are evidence for paper-trading research, not trade authorization.",
         ],
     )
@@ -555,9 +717,15 @@ def _patterns_for_setup(setup: str) -> list[PatternCard]:
 
 def _candidate_for_symbol(symbol: str) -> RankedScreenerCandidate:
     normalized = symbol.upper().strip()
-    if normalized not in _COMPONENTS:
-        raise ValueError(f"Unknown fixture symbol: {symbol}")
-    return _candidate(normalized, 1)
+    if normalized in _COMPONENTS:
+        return _candidate(normalized, 1)
+    try:
+        snapshot = get_data_provider_registry().market_data.get_snapshot(normalized)
+    except ValueError as exc:
+        if "Unknown fixture symbol" in str(exc):
+            raise ValueError(str(exc)) from exc
+        raise ValueError(f"Unknown symbol: {symbol}") from exc
+    return _configured_candidate(snapshot, 1)
 
 
 def build_strategy_evidence_pack(symbol: str, setup: str) -> StrategyEvidencePack:
