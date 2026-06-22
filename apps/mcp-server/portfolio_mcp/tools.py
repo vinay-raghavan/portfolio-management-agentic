@@ -9,8 +9,10 @@ from portfolio_domain import (
     create_demo_pre_market_briefing,
     create_fixture_backtest_request,
     create_fixture_paper_order_proposal,
-    draft_strategy,
+    create_fixture_strategy_draft,
+    get_fixture_backtest_request,
     get_fixture_backtest_result,
+    get_fixture_strategy_draft,
     get_fixture_paper_portfolio_accounting,
     get_data_provider_registry,
     get_pattern_card,
@@ -21,9 +23,11 @@ from portfolio_domain import (
     get_demo_watchlist_snapshot,
     list_fixture_approval_queue,
     list_fixture_audit_events,
+    list_fixture_backtest_requests,
     list_fixture_paper_fills,
     list_fixture_paper_orders,
     list_fixture_paper_positions,
+    list_fixture_strategy_drafts,
     list_fixture_universes,
     run_fixture_screener,
     run_demo_momentum_screener,
@@ -51,6 +55,8 @@ EXPOSED_TOOL_NAMES = {
     "cite_strategy_evidence",
     "explain_factor_stack",
     "create_backtest_request",
+    "list_backtest_requests",
+    "get_backtest_request",
     "get_backtest_result",
     "list_paper_orders",
     "list_paper_positions",
@@ -63,6 +69,8 @@ EXPOSED_TOOL_NAMES = {
     "get_audit_events",
     "get_risk_review",
     "draft_paper_strategy",
+    "list_strategy_drafts",
+    "get_strategy_draft",
     "create_paper_trade_proposal",
 }
 
@@ -169,9 +177,7 @@ def list_data_providers() -> dict[str, Any]:
     return {
         "status": "success",
         "policy": decision.to_dict(),
-        "providers": [
-            descriptor.to_dict() for descriptor in registry.descriptors()
-        ],
+        "providers": [descriptor.to_dict() for descriptor in registry.descriptors()],
     }
 
 
@@ -408,6 +414,43 @@ def create_backtest_request(
     }
 
 
+def list_backtest_requests() -> dict[str, Any]:
+    """Return persisted paper backtest request history."""
+    tool_name = "list_backtest_requests"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "source": "offline_fixture",
+        "backtest_requests": [
+            request.to_dict() for request in list_fixture_backtest_requests()
+        ],
+    }
+
+
+def get_backtest_request(request_id: str) -> dict[str, Any]:
+    """Return one persisted paper backtest request by id."""
+    tool_name = "get_backtest_request"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        request = get_fixture_backtest_request(request_id)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "backtest_request": request.to_dict(),
+    }
+
+
 def get_backtest_result(request_id: str) -> dict[str, Any]:
     """Return the deterministic simulated result for a draft backtest request."""
     tool_name = "get_backtest_result"
@@ -612,9 +655,7 @@ def get_audit_events() -> dict[str, Any]:
         "status": "success",
         "policy": decision.to_dict(),
         "source": "offline_fixture",
-        "audit_events": [
-            event.to_dict() for event in list_fixture_audit_events()
-        ],
+        "audit_events": [event.to_dict() for event in list_fixture_audit_events()],
     }
 
 
@@ -637,10 +678,55 @@ def draft_paper_strategy(symbol: str, rationale: str) -> dict[str, Any]:
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
         return _blocked(tool_name)
+    try:
+        strategy = create_fixture_strategy_draft(symbol, rationale)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
     return {
         "status": "success",
         "policy": decision.to_dict(),
-        "strategy": draft_strategy(symbol, rationale).to_dict(),
+        "strategy": strategy.to_dict(),
+    }
+
+
+def list_strategy_drafts() -> dict[str, Any]:
+    """Return persisted paper strategy draft history."""
+    tool_name = "list_strategy_drafts"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "source": "offline_fixture",
+        "strategy_drafts": [
+            strategy.to_dict() for strategy in list_fixture_strategy_drafts()
+        ],
+    }
+
+
+def get_strategy_draft(strategy_id: str) -> dict[str, Any]:
+    """Return one persisted paper strategy draft by id."""
+    tool_name = "get_strategy_draft"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    try:
+        strategy = get_fixture_strategy_draft(strategy_id)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "strategy": strategy.to_dict(),
     }
 
 

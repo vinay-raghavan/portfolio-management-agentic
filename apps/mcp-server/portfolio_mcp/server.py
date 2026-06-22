@@ -15,6 +15,7 @@ from .tools import (
     explain_factor_stack,
     get_approval_queue,
     get_audit_events,
+    get_backtest_request,
     get_backtest_result,
     get_data_provider_health,
     get_market_data_snapshot,
@@ -24,12 +25,15 @@ from .tools import (
     get_research_digest,
     get_risk_review,
     get_signal_summary,
+    get_strategy_draft,
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_backtest_requests,
     list_paper_fills,
     list_paper_orders,
     list_paper_positions,
+    list_strategy_drafts,
     list_universes,
     run_screener,
     run_momentum_screener,
@@ -83,6 +87,8 @@ def build_server():
     server.tool()(cite_strategy_evidence)
     server.tool()(explain_factor_stack)
     server.tool()(create_backtest_request)
+    server.tool()(list_backtest_requests)
+    server.tool()(get_backtest_request)
     server.tool()(get_backtest_result)
     server.tool()(list_paper_orders)
     server.tool()(list_paper_positions)
@@ -95,6 +101,8 @@ def build_server():
     server.tool()(get_audit_events)
     server.tool()(get_risk_review)
     server.tool()(draft_paper_strategy)
+    server.tool()(list_strategy_drafts)
+    server.tool()(get_strategy_draft)
     server.tool()(create_paper_trade_proposal)
     return server
 

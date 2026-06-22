@@ -19,6 +19,7 @@ from .models import (
     PaperOrder,
     PaperPortfolioAccounting,
     PaperPosition,
+    StrategyDraft,
 )
 
 OFFLINE_SOURCE = "offline_fixture"
@@ -54,6 +55,107 @@ def _validate_date_window(start_date: str, end_date: str) -> None:
         raise ValueError("Backtest dates must use YYYY-MM-DD format.") from exc
     if start > end:
         raise ValueError("Backtest start_date must be on or before end_date.")
+
+
+def _build_strategy_draft(symbol: str, rationale: str) -> StrategyDraft:
+    normalized_symbol = _normalize_symbol(symbol)
+    normalized_rationale = rationale.strip()
+    if not normalized_rationale:
+        raise ValueError("Strategy rationale is required.")
+    return StrategyDraft(
+        strategy_id=f"paper-{normalized_symbol.lower()}-momentum-001",
+        symbol=normalized_symbol,
+        mode="paper",
+        status="draft",
+        source=OFFLINE_SOURCE,
+        created_at=FIXTURE_TIMESTAMP,
+        rationale=normalized_rationale,
+        entry_rule="Enter paper position only after price confirms above prior day high.",
+        exit_rule="Exit paper position on 2 percent stop loss or failed breakout close.",
+        risk_notes=[
+            "Paper trading only.",
+            "Requires human approval before simulated execution.",
+            f"Rationale: {normalized_rationale}",
+        ],
+    )
+
+
+def _build_backtest_request(
+    symbol: str,
+    setup: str,
+    start_date: str,
+    end_date: str,
+) -> BacktestRequest:
+    normalized_symbol = _normalize_symbol(symbol)
+    normalized_setup = _normalize_setup(setup)
+    _validate_date_window(start_date, end_date)
+    request_id = "-".join(
+        (
+            "backtest",
+            _slug(normalized_symbol),
+            _slug(normalized_setup),
+            _slug(start_date),
+            _slug(end_date),
+        )
+    )
+    return BacktestRequest(
+        request_id=request_id,
+        symbol=normalized_symbol,
+        setup=normalized_setup,
+        start_date=start_date,
+        end_date=end_date,
+        mode="paper",
+        status="draft",
+        source=OFFLINE_SOURCE,
+        assumptions=[
+            "Offline fixture bars and deterministic fills are used.",
+            "Costs, slippage, taxes, and broker constraints are simplified.",
+            "Position sizing is illustrative and capped for paper review.",
+        ],
+        notes=[
+            "Backtest request is a simulation draft, not an order.",
+            "Live trading is forbidden by policy.",
+        ],
+    )
+
+
+def _build_backtest_result(request: BacktestRequest) -> BacktestResult:
+    trades = _fixture_trades(request.symbol, request.setup)
+    total_pnl = round(sum(trade.pnl for trade in trades), 2)
+    average_return = round(
+        sum(trade.return_pct for trade in trades) / len(trades),
+        2,
+    )
+    wins = [trade for trade in trades if trade.pnl > 0]
+    metrics: dict[str, float | int | str] = {
+        "trade_count": len(trades),
+        "winning_trades": len(wins),
+        "win_rate_pct": round(len(wins) / len(trades) * 100, 2),
+        "total_pnl": total_pnl,
+        "total_return_pct": round(total_pnl / 100000 * 100, 2),
+        "average_trade_return_pct": average_return,
+        "max_drawdown_pct": -3.4,
+        "exposure_cap_pct": 8.0,
+    }
+    return BacktestResult(
+        request_id=request.request_id,
+        symbol=request.symbol,
+        setup=request.setup,
+        mode="paper",
+        status="simulated",
+        source=OFFLINE_SOURCE,
+        metrics=metrics,
+        trades=trades,
+        warnings=[
+            "Simulated backtest is not predictive and is not investment advice.",
+            "No live order, broker API, or trading credential is used.",
+        ],
+        citations=[
+            "breakout-continuation-v1",
+            "volatility-regime-sizing-v1",
+        ],
+        generated_at=FIXTURE_TIMESTAMP,
+    )
 
 
 def _fixture_positions() -> list[PaperPosition]:
@@ -332,105 +434,70 @@ def _build_accounting(
     )
 
 
-class BacktestStore:
-    """Deterministic offline backtest contract store."""
+class PaperLedgerStore:
+    """In-memory paper-only strategy, backtest, and ledger repository."""
 
     def __init__(self) -> None:
-        self._requests: dict[str, BacktestRequest] = {}
+        self._strategy_drafts: dict[str, StrategyDraft] = {}
+        self._backtest_requests: dict[str, BacktestRequest] = {}
+        self._orders: dict[str, PaperOrder] = {}
+        self._approvals: dict[str, ApprovalRequest] = {}
+        self._audit_events: list[AuditEvent] = []
+        self._positions = _fixture_positions()
+        self._fills: dict[str, PaperFill] = {}
 
-    def create_request(
+    def create_strategy_draft(self, symbol: str, rationale: str) -> StrategyDraft:
+        draft = _build_strategy_draft(symbol, rationale)
+        existing = self._strategy_drafts.get(draft.strategy_id)
+        if existing is not None:
+            return existing
+        self._strategy_drafts[draft.strategy_id] = draft
+        return draft
+
+    def list_strategy_drafts(self) -> list[StrategyDraft]:
+        return sorted(
+            self._strategy_drafts.values(),
+            key=lambda draft: (draft.created_at, draft.strategy_id),
+        )
+
+    def get_strategy_draft(self, strategy_id: str) -> StrategyDraft:
+        draft = self._strategy_drafts.get(strategy_id)
+        if draft is None:
+            raise ValueError(f"Unknown strategy_id: {strategy_id}")
+        return draft
+
+    def create_backtest_request(
         self,
         symbol: str,
         setup: str,
         start_date: str,
         end_date: str,
     ) -> BacktestRequest:
-        normalized_symbol = _normalize_symbol(symbol)
-        normalized_setup = _normalize_setup(setup)
-        _validate_date_window(start_date, end_date)
-        request_id = "-".join(
-            (
-                "backtest",
-                _slug(normalized_symbol),
-                _slug(normalized_setup),
-                _slug(start_date),
-                _slug(end_date),
-            )
-        )
-        request = BacktestRequest(
-            request_id=request_id,
-            symbol=normalized_symbol,
-            setup=normalized_setup,
-            start_date=start_date,
-            end_date=end_date,
-            mode="paper",
-            status="draft",
-            source=OFFLINE_SOURCE,
-            assumptions=[
-                "Offline fixture bars and deterministic fills are used.",
-                "Costs, slippage, taxes, and broker constraints are simplified.",
-                "Position sizing is illustrative and capped for paper review.",
-            ],
-            notes=[
-                "Backtest request is a simulation draft, not an order.",
-                "Live trading is forbidden by policy.",
-            ],
-        )
-        self._requests[request.request_id] = request
+        request = _build_backtest_request(symbol, setup, start_date, end_date)
+        existing = self._backtest_requests.get(request.request_id)
+        if existing is not None:
+            return existing
+        self._backtest_requests[request.request_id] = request
         return request
 
-    def get_result(self, request_id: str) -> BacktestResult:
-        request = self._requests.get(request_id)
+    def list_backtest_requests(self) -> list[BacktestRequest]:
+        return sorted(
+            self._backtest_requests.values(),
+            key=lambda request: (
+                request.start_date,
+                request.end_date,
+                request.request_id,
+            ),
+        )
+
+    def get_backtest_request(self, request_id: str) -> BacktestRequest:
+        request = self._backtest_requests.get(request_id)
         if request is None:
             raise ValueError(f"Unknown backtest request_id: {request_id}")
+        return request
 
-        trades = _fixture_trades(request.symbol, request.setup)
-        total_pnl = round(sum(trade.pnl for trade in trades), 2)
-        average_return = round(
-            sum(trade.return_pct for trade in trades) / len(trades),
-            2,
-        )
-        wins = [trade for trade in trades if trade.pnl > 0]
-        metrics: dict[str, float | int | str] = {
-            "trade_count": len(trades),
-            "winning_trades": len(wins),
-            "win_rate_pct": round(len(wins) / len(trades) * 100, 2),
-            "total_pnl": total_pnl,
-            "total_return_pct": round(total_pnl / 100000 * 100, 2),
-            "average_trade_return_pct": average_return,
-            "max_drawdown_pct": -3.4,
-            "exposure_cap_pct": 8.0,
-        }
-        return BacktestResult(
-            request_id=request.request_id,
-            symbol=request.symbol,
-            setup=request.setup,
-            mode="paper",
-            status="simulated",
-            source=OFFLINE_SOURCE,
-            metrics=metrics,
-            trades=trades,
-            warnings=[
-                "Simulated backtest is not predictive and is not investment advice.",
-                "No live order, broker API, or trading credential is used.",
-            ],
-            citations=[
-                "breakout-continuation-v1",
-                "volatility-regime-sizing-v1",
-            ],
-            generated_at=FIXTURE_TIMESTAMP,
-        )
-
-
-class PaperLedgerStore:
-    """In-memory paper-only ledger used until durable persistence is added."""
-
-    def __init__(self) -> None:
-        self._orders: dict[str, PaperOrder] = {}
-        self._approvals: dict[str, ApprovalRequest] = {}
-        self._audit_events: list[AuditEvent] = []
-        self._positions = _fixture_positions()
-        self._fills: dict[str, PaperFill] = {}
+    def get_backtest_result(self, request_id: str) -> BacktestResult:
+        return _build_backtest_result(self.get_backtest_request(request_id))
 
     def create_order_proposal(
         self,
@@ -577,13 +644,134 @@ class PaperLedgerStore:
 
 
 class SQLitePaperLedgerStore:
-    """SQLite-backed paper-only ledger for local durable state."""
+    """SQLite-backed paper-only strategy, backtest, and ledger repository."""
 
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         if self.db_path.parent != Path("."):
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
+
+    def create_strategy_draft(self, symbol: str, rationale: str) -> StrategyDraft:
+        draft = _build_strategy_draft(symbol, rationale)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into strategy_drafts (
+                    strategy_id,
+                    symbol,
+                    mode,
+                    status,
+                    source,
+                    created_at,
+                    rationale,
+                    entry_rule,
+                    exit_rule,
+                    risk_notes_json
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(strategy_id) do nothing
+                """,
+                (
+                    draft.strategy_id,
+                    draft.symbol,
+                    draft.mode,
+                    draft.status,
+                    draft.source,
+                    draft.created_at,
+                    draft.rationale,
+                    draft.entry_rule,
+                    draft.exit_rule,
+                    _to_json(draft.risk_notes),
+                ),
+            )
+            connection.commit()
+            persisted = self._get_strategy_draft(connection, draft.strategy_id)
+        if persisted is None:
+            raise ValueError(f"Missing persisted strategy_id: {draft.strategy_id}")
+        return persisted
+
+    def list_strategy_drafts(self) -> list[StrategyDraft]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select * from strategy_drafts
+                order by created_at, strategy_id
+                """
+            ).fetchall()
+        return [_row_to_strategy_draft(row) for row in rows]
+
+    def get_strategy_draft(self, strategy_id: str) -> StrategyDraft:
+        with self._connect() as connection:
+            draft = self._get_strategy_draft(connection, strategy_id)
+        if draft is None:
+            raise ValueError(f"Unknown strategy_id: {strategy_id}")
+        return draft
+
+    def create_backtest_request(
+        self,
+        symbol: str,
+        setup: str,
+        start_date: str,
+        end_date: str,
+    ) -> BacktestRequest:
+        request = _build_backtest_request(symbol, setup, start_date, end_date)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                insert into backtest_requests (
+                    request_id,
+                    symbol,
+                    setup,
+                    start_date,
+                    end_date,
+                    mode,
+                    status,
+                    source,
+                    assumptions_json,
+                    notes_json,
+                    created_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict(request_id) do nothing
+                """,
+                (
+                    request.request_id,
+                    request.symbol,
+                    request.setup,
+                    request.start_date,
+                    request.end_date,
+                    request.mode,
+                    request.status,
+                    request.source,
+                    _to_json(request.assumptions),
+                    _to_json(request.notes),
+                    FIXTURE_TIMESTAMP,
+                ),
+            )
+            connection.commit()
+            persisted = self._get_backtest_request(connection, request.request_id)
+        if persisted is None:
+            raise ValueError(f"Missing persisted request_id: {request.request_id}")
+        return persisted
+
+    def list_backtest_requests(self) -> list[BacktestRequest]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                select * from backtest_requests
+                order by start_date, end_date, request_id
+                """
+            ).fetchall()
+        return [_row_to_backtest_request(row) for row in rows]
+
+    def get_backtest_request(self, request_id: str) -> BacktestRequest:
+        with self._connect() as connection:
+            request = self._get_backtest_request(connection, request_id)
+        if request is None:
+            raise ValueError(f"Unknown backtest request_id: {request_id}")
+        return request
+
+    def get_backtest_result(self, request_id: str) -> BacktestResult:
+        return _build_backtest_result(self.get_backtest_request(request_id))
 
     def create_order_proposal(
         self,
@@ -777,7 +965,9 @@ class SQLitePaperLedgerStore:
                 raise ValueError(f"Unknown paper order_id: {order_id}")
             approval = self._get_approval(connection, order.approval_request_id)
             if approval is None or approval.status != "approved":
-                raise ValueError("Paper order simulation requires human approval first.")
+                raise ValueError(
+                    "Paper order simulation requires human approval first."
+                )
 
             fill_id = f"fill-{order.order_id}"
             existing_fill = self._get_fill(connection, fill_id)
@@ -788,7 +978,11 @@ class SQLitePaperLedgerStore:
                     connection,
                     f"audit-{existing_fill.fill_id}",
                 )
-                if current_order is None or current_position is None or fill_event is None:
+                if (
+                    current_order is None
+                    or current_position is None
+                    or fill_event is None
+                ):
                     raise ValueError("Persisted paper fill is missing related state.")
                 return existing_fill, current_order, current_position, fill_event
 
@@ -943,6 +1137,33 @@ class SQLitePaperLedgerStore:
         with self._connect() as connection:
             connection.executescript(
                 """
+                create table if not exists strategy_drafts (
+                    strategy_id text primary key,
+                    symbol text not null,
+                    mode text not null check (mode = 'paper'),
+                    status text not null,
+                    source text not null,
+                    created_at text not null,
+                    rationale text not null,
+                    entry_rule text not null,
+                    exit_rule text not null,
+                    risk_notes_json text not null default '[]'
+                );
+
+                create table if not exists backtest_requests (
+                    request_id text primary key,
+                    symbol text not null,
+                    setup text not null,
+                    start_date text not null,
+                    end_date text not null,
+                    mode text not null check (mode = 'paper'),
+                    status text not null,
+                    source text not null,
+                    assumptions_json text not null default '[]',
+                    notes_json text not null default '[]',
+                    created_at text not null
+                );
+
                 create table if not exists paper_orders (
                     order_id text primary key,
                     strategy_id text not null,
@@ -1034,6 +1255,28 @@ class SQLitePaperLedgerStore:
                     ),
                 )
             connection.commit()
+
+    def _get_strategy_draft(
+        self,
+        connection: sqlite3.Connection,
+        strategy_id: str,
+    ) -> StrategyDraft | None:
+        row = connection.execute(
+            "select * from strategy_drafts where strategy_id = ?",
+            (strategy_id,),
+        ).fetchone()
+        return _row_to_strategy_draft(row) if row is not None else None
+
+    def _get_backtest_request(
+        self,
+        connection: sqlite3.Connection,
+        request_id: str,
+    ) -> BacktestRequest | None:
+        row = connection.execute(
+            "select * from backtest_requests where request_id = ?",
+            (request_id,),
+        ).fetchone()
+        return _row_to_backtest_request(row) if row is not None else None
 
     def _get_order(
         self,
@@ -1133,6 +1376,36 @@ def _to_json(value: Any) -> str:
 
 def _from_json(value: str) -> Any:
     return json.loads(value)
+
+
+def _row_to_strategy_draft(row: sqlite3.Row) -> StrategyDraft:
+    return StrategyDraft(
+        strategy_id=row["strategy_id"],
+        symbol=row["symbol"],
+        mode=row["mode"],
+        status=row["status"],
+        source=row["source"],
+        created_at=row["created_at"],
+        rationale=row["rationale"],
+        entry_rule=row["entry_rule"],
+        exit_rule=row["exit_rule"],
+        risk_notes=list(_from_json(row["risk_notes_json"])),
+    )
+
+
+def _row_to_backtest_request(row: sqlite3.Row) -> BacktestRequest:
+    return BacktestRequest(
+        request_id=row["request_id"],
+        symbol=row["symbol"],
+        setup=row["setup"],
+        start_date=row["start_date"],
+        end_date=row["end_date"],
+        mode=row["mode"],
+        status=row["status"],
+        source=row["source"],
+        assumptions=list(_from_json(row["assumptions_json"])),
+        notes=list(_from_json(row["notes_json"])),
+    )
 
 
 def _row_to_order(row: sqlite3.Row) -> PaperOrder:
@@ -1253,9 +1526,6 @@ def _fixture_trades(symbol: str, setup: str) -> list[BacktestTrade]:
     ]
 
 
-_BACKTEST_STORE = BacktestStore()
-
-
 def build_paper_ledger_store() -> PaperLedgerStore | SQLitePaperLedgerStore:
     db_path = os.getenv("PAPER_LEDGER_DB_PATH", "").strip()
     if db_path:
@@ -1266,17 +1536,42 @@ def build_paper_ledger_store() -> PaperLedgerStore | SQLitePaperLedgerStore:
 _PAPER_LEDGER_STORE = build_paper_ledger_store()
 
 
+def create_fixture_strategy_draft(symbol: str, rationale: str) -> StrategyDraft:
+    return _PAPER_LEDGER_STORE.create_strategy_draft(symbol, rationale)
+
+
+def list_fixture_strategy_drafts() -> list[StrategyDraft]:
+    return _PAPER_LEDGER_STORE.list_strategy_drafts()
+
+
+def get_fixture_strategy_draft(strategy_id: str) -> StrategyDraft:
+    return _PAPER_LEDGER_STORE.get_strategy_draft(strategy_id)
+
+
 def create_fixture_backtest_request(
     symbol: str,
     setup: str,
     start_date: str,
     end_date: str,
 ) -> BacktestRequest:
-    return _BACKTEST_STORE.create_request(symbol, setup, start_date, end_date)
+    return _PAPER_LEDGER_STORE.create_backtest_request(
+        symbol,
+        setup,
+        start_date,
+        end_date,
+    )
+
+
+def list_fixture_backtest_requests() -> list[BacktestRequest]:
+    return _PAPER_LEDGER_STORE.list_backtest_requests()
+
+
+def get_fixture_backtest_request(request_id: str) -> BacktestRequest:
+    return _PAPER_LEDGER_STORE.get_backtest_request(request_id)
 
 
 def get_fixture_backtest_result(request_id: str) -> BacktestResult:
-    return _BACKTEST_STORE.get_result(request_id)
+    return _PAPER_LEDGER_STORE.get_backtest_result(request_id)
 
 
 def create_fixture_paper_order_proposal(

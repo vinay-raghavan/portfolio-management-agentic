@@ -15,6 +15,8 @@ def test_ci_workflow_runs_required_deterministic_checks() -> None:
     assert "docker compose build agent-service mcp-server" in ci
     assert "streamable_http_client" in ci
     assert "create_pre_market_briefing" in ci
+    assert "list_strategy_drafts" in ci
+    assert "list_backtest_requests" in ci
     assert "place_live_order" in ci
     assert "get_broker_trading_token" in ci
 
