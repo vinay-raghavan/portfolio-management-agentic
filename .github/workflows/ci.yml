@@ -73,6 +73,35 @@ jobs:
       - name: Run agent-service tests
         run: uv run pytest tests/unit tests/integration
 
+  web:
+    name: Web console
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Audit web dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Typecheck web console
+        run: npm run typecheck
+
+      - name: Build web console
+        run: npm run build
+
   container-smoke:
     name: Container smoke
     runs-on: ubuntu-latest
@@ -92,15 +121,20 @@ jobs:
         run: docker compose config --quiet
 
       - name: Build runtime images
-        run: docker compose build agent-service mcp-server
+        run: docker compose build agent-service mcp-server web
 
       - name: Start runtime services
-        run: docker compose up -d agent-service mcp-server
+        run: docker compose up -d agent-service mcp-server web
 
       - name: Verify agent service readiness
         run: |
           curl --retry 20 --retry-all-errors --retry-delay 2 --fail \
             http://127.0.0.1:8000/docs >/dev/null
+
+      - name: Verify web console readiness
+        run: |
+          curl --retry 20 --retry-all-errors --retry-delay 2 --fail \
+            http://127.0.0.1:3000 >/dev/null
 
       - name: Verify MCP safe tool catalog
         run: |
@@ -169,7 +203,7 @@ jobs:
 
       - name: Show container logs on failure
         if: failure()
-        run: docker compose logs --no-color agent-service mcp-server
+        run: docker compose logs --no-color agent-service mcp-server web
 
       - name: Stop runtime services
         if: always()

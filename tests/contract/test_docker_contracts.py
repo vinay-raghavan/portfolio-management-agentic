@@ -49,6 +49,15 @@ def test_compose_mounts_paper_ledger_volume() -> None:
     assert "paper-ledger-data:" in compose
 
 
+def test_compose_exposes_web_console() -> None:
+    compose = Path("docker-compose.yml").read_text()
+
+    assert "web:" in compose
+    assert "dockerfile: apps/web/Dockerfile" in compose
+    assert 'VITE_AGENT_API_URL: ${VITE_AGENT_API_URL:-http://localhost:8000}' in compose
+    assert '"3000:3000"' in compose
+
+
 def test_compose_config_is_valid_with_available_container_runtime() -> None:
     compose_command = _compose_command()
     if compose_command is None:

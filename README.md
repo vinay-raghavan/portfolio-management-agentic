@@ -16,8 +16,9 @@ This is a standalone repository boundary. Implementation should use documented A
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
+- First thin web console is available in `apps/web`, backed by the agent service `/console/overview` endpoint and the same safe fixture/workflow contracts.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; Compose mounts a named volume at `/data` for shared local runtime state.
-- Docker or Podman Compose runs the agent service, MCP server, and optional Ollama profile.
+- Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
 - No copied portfolio data.
 - No broker trading credentials.
 - No live trading.
@@ -47,7 +48,7 @@ Primary constraints:
 
 - `apps/agent-service`: ADK coordinator and sub-agent service.
 - `apps/mcp-server`: MCP tool server and policy enforcement boundary.
-- `apps/web`: Optional capstone UI or thin agent console.
+- `apps/web`: Thin React console for the agentic portfolio and paper-trading workflows.
 - `packages/policy`: Shared action-tier and safety policy logic.
 - `packages/model-provider`: Model provider configuration and adapter contracts.
 - `packages/agent-platform`: Agent runtime and coding-agent handoff contracts.
@@ -65,7 +66,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Build the first thin web console after the matching MCP/domain workflows are tested.
+2. Expand web console workflows from overview panels into focused pages for screeners, strategy/backtest review, paper approvals, and reports.
 
 ## Verification
 
@@ -113,6 +114,7 @@ The default services expose:
 
 - Agent service: `http://localhost:8000`
 - MCP server: `http://localhost:8081/mcp`
+- Web console: `http://localhost:3000`
 
 Both services use the same paper-ledger database when `PAPER_LEDGER_DB_PATH` is
 set. The Compose default is `/data/paper-ledger.db` on the `paper-ledger-data`

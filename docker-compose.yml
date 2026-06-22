@@ -23,6 +23,19 @@ services:
     depends_on:
       - mcp-server
 
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_AGENT_API_URL: ${VITE_AGENT_API_URL:-http://localhost:8000}
+    environment:
+      VITE_AGENT_API_URL: ${VITE_AGENT_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - agent-service
+
   mcp-server:
     build:
       context: .

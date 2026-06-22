@@ -20,6 +20,7 @@ from google.cloud import logging as google_cloud_logging
 
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
+from app.console import build_console_overview
 
 setup_telemetry()
 
@@ -42,7 +43,13 @@ def build_logger():
 
 logger = build_logger()
 allow_origins = (
-    os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else None
+    os.getenv("ALLOW_ORIGINS", "").split(",")
+    if os.getenv("ALLOW_ORIGINS")
+    else [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+    ]
 )
 
 # Artifact bucket for ADK (created by Terraform, passed via env var)
@@ -78,6 +85,12 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
     """
     logger.log_struct(feedback.model_dump(), severity="INFO")
     return {"status": "success"}
+
+
+@app.get("/console/overview")
+def get_console_overview() -> dict:
+    """Return safe, policy-controlled state for the thin web console."""
+    return build_console_overview()
 
 
 # Main execution
