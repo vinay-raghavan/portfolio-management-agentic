@@ -55,6 +55,7 @@ The agent exposes only policy-classified tools:
 - Provider checks: read-only provider catalog, provider health, fixture market snapshots, and fixture universe members.
 - Pattern, factor, and recommendation evidence: universe listing, pattern search, pattern playbook retrieval, strategy evidence citations, factor-stack explanations, and read-only recommendation explanations that join history, risk, and ledger context.
 - Backtest, ledger, and report review: persisted simulated backtest requests, backtest history retrieval, deterministic results, paper order proposals, approval-gated simulated fills, paper positions, paper accounting, approval queue, redacted audit events, and read-only paper-trading reports.
+- Web console workflows: `/console/overview` summarizes safe state, while `/console/workflows` and its paper-only POST endpoints expose focused screeners, strategy/backtest review, paper order proposals, human approval, simulated fills, reports, and provider settings.
 
 Forbidden live-order and broker-token functions are not exposed to the agent.
 
