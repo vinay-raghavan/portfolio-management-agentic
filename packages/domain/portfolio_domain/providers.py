@@ -15,6 +15,7 @@ from .models import (
     OHLCVBar,
     ProviderDescriptor,
     ProviderHealth,
+    ProviderImportValidation,
     SentimentSnapshot,
     UniverseDefinition,
     UniverseMembers,
@@ -36,6 +37,15 @@ VOLATILITY_JSON_PATH_ENV = "PORTFOLIO_VOLATILITY_JSON_PATH"
 MACRO_PROVIDER_ENV = "PORTFOLIO_MACRO_PROVIDER"
 MACRO_JSON_PATH_ENV = "PORTFOLIO_MACRO_JSON_PATH"
 JSON_FILE_PROVIDER = "json_file"
+
+
+@dataclass(frozen=True)
+class ConfiguredProviderImportSpec:
+    provider_id: str
+    kind: str
+    display_name: str
+    provider_env: str
+    json_path_env: str
 
 
 class MarketDataProvider(Protocol):
@@ -1265,6 +1275,188 @@ def _configured_macro_provider(
     if provider_name != JSON_FILE_PROVIDER or not json_path:
         return None
     return JsonFileMacroProvider(Path(json_path))
+
+
+def _configured_import_specs() -> list[ConfiguredProviderImportSpec]:
+    return [
+        ConfiguredProviderImportSpec(
+            "configured_market_data",
+            "market_data",
+            "Configured Market Data",
+            MARKET_DATA_PROVIDER_ENV,
+            MARKET_DATA_JSON_PATH_ENV,
+        ),
+        ConfiguredProviderImportSpec(
+            "configured_universe",
+            "universe",
+            "Configured Universe",
+            UNIVERSE_PROVIDER_ENV,
+            UNIVERSE_JSON_PATH_ENV,
+        ),
+        ConfiguredProviderImportSpec(
+            "configured_fundamentals",
+            "fundamentals",
+            "Configured Fundamentals",
+            FUNDAMENTALS_PROVIDER_ENV,
+            FUNDAMENTALS_JSON_PATH_ENV,
+        ),
+        ConfiguredProviderImportSpec(
+            "configured_sentiment",
+            "sentiment",
+            "Configured Sentiment",
+            SENTIMENT_PROVIDER_ENV,
+            SENTIMENT_JSON_PATH_ENV,
+        ),
+        ConfiguredProviderImportSpec(
+            "configured_volatility",
+            "volatility",
+            "Configured Volatility",
+            VOLATILITY_PROVIDER_ENV,
+            VOLATILITY_JSON_PATH_ENV,
+        ),
+        ConfiguredProviderImportSpec(
+            "configured_macro",
+            "macro",
+            "Configured Macro",
+            MACRO_PROVIDER_ENV,
+            MACRO_JSON_PATH_ENV,
+        ),
+    ]
+
+
+def _validated_import_identifiers(
+    spec: ConfiguredProviderImportSpec,
+    json_path: Path,
+) -> list[str]:
+    if spec.kind == "market_data":
+        provider = JsonFileMarketDataProvider(json_path)
+        return [
+            _snapshot_from_payload(payload, provider.provider_id).symbol
+            for payload in provider._snapshot_payloads()
+        ]
+    if spec.kind == "universe":
+        provider = JsonFileUniverseProvider(json_path)
+        return [
+            _universe_from_payload(payload).universe_id
+            for payload in provider._universe_payloads()
+        ]
+    if spec.kind == "fundamentals":
+        provider = JsonFileFundamentalsProvider(json_path)
+        return [
+            _fundamentals_from_payload(payload, provider.provider_id).symbol
+            for payload in provider._fundamentals_payloads()
+        ]
+    if spec.kind == "sentiment":
+        provider = JsonFileSentimentProvider(json_path)
+        return [
+            _sentiment_from_payload(payload, provider.provider_id).symbol
+            for payload in provider._sentiment_payloads()
+        ]
+    if spec.kind == "volatility":
+        provider = JsonFileVolatilityProvider(json_path)
+        return [
+            _volatility_from_payload(payload, provider.provider_id).symbol
+            for payload in provider._volatility_payloads()
+        ]
+    if spec.kind == "macro":
+        provider = JsonFileMacroProvider(json_path)
+        return [
+            _macro_from_payload(payload, provider.provider_id).symbol
+            for payload in provider._macro_payloads()
+        ]
+    raise ValueError("Unknown configured provider kind.")
+
+
+def _safe_validation_error(exc: Exception) -> str:
+    if isinstance(exc, KeyError):
+        return "Configured JSON payload is missing a required field."
+    if isinstance(exc, OSError):
+        return "Configured JSON file is not readable."
+    message = str(exc).strip()
+    return message or "Configured JSON file is not usable."
+
+
+def _validate_configured_import(
+    spec: ConfiguredProviderImportSpec,
+    config: Mapping[str, str],
+) -> ProviderImportValidation:
+    provider_mode = config.get(spec.provider_env, "").strip().lower()
+    display_mode = provider_mode if provider_mode in {"", "fixture", JSON_FILE_PROVIDER} else "unsupported"
+    required_env = [spec.provider_env, spec.json_path_env]
+    if not provider_mode or provider_mode == "fixture":
+        return ProviderImportValidation(
+            provider_id=spec.provider_id,
+            kind=spec.kind,
+            display_name=spec.display_name,
+            status="not_configured",
+            configured=False,
+            provider_mode=display_mode or "fixture",
+            required_env=required_env,
+            missing_env=[],
+            message="Fixture provider remains active; no configured import file is selected.",
+        )
+    if provider_mode != JSON_FILE_PROVIDER:
+        return ProviderImportValidation(
+            provider_id=spec.provider_id,
+            kind=spec.kind,
+            display_name=spec.display_name,
+            status="unsupported_provider",
+            configured=False,
+            provider_mode=display_mode,
+            required_env=required_env,
+            missing_env=[],
+            message="Only fixture and json_file provider modes are supported for configured imports.",
+        )
+    json_path_value = config.get(spec.json_path_env, "").strip()
+    if not json_path_value:
+        return ProviderImportValidation(
+            provider_id=spec.provider_id,
+            kind=spec.kind,
+            display_name=spec.display_name,
+            status="missing_path",
+            configured=False,
+            provider_mode=JSON_FILE_PROVIDER,
+            required_env=required_env,
+            missing_env=[spec.json_path_env],
+            message=f"json_file mode requires {spec.json_path_env}.",
+        )
+    try:
+        identifiers = _validated_import_identifiers(spec, Path(json_path_value))
+    except (KeyError, OSError, TypeError, ValueError) as exc:
+        return ProviderImportValidation(
+            provider_id=spec.provider_id,
+            kind=spec.kind,
+            display_name=spec.display_name,
+            status="error",
+            configured=True,
+            provider_mode=JSON_FILE_PROVIDER,
+            required_env=required_env,
+            missing_env=[],
+            message=_safe_validation_error(exc),
+        )
+    return ProviderImportValidation(
+        provider_id=spec.provider_id,
+        kind=spec.kind,
+        display_name=spec.display_name,
+        status="valid",
+        configured=True,
+        provider_mode=JSON_FILE_PROVIDER,
+        required_env=required_env,
+        missing_env=[],
+        message="Configured JSON import is readable and matches the expected shape.",
+        payload_count=len(identifiers),
+        sample_identifiers=identifiers[:5],
+    )
+
+
+def validate_configured_provider_imports(
+    env: Mapping[str, str] | None = None,
+) -> list[ProviderImportValidation]:
+    config = env if env is not None else os.environ
+    return [
+        _validate_configured_import(spec, config)
+        for spec in _configured_import_specs()
+    ]
 
 
 @dataclass(frozen=True)

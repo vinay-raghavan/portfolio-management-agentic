@@ -45,6 +45,7 @@ from .tools import (  # noqa: E402
     run_momentum_screener,
     search_pattern_library,
     simulate_approved_paper_fill,
+    validate_data_provider_imports,
 )
 
 __all__ = [
@@ -90,4 +91,5 @@ __all__ = [
     "run_momentum_screener",
     "search_pattern_library",
     "simulate_approved_paper_fill",
+    "validate_data_provider_imports",
 ]

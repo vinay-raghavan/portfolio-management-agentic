@@ -36,6 +36,39 @@ def test_console_workflows_expose_focused_policy_safe_pages() -> None:
     assert "secret" not in str(payload).lower()
 
 
+def test_console_workflows_expose_provider_import_validation_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    bad_sentiment_path = tmp_path / "bad-sentiment.json"
+    bad_sentiment_path.write_text("{bad")
+    monkeypatch.setenv("PORTFOLIO_SENTIMENT_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_SENTIMENT_JSON_PATH", str(bad_sentiment_path))
+    client = TestClient(app)
+
+    response = client.get("/console/workflows", params={"preset": "momentum"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    validation = payload["settings"]["import_validation"]
+    validations = {
+        item["provider_id"]: item
+        for item in validation["validations"]
+    }
+
+    assert validation["status"] == "success"
+    assert validation["policy"]["tier"] == "read_only"
+    assert validation["summary"]["needs_attention"] == 1
+    assert validations["configured_sentiment"]["status"] == "error"
+    assert "not valid JSON" in validations["configured_sentiment"]["message"]
+
+    combined = f"{validation}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "bad-sentiment" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
 def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
     client = TestClient(app)
 

@@ -111,6 +111,24 @@ class ProviderHealth:
 
 
 @dataclass(frozen=True)
+class ProviderImportValidation:
+    provider_id: str
+    kind: str
+    display_name: str
+    status: str
+    configured: bool
+    provider_mode: str
+    required_env: list[str]
+    missing_env: list[str]
+    message: str
+    payload_count: int | None = None
+    sample_identifiers: list[str] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class OHLCVBar:
     date: str
     open: float

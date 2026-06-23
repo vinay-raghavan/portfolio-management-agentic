@@ -31,6 +31,7 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
         "create_pre_market_briefing",
         "list_data_providers",
         "get_data_provider_health",
+        "validate_data_provider_imports",
         "get_market_data_snapshot",
         "get_universe_members",
         "list_universes",
