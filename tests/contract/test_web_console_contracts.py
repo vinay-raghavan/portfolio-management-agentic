@@ -38,6 +38,10 @@ def test_web_console_has_product_surfaces_and_no_live_trade_copy() -> None:
         "Import jobs",
         "Configured files",
         "Refresh profile",
+        "Run full refresh",
+        "Refresh readiness",
+        "Backoff state",
+        "Next attempt",
         "Last validation",
         "Needs attention",
         "Screener candidates",
@@ -48,6 +52,19 @@ def test_web_console_has_product_surfaces_and_no_live_trade_copy() -> None:
 
     assert "Place live order" not in source
     assert "broker token" not in source.lower()
+
+
+def test_web_console_exposes_provider_refresh_cycle_controls() -> None:
+    source = (WEB_ROOT / "src" / "App.tsx").read_text()
+
+    assert "/console/workflows/provider-profiles/refresh-schedule" in source
+    assert "runProviderRefreshSchedule" in source
+    assert "ProviderRefreshReadiness" in source
+    assert "provider_refresh_readiness" in source
+    assert "provider_refresh_actions" in source
+    assert "retry_after_seconds" in source
+    assert "next_attempt_at" in source
+    assert "backoff" in source
 
 
 def test_compose_exposes_web_console_without_secrets() -> None:
