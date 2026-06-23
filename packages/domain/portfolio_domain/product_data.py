@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .models import (
     FactorStackExplanation,
     FundamentalsSnapshot,
@@ -16,6 +18,7 @@ from .models import (
     UniverseDefinition,
     VolatilitySnapshot,
 )
+from .provider_profiles import list_provider_refresh_readiness
 from .providers import DataProviderRegistry, get_data_provider_registry
 
 OFFLINE_SOURCE = "offline_fixture"
@@ -68,6 +71,15 @@ FRED_API = PatternCitation(
     url="https://fred.stlouisfed.org/docs/api/fred/",
     usage_notes="Reference for economic series, release calendars, and historical observations used in macro context.",
 )
+
+PROVIDER_READINESS_CITATION = "provider-refresh-readiness"
+_READINESS_NEEDS_ATTENTION = {
+    "backoff",
+    "needs_attention",
+    "pending_refresh",
+    "retry_due",
+    "stale",
+}
 
 UNIVERSES = [
     UniverseDefinition(
@@ -412,6 +424,139 @@ def _citations_for_components(components: list[ScoreComponent]) -> list[str]:
             if citation not in citations:
                 citations.append(citation)
     return citations
+
+
+def _active_provider_refresh_readiness() -> list[dict[str, Any]]:
+    readiness = list_provider_refresh_readiness()
+    return [
+        item
+        for item in readiness
+        if item.get("configured") or item.get("latest_status") != "none"
+    ]
+
+
+def _provider_refresh_readiness_summary(
+    readiness: list[dict[str, Any]],
+) -> dict[str, Any]:
+    statuses = {
+        str(item["provider_id"]): str(item["readiness_status"])
+        for item in readiness
+    }
+    needs_attention = [
+        provider_id
+        for provider_id, status in statuses.items()
+        if status in _READINESS_NEEDS_ATTENTION
+    ]
+    return {
+        "configured_count": len(readiness),
+        "ready": sum(1 for status in statuses.values() if status == "ready"),
+        "stale": sum(1 for status in statuses.values() if status == "stale"),
+        "needs_attention": len(needs_attention),
+        "provider_statuses": statuses,
+        "needs_attention_provider_ids": needs_attention,
+    }
+
+
+def _provider_readiness_notes(
+    readiness: list[dict[str, Any]],
+) -> tuple[list[str], list[str], list[str]]:
+    evidence: list[str] = []
+    counterevidence: list[str] = []
+    missing_data: list[str] = []
+    for item in readiness:
+        provider_id = str(item["provider_id"])
+        status = str(item["readiness_status"])
+        source_label = str(item.get("source_label") or "configured provider")
+        if status == "ready":
+            evidence.append(
+                f"{provider_id} refresh readiness is ready from {source_label}."
+            )
+            continue
+        marker = f"{provider_id}_refresh_{status}"
+        missing_data.append(marker)
+        if status == "stale":
+            counterevidence.append(
+                f"{provider_id} refresh readiness is stale; refresh before relying on this provider context."
+            )
+        elif status == "backoff":
+            next_attempt = str(item.get("next_attempt_at") or "")
+            suffix = f" until {next_attempt}" if next_attempt else ""
+            counterevidence.append(
+                f"{provider_id} refresh readiness is in backoff{suffix}."
+            )
+        elif status == "retry_due":
+            counterevidence.append(
+                f"{provider_id} refresh readiness is retry due and should be refreshed before use."
+            )
+        elif status == "pending_refresh":
+            counterevidence.append(
+                f"{provider_id} is configured but has no completed refresh job yet."
+            )
+        elif status == "needs_attention":
+            counterevidence.append(
+                f"{provider_id} refresh readiness needs attention before this evidence is trusted."
+            )
+        elif status == "not_configured":
+            counterevidence.append(f"{provider_id} is not configured for refresh.")
+    return evidence, counterevidence, missing_data
+
+
+def _provider_readiness_score(readiness: list[dict[str, Any]]) -> float:
+    if not readiness:
+        return 1.0
+    statuses = {str(item["readiness_status"]) for item in readiness}
+    if statuses == {"ready"}:
+        return 1.0
+    if "backoff" in statuses or "needs_attention" in statuses:
+        return 0.25
+    if "retry_due" in statuses or "pending_refresh" in statuses:
+        return 0.35
+    if "stale" in statuses:
+        return 0.50
+    return 0.60
+
+
+def _provider_readiness_component(
+    readiness: list[dict[str, Any]],
+) -> tuple[ScoreComponent | None, list[str]]:
+    if not readiness:
+        return None, []
+    evidence, counterevidence, missing_data = _provider_readiness_notes(readiness)
+    return (
+        ScoreComponent(
+            "provider_readiness",
+            _provider_readiness_score(readiness),
+            0.05,
+            evidence,
+            counterevidence,
+            [PROVIDER_READINESS_CITATION],
+        ),
+        missing_data,
+    )
+
+
+def _candidate_with_provider_readiness(
+    candidate: RankedScreenerCandidate,
+    readiness: list[dict[str, Any]],
+) -> RankedScreenerCandidate:
+    component, missing_data = _provider_readiness_component(readiness)
+    if component is None:
+        return candidate
+    components = [*candidate.score_components, component]
+    return RankedScreenerCandidate(
+        rank=candidate.rank,
+        symbol=candidate.symbol,
+        setup=candidate.setup,
+        score=_weighted_score(components),
+        passed_screeners=candidate.passed_screeners,
+        gates=candidate.gates,
+        score_components=components,
+        evidence=[*candidate.evidence, *component.evidence],
+        counterevidence=[*candidate.counterevidence, *component.counterevidence],
+        missing_data=sorted({*candidate.missing_data, *missing_data}),
+        citations=_citations_for_components(components),
+        next_allowed_actions=candidate.next_allowed_actions,
+    )
 
 
 def _candidate(symbol: str, rank: int) -> RankedScreenerCandidate:
@@ -850,6 +995,7 @@ def run_fixture_screener(
     normalized_preset = preset.strip().lower() or "momentum"
     rejected_symbols: list[str] = []
     candidates: list[RankedScreenerCandidate] = []
+    provider_readiness = _active_provider_refresh_readiness()
     providers_used = registry.providers_used()
     run_source = (
         "configured_json_file"
@@ -885,6 +1031,7 @@ def run_fixture_screener(
                 macro,
             )
         )
+        candidate = _candidate_with_provider_readiness(candidate, provider_readiness)
         gates = candidate.gates
         if any(gate.status != "pass" for gate in gates):
             rejected_symbols.append(symbol)
@@ -932,6 +1079,9 @@ def run_fixture_screener(
             "rejected_count": len(rejected_symbols),
             "hard_gates": ["data_quality", "tradability", "paper_only"],
             "providers_used": providers_used,
+            "provider_refresh_readiness": _provider_refresh_readiness_summary(
+                provider_readiness,
+            ),
         },
         candidates=ranked,
         rejected_symbols=rejected_symbols,
@@ -1000,8 +1150,12 @@ def _patterns_for_setup(setup: str) -> list[PatternCard]:
 
 def _candidate_for_symbol(symbol: str) -> RankedScreenerCandidate:
     normalized = symbol.upper().strip()
+    provider_readiness = _active_provider_refresh_readiness()
     if normalized in _COMPONENTS:
-        return _candidate(normalized, 1)
+        return _candidate_with_provider_readiness(
+            _candidate(normalized, 1),
+            provider_readiness,
+        )
     registry = get_data_provider_registry()
     try:
         snapshot = registry.market_data.get_snapshot(normalized)
@@ -1009,13 +1163,16 @@ def _candidate_for_symbol(symbol: str) -> RankedScreenerCandidate:
         if "Unknown fixture symbol" in str(exc):
             raise ValueError(str(exc)) from exc
         raise ValueError(f"Unknown symbol: {symbol}") from exc
-    return _configured_candidate(
-        snapshot,
-        1,
-        _fundamentals_for_symbol(registry, normalized),
-        _sentiment_for_symbol(registry, normalized),
-        _volatility_for_symbol(registry, normalized),
-        _macro_for_symbol(registry, normalized),
+    return _candidate_with_provider_readiness(
+        _configured_candidate(
+            snapshot,
+            1,
+            _fundamentals_for_symbol(registry, normalized),
+            _sentiment_for_symbol(registry, normalized),
+            _volatility_for_symbol(registry, normalized),
+            _macro_for_symbol(registry, normalized),
+        ),
+        provider_readiness,
     )
 
 
