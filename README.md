@@ -15,11 +15,11 @@ This is a standalone repository boundary. Implementation should use documented A
 - Recommendation explanations join screener/factor evidence, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
-- Market-data persistence stores fixture/configured-provider market snapshots and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
-- Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured market-data refreshes can also import normalized snapshots into `MARKET_DATA_DB_PATH`. They store env key names, provider mode, validation status, counts, sample identifiers, and import counts, not resolved local file paths or raw provider payloads.
+- Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
+- Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured refreshes can also import normalized market, universe, fundamentals, sentiment, volatility, and macro records into the SQLite data store behind `MARKET_DATA_DB_PATH`. They store env key names, provider mode, validation status, counts, sample identifiers, and import counts, not resolved local file paths or raw provider payloads.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
 - Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with configured-file validation, provider profiles, and import-job feedback.
-- SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data snapshot and screener-run persistence is available through `MARKET_DATA_DB_PATH`; provider profile and import-job metadata persistence is available through `PROVIDER_CONFIG_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
+- SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data, provider-context, and screener-run persistence is available through `MARKET_DATA_DB_PATH`; provider profile and import-job metadata persistence is available through `PROVIDER_CONFIG_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
 - No copied portfolio data.
 - No broker trading credentials.
@@ -68,7 +68,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Add provider refresh execution that copies validated configured JSON snapshots into structured market-data/screener-ready storage with job progress, retry state, and metadata-only audit events.
+2. Add scheduled provider refresh orchestration with retry/backoff, stale-data detection, and readiness UI feedback.
 
 ## Verification
 
@@ -175,7 +175,8 @@ Use `list_provider_profiles`, `refresh_provider_import_profile`, and
 `list_provider_import_jobs` to persist and review provider profile readiness.
 Refresh jobs validate configured sources, store sanitized status, counts,
 sample identifiers, env key names, and import metadata, and import configured
-market snapshots into the structured market-data store when it is configured.
+market, universe, fundamentals, sentiment, volatility, and macro records into
+structured SQLite tables when `MARKET_DATA_DB_PATH` is configured.
 They do not store raw provider payloads or resolved local paths.
 
 The optional Ollama service is profile-gated:

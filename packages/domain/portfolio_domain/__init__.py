@@ -64,6 +64,11 @@ from .market_data_store import (
     record_market_data_snapshot,
     record_screener_run,
 )
+from .provider_data_store import (
+    ProviderDataStore,
+    SQLiteProviderDataStore,
+    build_provider_data_store,
+)
 from .paper_ledger import (
     SQLitePaperLedgerStore,
     approve_fixture_paper_order_simulation,
@@ -110,7 +115,12 @@ from .providers import (
     VolatilityProvider,
     build_data_provider_registry,
     get_data_provider_registry,
+    list_configured_fundamentals_snapshots,
+    list_configured_macro_snapshots,
     list_configured_market_data_snapshots,
+    list_configured_sentiment_snapshots,
+    list_configured_universe_members,
+    list_configured_volatility_snapshots,
     validate_configured_provider_imports,
 )
 from .product_data import (
@@ -170,6 +180,8 @@ __all__ = [
     "WatchlistItem",
     "WatchlistSnapshot",
     "SQLiteMarketDataStore",
+    "SQLiteProviderDataStore",
+    "ProviderDataStore",
     "SQLiteProviderProfileStore",
     "approve_fixture_paper_order_simulation",
     "DataProviderRegistry",
@@ -190,6 +202,7 @@ __all__ = [
     "build_market_data_store",
     "build_paper_ledger_store",
     "build_paper_trading_report",
+    "build_provider_data_store",
     "build_provider_profile_store",
     "build_recommendation_explanation",
     "build_strategy_evidence_pack",
@@ -209,7 +222,12 @@ __all__ = [
     "get_demo_signal_summary",
     "get_demo_watchlist_snapshot",
     "get_data_provider_registry",
+    "list_configured_fundamentals_snapshots",
+    "list_configured_macro_snapshots",
     "list_configured_market_data_snapshots",
+    "list_configured_sentiment_snapshots",
+    "list_configured_universe_members",
+    "list_configured_volatility_snapshots",
     "get_provider_profile_storage_status",
     "validate_configured_provider_imports",
     "get_market_data_storage_status",
