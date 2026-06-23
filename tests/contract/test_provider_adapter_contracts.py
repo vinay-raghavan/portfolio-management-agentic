@@ -251,6 +251,43 @@ def _write_configured_volatility(tmp_path) -> str:
     return str(json_path)
 
 
+def _write_configured_macro(tmp_path) -> str:
+    json_path = tmp_path / "macro.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "macro": [
+                    {
+                        "symbol": "DEMODATA",
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "market_regime_score": 0.72,
+                            "breadth_score": 0.68,
+                            "rate_pressure_score": 0.61,
+                            "event_risk_score": 0.22,
+                            "liquidity_condition_score": 0.66,
+                        },
+                        "notes": ["Configured macro context for tests."],
+                    },
+                    {
+                        "symbol": "SLOWDATA",
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "market_regime_score": 0.46,
+                            "breadth_score": 0.49,
+                            "rate_pressure_score": 0.38,
+                            "event_risk_score": 0.58,
+                            "liquidity_condition_score": 0.44,
+                        },
+                        "notes": ["Mixed configured macro context for tests."],
+                    },
+                ]
+            }
+        )
+    )
+    return str(json_path)
+
+
 def test_data_provider_catalog_defaults_to_fixture_providers() -> None:
     result = list_data_providers()
 
@@ -273,6 +310,8 @@ def test_data_provider_catalog_defaults_to_fixture_providers() -> None:
     assert "PORTFOLIO_SENTIMENT_JSON_PATH" in providers["configured_sentiment"]["required_env"]
     assert "PORTFOLIO_VOLATILITY_PROVIDER" in providers["configured_volatility"]["required_env"]
     assert "PORTFOLIO_VOLATILITY_JSON_PATH" in providers["configured_volatility"]["required_env"]
+    assert "PORTFOLIO_MACRO_PROVIDER" in providers["configured_macro"]["required_env"]
+    assert "PORTFOLIO_MACRO_JSON_PATH" in providers["configured_macro"]["required_env"]
     assert "api_key" not in str(result).lower()
     assert "token" not in str(result).lower()
 
@@ -454,6 +493,36 @@ def test_configured_json_volatility_provider_preserves_metrics_shape(tmp_path) -
     assert "token" not in combined
 
 
+def test_configured_json_macro_provider_preserves_metrics_shape(tmp_path) -> None:
+    json_path = _write_configured_macro(tmp_path)
+    registry = build_data_provider_registry(
+        {
+            "PORTFOLIO_MACRO_PROVIDER": "json_file",
+            "PORTFOLIO_MACRO_JSON_PATH": json_path,
+        }
+    )
+
+    descriptor = registry.macro.descriptor().to_dict()
+    health = registry.macro.health().to_dict()
+    macro = registry.macro.get_context("demodata").to_dict()
+
+    assert descriptor["provider_id"] == "configured_macro"
+    assert descriptor["status"] == "available"
+    assert descriptor["configured"] is True
+    assert health["status"] == "available"
+    assert macro["provider_id"] == "configured_macro"
+    assert macro["source"] == "configured_json_file"
+    assert macro["symbol"] == "DEMODATA"
+    assert macro["metrics"]["market_regime_score"] == 0.72
+    assert macro["metrics"]["event_risk_score"] == 0.22
+    assert registry.providers_used()["macro"] == "configured_macro"
+
+    combined = f"{descriptor} {health} {macro}".lower()
+    assert str(json_path).lower() not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
 def test_market_data_tool_caches_configured_json_snapshot(
     monkeypatch,
     tmp_path,
@@ -487,6 +556,7 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     fundamentals_path = _write_configured_fundamentals(tmp_path)
     sentiment_path = _write_configured_sentiment(tmp_path)
     volatility_path = _write_configured_volatility(tmp_path)
+    macro_path = _write_configured_macro(tmp_path)
     monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
     monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", market_path)
     monkeypatch.setenv("PORTFOLIO_UNIVERSE_PROVIDER", "json_file")
@@ -497,6 +567,8 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     monkeypatch.setenv("PORTFOLIO_SENTIMENT_JSON_PATH", sentiment_path)
     monkeypatch.setenv("PORTFOLIO_VOLATILITY_PROVIDER", "json_file")
     monkeypatch.setenv("PORTFOLIO_VOLATILITY_JSON_PATH", volatility_path)
+    monkeypatch.setenv("PORTFOLIO_MACRO_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MACRO_JSON_PATH", macro_path)
 
     universe = get_universe_members("configured_growth")
     result = run_screener("configured_growth", "momentum", 5)
@@ -514,6 +586,7 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     assert run["run_summary"]["providers_used"]["fundamentals"] == "configured_fundamentals"
     assert run["run_summary"]["providers_used"]["sentiment"] == "configured_sentiment"
     assert run["run_summary"]["providers_used"]["volatility"] == "configured_volatility"
+    assert run["run_summary"]["providers_used"]["macro"] == "configured_macro"
     assert run["run_summary"]["total_screened"] == 3
     assert run["run_summary"]["candidate_count"] == 2
     assert run["run_summary"]["rejected_count"] == 1
@@ -526,12 +599,14 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
         "fundamental",
         "sentiment",
         "volatility",
+        "macro",
         "liquidity",
         "pattern",
     }
     assert "configured_fundamentals" not in run["candidates"][0]["missing_data"]
     assert "configured_sentiment" not in run["candidates"][0]["missing_data"]
     assert "configured_volatility" not in run["candidates"][0]["missing_data"]
+    assert "configured_macro" not in run["candidates"][0]["missing_data"]
     assert run["candidates"][0]["next_allowed_actions"] == [
         "explain_evidence",
         "draft_paper_strategy",
@@ -545,9 +620,18 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
         "India VIX" in item
         for item in explanation["factor_stack"]["sections"]["volatility"]["evidence"]
     )
+    assert any(
+        "Market regime" in item
+        for item in explanation["factor_stack"]["sections"]["macro"]["evidence"]
+    )
+    assert (
+        explanation["factor_stack"]["sections"]["market_regime"]["evidence"]
+        == explanation["factor_stack"]["sections"]["macro"]["evidence"]
+    )
     assert "configured_fundamentals" not in explanation["factor_stack"]["missing_data"]
     assert "configured_sentiment" not in explanation["factor_stack"]["missing_data"]
     assert "configured_volatility" not in explanation["factor_stack"]["missing_data"]
+    assert "configured_macro" not in explanation["factor_stack"]["missing_data"]
 
     combined = f"{universe} {result} {explanation}".lower()
     assert str(market_path).lower() not in combined
@@ -555,6 +639,7 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     assert str(fundamentals_path).lower() not in combined
     assert str(sentiment_path).lower() not in combined
     assert str(volatility_path).lower() not in combined
+    assert str(macro_path).lower() not in combined
     assert "api_key" not in combined
     assert "token" not in combined
 

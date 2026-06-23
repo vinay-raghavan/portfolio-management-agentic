@@ -10,6 +10,7 @@ from typing import Protocol
 
 from .models import (
     FundamentalsSnapshot,
+    MacroSnapshot,
     MarketDataSnapshot,
     OHLCVBar,
     ProviderDescriptor,
@@ -32,6 +33,8 @@ SENTIMENT_PROVIDER_ENV = "PORTFOLIO_SENTIMENT_PROVIDER"
 SENTIMENT_JSON_PATH_ENV = "PORTFOLIO_SENTIMENT_JSON_PATH"
 VOLATILITY_PROVIDER_ENV = "PORTFOLIO_VOLATILITY_PROVIDER"
 VOLATILITY_JSON_PATH_ENV = "PORTFOLIO_VOLATILITY_JSON_PATH"
+MACRO_PROVIDER_ENV = "PORTFOLIO_MACRO_PROVIDER"
+MACRO_JSON_PATH_ENV = "PORTFOLIO_MACRO_JSON_PATH"
 JSON_FILE_PROVIDER = "json_file"
 
 
@@ -81,6 +84,8 @@ class MacroProvider(Protocol):
     def descriptor(self) -> ProviderDescriptor: ...
 
     def health(self) -> ProviderHealth: ...
+
+    def get_context(self, symbol: str) -> MacroSnapshot: ...
 
 
 FIXTURE_UNIVERSES = [
@@ -225,6 +230,37 @@ FIXTURE_VOLATILITY: dict[str, dict[str, float | int | str]] = {
         "vix_change_pct": 9.2,
         "regime_score": 0.32,
         "risk_multiplier": 0.48,
+    },
+}
+
+FIXTURE_MACRO: dict[str, dict[str, float | int | str]] = {
+    "TATAMOTORS": {
+        "market_regime_score": 0.62,
+        "breadth_score": 0.58,
+        "rate_pressure_score": 0.54,
+        "event_risk_score": 0.34,
+        "liquidity_condition_score": 0.60,
+    },
+    "SBIN": {
+        "market_regime_score": 0.60,
+        "breadth_score": 0.56,
+        "rate_pressure_score": 0.52,
+        "event_risk_score": 0.32,
+        "liquidity_condition_score": 0.58,
+    },
+    "SUNPHARMA": {
+        "market_regime_score": 0.57,
+        "breadth_score": 0.53,
+        "rate_pressure_score": 0.55,
+        "event_risk_score": 0.28,
+        "liquidity_condition_score": 0.61,
+    },
+    "LOWLIQ": {
+        "market_regime_score": 0.42,
+        "breadth_score": 0.38,
+        "rate_pressure_score": 0.44,
+        "event_risk_score": 0.58,
+        "liquidity_condition_score": 0.35,
     },
 }
 
@@ -406,6 +442,31 @@ def _volatility_from_payload(
         metrics=dict(metrics_payload),
         notes=[
             "Read-only configured volatility snapshot.",
+            *notes,
+        ],
+    )
+
+
+def _macro_from_payload(
+    payload: Mapping[str, Any],
+    provider_id: str,
+) -> MacroSnapshot:
+    symbol = str(payload["symbol"]).upper().strip()
+    if not symbol:
+        raise ValueError("Configured macro context requires symbol.")
+    metrics_payload = payload.get("metrics", {})
+    if not isinstance(metrics_payload, Mapping) or not metrics_payload:
+        raise ValueError("Configured macro context metrics must be a non-empty object.")
+    notes_payload = payload.get("notes", [])
+    notes = [str(item) for item in notes_payload if str(item).strip()]
+    return MacroSnapshot(
+        provider_id=provider_id,
+        source=str(payload.get("source") or CONFIGURED_JSON_SOURCE),
+        symbol=symbol,
+        as_of=str(payload.get("as_of") or ""),
+        metrics=dict(metrics_payload),
+        notes=[
+            "Read-only configured macro context.",
             *notes,
         ],
     )
@@ -784,6 +845,78 @@ class JsonFileVolatilityProvider:
 
 
 @dataclass(frozen=True)
+class JsonFileMacroProvider:
+    json_path: Path
+    provider_id: str = "configured_macro"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="macro",
+            display_name="Configured JSON Macro",
+            status="available" if self.json_path.is_file() else "error",
+            configured=True,
+            capabilities=["macro_context", "json_macro_file"],
+            required_env=[MACRO_PROVIDER_ENV, MACRO_JSON_PATH_ENV],
+            notes=[
+                "Read-only macro/regime adapter using a configured JSON file.",
+                "Fixture macro context remains the default when this adapter is not configured.",
+            ],
+        )
+
+    def health(self) -> ProviderHealth:
+        try:
+            self._macro_payloads()
+        except ValueError as exc:
+            return ProviderHealth(
+                provider_id=self.provider_id,
+                kind="macro",
+                status="error",
+                configured=True,
+                message=f"Configured JSON macro context is not usable: {exc}",
+            )
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="macro",
+            status="available",
+            configured=True,
+            message="Configured JSON macro context is readable.",
+        )
+
+    def get_context(self, symbol: str) -> MacroSnapshot:
+        normalized = symbol.upper().strip()
+        for payload in self._macro_payloads():
+            macro = _macro_from_payload(payload, self.provider_id)
+            if macro.symbol == normalized:
+                return macro
+        raise ValueError(f"Unknown configured macro context symbol: {symbol}")
+
+    def _macro_payloads(self) -> list[Mapping[str, Any]]:
+        if not self.json_path.is_file():
+            raise ValueError("configured JSON file is missing or unreadable")
+        try:
+            payload = json.loads(self.json_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise ValueError("configured JSON file is not valid JSON") from exc
+        macro: Any
+        if isinstance(payload, list):
+            macro = payload
+        elif isinstance(payload, Mapping) and "macro" in payload:
+            macro = payload["macro"]
+            if isinstance(macro, Mapping):
+                macro = list(macro.values())
+        elif isinstance(payload, Mapping) and "symbol" in payload:
+            macro = [payload]
+        else:
+            raise ValueError("configured JSON must contain macro payloads")
+        if not isinstance(macro, list) or not macro:
+            raise ValueError("configured JSON contains no macro context")
+        if not all(isinstance(item, Mapping) for item in macro):
+            raise ValueError("configured JSON macro context must be objects")
+        return macro
+
+
+@dataclass(frozen=True)
 class FixtureUniverseProvider:
     provider_id: str = "fixture_universe"
 
@@ -955,6 +1088,49 @@ class FixtureVolatilityProvider:
 
 
 @dataclass(frozen=True)
+class FixtureMacroProvider:
+    provider_id: str = "fixture_macro"
+
+    def descriptor(self) -> ProviderDescriptor:
+        return ProviderDescriptor(
+            provider_id=self.provider_id,
+            kind="macro",
+            display_name="Fixture Macro",
+            status="available",
+            configured=True,
+            capabilities=["macro_context", "macro_regime_proxy"],
+            required_env=[],
+            notes=["Offline-safe deterministic macro/regime proxies."],
+        )
+
+    def health(self) -> ProviderHealth:
+        return ProviderHealth(
+            provider_id=self.provider_id,
+            kind="macro",
+            status="available",
+            configured=True,
+            message="Fixture macro context is available without network access.",
+        )
+
+    def get_context(self, symbol: str) -> MacroSnapshot:
+        normalized = symbol.upper().strip()
+        metrics = FIXTURE_MACRO.get(normalized)
+        if not metrics:
+            raise ValueError(f"Unknown fixture macro context symbol: {symbol}")
+        return MacroSnapshot(
+            provider_id=self.provider_id,
+            source=OFFLINE_SOURCE,
+            symbol=normalized,
+            as_of="2026-06-22",
+            metrics=metrics,
+            notes=[
+                "Offline fixture macro/regime proxy.",
+                "No network or broker connection was used.",
+            ],
+        )
+
+
+@dataclass(frozen=True)
 class FixtureReferenceProvider:
     provider_id: str
     kind: str
@@ -1081,6 +1257,16 @@ def _configured_volatility_provider(
     return JsonFileVolatilityProvider(Path(json_path))
 
 
+def _configured_macro_provider(
+    config: Mapping[str, str],
+) -> JsonFileMacroProvider | None:
+    provider_name = config.get(MACRO_PROVIDER_ENV, "").strip().lower()
+    json_path = config.get(MACRO_JSON_PATH_ENV, "").strip()
+    if provider_name != JSON_FILE_PROVIDER or not json_path:
+        return None
+    return JsonFileMacroProvider(Path(json_path))
+
+
 @dataclass(frozen=True)
 class DataProviderRegistry:
     market_data: MarketDataProvider
@@ -1133,6 +1319,7 @@ def build_data_provider_registry(
     configured_fundamentals = _configured_fundamentals_provider(config)
     configured_sentiment = _configured_sentiment_provider(config)
     configured_volatility = _configured_volatility_provider(config)
+    configured_macro = _configured_macro_provider(config)
     market_data: MarketDataProvider = configured_market_data or FixtureMarketDataProvider()
     universe: UniverseProvider = configured_universe or FixtureUniverseProvider()
     fundamentals: FundamentalsProvider = (
@@ -1140,6 +1327,7 @@ def build_data_provider_registry(
     )
     sentiment: SentimentProvider = configured_sentiment or FixtureSentimentProvider()
     volatility: VolatilityProvider = configured_volatility or FixtureVolatilityProvider()
+    macro: MacroProvider = configured_macro or FixtureMacroProvider()
     configured_placeholders: list[ConfiguredProviderPlaceholder] = []
     if configured_market_data is None:
         configured_placeholders.append(
@@ -1196,30 +1384,24 @@ def build_data_provider_registry(
                 env=config,
             )
         )
-    configured_placeholders.extend(
-        [
+    if configured_macro is None:
+        configured_placeholders.append(
             ConfiguredProviderPlaceholder(
                 provider_id="configured_macro",
                 kind="macro",
                 display_name="Configured Macro",
                 capabilities=["macro_context"],
-                required_env=["PORTFOLIO_MACRO_PROVIDER"],
+                required_env=[MACRO_PROVIDER_ENV, MACRO_JSON_PATH_ENV],
                 env=config,
-            ),
-        ]
-    )
+            )
+        )
     return DataProviderRegistry(
         market_data=market_data,
         universe=universe,
         fundamentals=fundamentals,
         sentiment=sentiment,
         volatility=volatility,
-        macro=FixtureReferenceProvider(
-            provider_id="fixture_macro",
-            kind="macro",
-            display_name="Fixture Macro",
-            capabilities=["macro_context"],
-        ),
+        macro=macro,
         configured_placeholders=configured_placeholders,
     )
 

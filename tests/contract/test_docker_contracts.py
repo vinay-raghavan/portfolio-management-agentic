@@ -37,6 +37,9 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "PORTFOLIO_VOLATILITY_PROVIDER=fixture" in env_example
     assert "# PORTFOLIO_VOLATILITY_PROVIDER=json_file" in env_example
     assert "# PORTFOLIO_VOLATILITY_JSON_PATH=data/volatility.json" in env_example
+    assert "PORTFOLIO_MACRO_PROVIDER=fixture" in env_example
+    assert "# PORTFOLIO_MACRO_PROVIDER=json_file" in env_example
+    assert "# PORTFOLIO_MACRO_JSON_PATH=data/macro.json" in env_example
     assert "OLLAMA_BASE_URL=http://ollama:11434" in env_example
     assert "FYERS" not in env_example.upper()
 
@@ -72,6 +75,8 @@ def test_compose_mounts_paper_ledger_volume() -> None:
     assert "PORTFOLIO_SENTIMENT_JSON_PATH: ${PORTFOLIO_SENTIMENT_JSON_PATH:-}" in compose
     assert "PORTFOLIO_VOLATILITY_PROVIDER: ${PORTFOLIO_VOLATILITY_PROVIDER:-fixture}" in compose
     assert "PORTFOLIO_VOLATILITY_JSON_PATH: ${PORTFOLIO_VOLATILITY_JSON_PATH:-}" in compose
+    assert "PORTFOLIO_MACRO_PROVIDER: ${PORTFOLIO_MACRO_PROVIDER:-fixture}" in compose
+    assert "PORTFOLIO_MACRO_JSON_PATH: ${PORTFOLIO_MACRO_JSON_PATH:-}" in compose
     assert "paper-ledger-data:/data" in compose
     assert "paper-ledger-data:" in compose
 

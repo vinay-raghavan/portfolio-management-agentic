@@ -24,7 +24,7 @@ Current coverage:
 - Paper-trading report contracts return read-only review summaries with JSON-ready redacted audit exports and no file writes.
 - Model-backed eval preflight checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, and never print secret values.
 - Web console contracts verify the Vite/React app, safe product surfaces, Compose wiring, `/console/overview`, focused `/console/workflows` pages, and the paper-only action lifecycle.
-- Provider adapter contracts expose fixture defaults, provider health, fixture market snapshots, configured read-only JSON market snapshots, configured read-only JSON universes, configured read-only JSON fundamentals, configured read-only JSON sentiment, configured read-only JSON volatility, and universe membership without credentials or network requirements.
+- Provider adapter contracts expose fixture defaults, provider health, fixture market snapshots, configured read-only JSON market snapshots, configured read-only JSON universes, configured read-only JSON fundamentals, configured read-only JSON sentiment, configured read-only JSON volatility, configured read-only JSON macro context, and universe membership without credentials or network requirements.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
 - ADK, Codex, Claude Code, Gemini CLI, and generic MCP client profiles use the MCP policy boundary.
@@ -102,9 +102,10 @@ market-data state. It also passes `PORTFOLIO_MARKET_DATA_PROVIDER`,
 `PORTFOLIO_UNIVERSE_JSON_PATH`, `PORTFOLIO_FUNDAMENTALS_PROVIDER`,
 `PORTFOLIO_FUNDAMENTALS_JSON_PATH`, `PORTFOLIO_SENTIMENT_PROVIDER`,
 `PORTFOLIO_SENTIMENT_JSON_PATH`, `PORTFOLIO_VOLATILITY_PROVIDER`, and
-`PORTFOLIO_VOLATILITY_JSON_PATH` to the agent and MCP services so local JSON
-snapshot, universe, fundamentals, sentiment, and volatility adapters can be
-enabled without committing provider data.
+`PORTFOLIO_VOLATILITY_JSON_PATH`, `PORTFOLIO_MACRO_PROVIDER`, and
+`PORTFOLIO_MACRO_JSON_PATH` to the agent and MCP services so local JSON
+snapshot, universe, fundamentals, sentiment, volatility, and macro adapters
+can be enabled without committing provider data.
 
 The optional local LLM profile is disabled by default:
 

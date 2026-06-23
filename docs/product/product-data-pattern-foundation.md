@@ -77,13 +77,13 @@ Use a layered approach:
 
 - Use typed provider contracts for `MarketDataProvider`, `UniverseProvider`, `FundamentalsProvider`, `SentimentProvider`, `VolatilityProvider`, and `MacroProvider`.
 - Use SQLite or Postgres for users, portfolios, watchlists, strategies, paper orders, simulated fills, approvals, and audit logs.
-- Use structured local storage for market snapshots, screener runs, and backtest datasets. The current implementation uses SQLite for the first durable market-data cache plus configured read-only JSON market-snapshot, universe, fundamentals, sentiment, and volatility adapters for local provider exports; DuckDB or Parquet can replace or supplement this when batch analytics volume justifies it.
+- Use structured local storage for market snapshots, screener runs, and backtest datasets. The current implementation uses SQLite for the first durable market-data cache plus configured read-only JSON market-snapshot, universe, fundamentals, sentiment, volatility, and macro adapters for local provider exports; DuckDB or Parquet can replace or supplement this when batch analytics volume justifies it.
 - Use a `PatternStore` interface for reference cards. Start file-backed and add ChromaDB only when semantic retrieval over a larger corpus is actually needed.
 - Keep price candles, paper trades, and approvals in structured stores, not vector memory.
 
 ## Implementation Status
 
-Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, and volatility adapters, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
 
 The implementation sequence for this foundation was:
 
@@ -99,12 +99,13 @@ The implementation sequence for this foundation was:
 10. Add a configured JSON universe adapter and metric-backed configured screener path that ranks configured symbols without network or broker access.
 11. Add a configured JSON fundamentals adapter and factor-backed configured screener scoring that uses quality, value, growth, earnings revision, and leverage metrics when available.
 12. Add configured JSON sentiment and volatility adapters that replace missing-data disclosures with sentiment and volatility evidence when configured.
+13. Add a configured JSON macro/regime adapter that contributes macro evidence to configured screener scoring and sources the market-regime explanation from provider data when configured.
 
 ## Acceptance Criteria
 
 - Deterministic tests pass without model, broker, or market-data credentials.
-- The screener can run against offline-safe fixtures or configured local JSON market/universe/fundamentals/sentiment/volatility inputs and return ranked candidates with filter-level reasons.
-- Candidate explanations include technical, fundamental, sentiment, volatility, portfolio-fit, and pattern evidence sections when data exists.
+- The screener can run against offline-safe fixtures or configured local JSON market/universe/fundamentals/sentiment/volatility/macro inputs and return ranked candidates with filter-level reasons.
+- Candidate explanations include technical, fundamental, sentiment, volatility, macro, market-regime, portfolio-fit, and pattern evidence sections when data exists.
 - Public citations are present for pattern and factor definitions.
 - Missing data is visible in outputs and lowers confidence where appropriate.
 - RAG tools are read-only and cannot create, authorize, or execute paper or live trades.
@@ -115,7 +116,7 @@ The implementation sequence for this foundation was:
 
 ### Multi-factor screener
 
-Given offline-safe OHLCV, fundamentals, sentiment, and volatility fixtures exist
+Given offline-safe OHLCV, fundamentals, sentiment, volatility, and macro fixtures exist
 When the user asks for today's strongest paper-trading candidates
 Then the system applies data-quality and tradability gates
 And ranks candidates using explicit screener weights
@@ -124,7 +125,7 @@ And returns evidence, counterevidence, missing data, citations, and paper-only n
 ### Regime-aware downgrade
 
 Given a candidate has strong technical momentum
-And the volatility regime is elevated
+And the volatility or macro regime is elevated
 When the agent explains the setup
 Then the explanation keeps the technical evidence
 But downgrades risk sizing or confidence
@@ -142,6 +143,6 @@ And the retrieved pattern remains advisory context only.
 
 Read `.agents-cli-spec.md`, this document, `references/reference-map.md`, `docs/decisions/0005-rag-pattern-memory-boundary.md`, and `docs/architecture/tool-catalog.md`.
 
-Next test to write: a contract test for configured macro/regime context that verifies market-regime evidence is sourced from a provider only when the configured adapter is active.
+Next test to write: a contract test for provider-settings import validation that rejects malformed configured JSON files without leaking local paths or credential names.
 
 Do not copy source-system code. Recreate the behavior as typed domain contracts and deterministic services with tests.
