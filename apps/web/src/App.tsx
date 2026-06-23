@@ -311,6 +311,15 @@ const fallbackWorkflows: JsonRecord = {
       summary: { total: 0, needs_attention: 0 },
       import_jobs: [],
     },
+    provider_refresh_readiness: {
+      status: 'success',
+      summary: { total: 6, ready: 0, stale: 0, needs_attention: 0 },
+      readiness: [],
+    },
+    provider_refresh_actions: {
+      run_schedule: { tier: 'draft_only' },
+      read_readiness: { tier: 'read_only' },
+    },
     risk: fallbackOverview.risk,
     safety: fallbackOverview.safety,
   },
@@ -526,6 +535,12 @@ function App() {
   const providerImportJobs =
     workflows.settings?.provider_import_jobs?.import_jobs ??
     fallbackWorkflows.settings.provider_import_jobs.import_jobs;
+  const providerRefreshReadiness =
+    workflows.settings?.provider_refresh_readiness ??
+    fallbackWorkflows.settings.provider_refresh_readiness;
+  const providerRefreshActions =
+    workflows.settings?.provider_refresh_actions ??
+    fallbackWorkflows.settings.provider_refresh_actions;
   const defaults = workflows.strategy_backtest?.defaults ?? {
     symbol: selectedCandidate.symbol,
     setup: selectedCandidate.setup,
@@ -643,6 +658,14 @@ function App() {
       `/console/workflows/provider-profiles/${providerId}/refresh`,
       {},
       'Refresh profile',
+    );
+  }
+
+  function runProviderRefreshSchedule() {
+    void postWorkflowAction(
+      '/console/workflows/provider-profiles/refresh-schedule',
+      {},
+      'Run full refresh',
     );
   }
 
@@ -1169,6 +1192,20 @@ function App() {
 
             <section className="panel">
               <PanelHeading
+                label="Refresh readiness"
+                title="Backoff state"
+                icon={<RefreshCw size={19} aria-hidden="true" />}
+              />
+              <ProviderRefreshReadiness
+                actionPolicy={providerRefreshActions.run_schedule}
+                busyAction={busyAction}
+                readiness={providerRefreshReadiness}
+                onRunSchedule={runProviderRefreshSchedule}
+              />
+            </section>
+
+            <section className="panel">
+              <PanelHeading
                 label="Import validation"
                 title="Configured files"
                 icon={<AlertTriangle size={19} aria-hidden="true" />}
@@ -1344,6 +1381,83 @@ function ProviderProfiles({
           ))
         ) : (
           <div className="empty-state">Fixture profiles active</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function readinessTone(status: string): 'good' | 'warn' | 'danger' | 'info' | 'neutral' {
+  if (status === 'ready') {
+    return 'good';
+  }
+  if (status === 'stale' || status === 'retry_due' || status === 'pending_refresh') {
+    return 'warn';
+  }
+  if (status === 'backoff' || status === 'needs_attention') {
+    return 'danger';
+  }
+  if (status === 'not_configured') {
+    return 'neutral';
+  }
+  return 'info';
+}
+
+function ProviderRefreshReadiness({
+  actionPolicy,
+  busyAction,
+  onRunSchedule,
+  readiness,
+}: {
+  actionPolicy: JsonRecord;
+  busyAction: string;
+  onRunSchedule: () => void;
+  readiness: JsonRecord;
+}) {
+  const summary = readiness.summary ?? {};
+  const rows = readiness.readiness ?? [];
+  return (
+    <div className="readiness-stack">
+      <div className="readiness-summary" aria-label="Provider refresh readiness summary">
+        <div>
+          <span>Total providers</span>
+          <strong>{summary.total ?? rows.length ?? 0}</strong>
+        </div>
+        <div>
+          <span>Ready</span>
+          <strong>{summary.ready ?? 0}</strong>
+        </div>
+        <div>
+          <span>Needs attention</span>
+          <strong>{summary.needs_attention ?? 0}</strong>
+        </div>
+      </div>
+      <div className="command-row tight-row">
+        <ActionButton busy={busyAction === 'Run full refresh'} onClick={onRunSchedule}>
+          <RefreshCw size={14} aria-hidden="true" />
+          <span>Run full refresh</span>
+        </ActionButton>
+        <StatusPill tone="info">{actionPolicy?.tier ?? 'draft_only'}</StatusPill>
+      </div>
+      <div className="detail-list">
+        {rows.length ? (
+          rows.slice(0, 6).map((item: JsonRecord) => (
+            <div className="readiness-row" key={item.provider_id}>
+              <div>
+                <strong>{item.provider_id}</strong>
+                <span>{item.source_label ?? item.kind ?? 'configured provider'}</span>
+                <small>
+                  Retry after {item.retry_after_seconds ?? 0}s
+                  {item.next_attempt_at ? ` / Next attempt ${item.next_attempt_at}` : ' / Next attempt not scheduled'}
+                </small>
+              </div>
+              <StatusPill tone={readinessTone(item.readiness_status ?? 'unknown')}>
+                {humanize(item.readiness_status ?? 'unknown')}
+              </StatusPill>
+            </div>
+          ))
+        ) : (
+          <div className="empty-state">No provider refresh jobs yet</div>
         )}
       </div>
     </div>

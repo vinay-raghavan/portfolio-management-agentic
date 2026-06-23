@@ -623,7 +623,8 @@ p {
 .ledger-stats,
 .report-stack,
 .provider-list,
-.validation-stack {
+.validation-stack,
+.readiness-stack {
   display: grid;
   gap: 8px;
 }
@@ -744,6 +745,12 @@ p {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.tight-row {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
 }
 
 .segment-button,
@@ -878,6 +885,65 @@ p {
   min-height: 50px;
   padding: 10px 0;
   border-top: 1px solid var(--border);
+}
+
+.readiness-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.readiness-summary div {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.readiness-summary span,
+.readiness-row span,
+.readiness-row small {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.readiness-summary strong {
+  font-size: 18px;
+}
+
+.readiness-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.readiness-row:first-child {
+  border-top: 0;
+}
+
+.readiness-row div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.readiness-row strong,
+.readiness-row span,
+.readiness-row small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.readiness-row strong {
+  font-size: 13px;
 }
 
 .profile-row {
@@ -1024,6 +1090,7 @@ p {
   .main-grid,
   .focused-grid,
   .index-strip,
+  .readiness-summary,
   .ledger-stats,
   .workflow-summary {
     grid-template-columns: 1fr;

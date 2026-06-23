@@ -83,7 +83,7 @@ Use a layered approach:
 
 ## Implementation Status
 
-Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot, provider context, and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured import validation with provider-settings UI feedback, sanitized provider profiles and import-refresh job history, scheduled refresh readiness with retry/backoff and stale-data detection, provider readiness evidence in configured screener and recommendation explanations, configured market and provider-context refresh execution into structured SQLite tables, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot, provider context, and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured import validation with provider-settings UI feedback, sanitized provider profiles and import-refresh job history, scheduled refresh readiness with retry/backoff and stale-data detection, provider readiness evidence in configured screener and recommendation explanations, web-console full refresh controls with per-provider backoff state, configured market and provider-context refresh execution into structured SQLite tables, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
 
 The implementation sequence for this foundation was:
 
@@ -106,6 +106,7 @@ The implementation sequence for this foundation was:
 17. Add configured universe, fundamentals, sentiment, volatility, and macro refresh execution that imports normalized provider context records into structured SQLite tables while keeping job records sanitized.
 18. Add scheduled provider refresh orchestration that runs bounded configured-provider refresh cycles and reports ready, stale, retry-due, and backoff readiness.
 19. Wire provider refresh readiness into configured screener candidates, factor-stack explanations, and recommendation explanations so stale or backoff-limited data is disclosed before paper decisions.
+20. Add web-console provider-settings controls for running a full provider refresh cycle and inspecting per-provider backoff and next-attempt state.
 
 ## Acceptance Criteria
 
@@ -123,7 +124,7 @@ The implementation sequence for this foundation was:
 
 ## Remaining Implementation Plan
 
-Next, add richer web-console controls for running a full provider refresh cycle and inspecting per-provider backoff state.
+Next, add configured-provider source management so operators can see required env keys, active adapter modes, and safe setup gaps from the web console without exposing local paths.
 
 ## BDD Scenarios
 
@@ -156,6 +157,6 @@ And the retrieved pattern remains advisory context only.
 
 Read `.agents-cli-spec.md`, this document, `references/reference-map.md`, `docs/decisions/0005-rag-pattern-memory-boundary.md`, and `docs/architecture/tool-catalog.md`.
 
-Next test to write: a web-console contract showing provider settings can run a full refresh cycle and show per-provider backoff state without exposing local source paths.
+Next test to write: a web-console contract showing configured-provider setup gaps and required env keys are visible without exposing local source paths.
 
 Do not copy source-system code. Recreate the behavior as typed domain contracts and deterministic services with tests.
