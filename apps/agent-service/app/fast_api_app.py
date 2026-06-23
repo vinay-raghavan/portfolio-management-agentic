@@ -29,6 +29,7 @@ from app.console import (
     create_console_paper_order,
     draft_console_strategy,
     refresh_console_provider_profile,
+    run_console_provider_refresh_schedule,
     simulate_console_paper_fill,
 )
 
@@ -198,6 +199,12 @@ def post_console_paper_order_fill(order_id: str, request: PaperFillRequest) -> d
 def post_console_provider_profile_refresh(provider_id: str) -> dict:
     """Refresh one configured provider profile and sanitized import job."""
     return refresh_console_provider_profile(provider_id)
+
+
+@app.post("/console/workflows/provider-profiles/refresh-schedule")
+def post_console_provider_refresh_schedule() -> dict:
+    """Run a scheduled configured-provider refresh cycle."""
+    return run_console_provider_refresh_schedule()
 
 
 # Main execution

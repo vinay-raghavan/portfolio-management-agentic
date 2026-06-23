@@ -83,7 +83,7 @@ Use a layered approach:
 
 ## Implementation Status
 
-Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot, provider context, and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured import validation with provider-settings UI feedback, sanitized provider profiles and import-refresh job history, configured market and provider-context refresh execution into structured SQLite tables, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot, provider context, and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured import validation with provider-settings UI feedback, sanitized provider profiles and import-refresh job history, scheduled refresh readiness with retry/backoff and stale-data detection, configured market and provider-context refresh execution into structured SQLite tables, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
 
 The implementation sequence for this foundation was:
 
@@ -104,6 +104,7 @@ The implementation sequence for this foundation was:
 15. Add sanitized provider configuration profiles and import-refresh job history so configured local sources can be validated and tracked without committing provider data, paths, or payloads.
 16. Add configured market-data refresh execution that imports normalized snapshots into the structured market-data store while keeping job records sanitized.
 17. Add configured universe, fundamentals, sentiment, volatility, and macro refresh execution that imports normalized provider context records into structured SQLite tables while keeping job records sanitized.
+18. Add scheduled provider refresh orchestration that runs bounded configured-provider refresh cycles and reports ready, stale, retry-due, and backoff readiness.
 
 ## Acceptance Criteria
 
@@ -112,7 +113,7 @@ The implementation sequence for this foundation was:
 - Candidate explanations include technical, fundamental, sentiment, volatility, macro, market-regime, portfolio-fit, and pattern evidence sections when data exists.
 - Provider settings expose read-only import validation for configured JSON sources without returning local paths, file names, or provider secrets.
 - Provider settings expose profile readiness and refresh-job history without returning local paths, file names, raw provider payloads, or provider secrets.
-- Configured provider refreshes import normalized market snapshots into `market_data_snapshots`, universe membership into `provider_universe_members`, and fundamentals/sentiment/volatility/macro snapshots into `provider_factor_snapshots`, while recording sanitized progress, import counts, retry attempts, and audit metadata.
+- Configured provider refreshes import normalized market snapshots into `market_data_snapshots`, universe membership into `provider_universe_members`, and fundamentals/sentiment/volatility/macro snapshots into `provider_factor_snapshots`, while recording sanitized progress, import counts, retry attempts, retry/backoff state, stale-data readiness, and audit metadata.
 - Public citations are present for pattern and factor definitions.
 - Missing data is visible in outputs and lowers confidence where appropriate.
 - RAG tools are read-only and cannot create, authorize, or execute paper or live trades.
@@ -121,7 +122,7 @@ The implementation sequence for this foundation was:
 
 ## Remaining Implementation Plan
 
-Next, add scheduled refresh orchestration with retry/backoff, stale-data detection, and UI controls that show provider readiness without exposing local source paths. After that, wire stale-data signals into screener and recommendation explanations so agents can prefer fresh provider records and disclose stale or missing context.
+Next, wire stale-data signals into screener and recommendation explanations so agents can prefer fresh provider records and disclose stale or missing context. After that, add richer web-console controls for running a full refresh cycle and inspecting per-provider backoff state.
 
 ## BDD Scenarios
 
@@ -154,6 +155,6 @@ And the retrieved pattern remains advisory context only.
 
 Read `.agents-cli-spec.md`, this document, `references/reference-map.md`, `docs/decisions/0005-rag-pattern-memory-boundary.md`, and `docs/architecture/tool-catalog.md`.
 
-Next test to write: a contract test for scheduled provider refresh orchestration that records retry/backoff state and stale-data readiness while still avoiding committed provider data or local source paths.
+Next test to write: a contract test showing stale provider readiness is surfaced in screener or recommendation explanations without creating paper orders or hiding missing context.
 
 Do not copy source-system code. Recreate the behavior as typed domain contracts and deterministic services with tests.
