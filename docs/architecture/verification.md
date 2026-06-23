@@ -19,7 +19,7 @@ Current coverage:
 - Demo portfolio, screener, strategy draft, and paper proposal contracts work.
 - Pre-market briefing contracts compose portfolio, watchlist, signal, research, and risk sections from synthetic data.
 - Product data and pattern contracts list fixture/configured universes, run hard-gated deterministic screeners, retrieve pattern cards, cite strategy evidence, and explain factor stacks.
-- Market-data persistence contracts store and reload fixture/configured-provider market snapshots and screener runs in their tool payload shape without exposing database paths or credentials.
+- Market-data persistence contracts store and reload fixture/configured-provider market snapshots, provider context records, and screener runs in their tool payload shape without exposing database paths or credentials.
 - Provider profile metadata contracts store configured-provider profile and import-refresh job summaries without exposing resolved local paths, file names, credentials, or raw provider payloads.
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with JSON-ready redacted audit exports and no file writes.
@@ -111,9 +111,9 @@ snapshot, universe, fundamentals, sentiment, volatility, and macro adapters
 can be enabled without committing provider data. Import validation checks
 those configured JSON files without returning local file paths. Provider
 profile refresh jobs persist sanitized validation and execution summaries,
-source env key names, and market snapshot import counts. Configured
-market-data refreshes can import normalized snapshots into
-`market_data_snapshots` when `MARKET_DATA_DB_PATH` is configured.
+source env key names, and import counts. Configured refreshes can import
+normalized snapshots into `market_data_snapshots`, `provider_universe_members`,
+and `provider_factor_snapshots` when `MARKET_DATA_DB_PATH` is configured.
 
 The optional local LLM profile is disabled by default:
 

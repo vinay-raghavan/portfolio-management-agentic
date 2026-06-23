@@ -1474,6 +1474,78 @@ def list_configured_market_data_snapshots(
     ]
 
 
+def list_configured_universe_members(
+    env: Mapping[str, str] | None = None,
+) -> list[UniverseMembers]:
+    config = env if env is not None else os.environ
+    provider = _configured_universe_provider(config)
+    if provider is None:
+        raise ValueError("Configured JSON universe provider is not selected.")
+    return [
+        UniverseMembers(
+            provider_id=provider.provider_id,
+            universe_id=universe.universe_id,
+            source=universe.source,
+            as_of=universe.as_of,
+            symbols=universe.symbols,
+            notes=universe.notes,
+        )
+        for universe in provider.list_universes()
+    ]
+
+
+def list_configured_fundamentals_snapshots(
+    env: Mapping[str, str] | None = None,
+) -> list[FundamentalsSnapshot]:
+    config = env if env is not None else os.environ
+    provider = _configured_fundamentals_provider(config)
+    if provider is None:
+        raise ValueError("Configured JSON fundamentals provider is not selected.")
+    return [
+        _fundamentals_from_payload(payload, provider.provider_id)
+        for payload in provider._fundamentals_payloads()
+    ]
+
+
+def list_configured_sentiment_snapshots(
+    env: Mapping[str, str] | None = None,
+) -> list[SentimentSnapshot]:
+    config = env if env is not None else os.environ
+    provider = _configured_sentiment_provider(config)
+    if provider is None:
+        raise ValueError("Configured JSON sentiment provider is not selected.")
+    return [
+        _sentiment_from_payload(payload, provider.provider_id)
+        for payload in provider._sentiment_payloads()
+    ]
+
+
+def list_configured_volatility_snapshots(
+    env: Mapping[str, str] | None = None,
+) -> list[VolatilitySnapshot]:
+    config = env if env is not None else os.environ
+    provider = _configured_volatility_provider(config)
+    if provider is None:
+        raise ValueError("Configured JSON volatility provider is not selected.")
+    return [
+        _volatility_from_payload(payload, provider.provider_id)
+        for payload in provider._volatility_payloads()
+    ]
+
+
+def list_configured_macro_snapshots(
+    env: Mapping[str, str] | None = None,
+) -> list[MacroSnapshot]:
+    config = env if env is not None else os.environ
+    provider = _configured_macro_provider(config)
+    if provider is None:
+        raise ValueError("Configured JSON macro provider is not selected.")
+    return [
+        _macro_from_payload(payload, provider.provider_id)
+        for payload in provider._macro_payloads()
+    ]
+
+
 @dataclass(frozen=True)
 class DataProviderRegistry:
     market_data: MarketDataProvider

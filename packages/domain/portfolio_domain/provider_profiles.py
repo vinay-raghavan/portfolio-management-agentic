@@ -9,15 +9,26 @@ from pathlib import Path
 from typing import Any
 
 from .models import (
+    FundamentalsSnapshot,
+    MacroSnapshot,
     MarketDataSnapshot,
     ProviderConfigurationProfile,
     ProviderImportJob,
     ProviderImportValidation,
+    SentimentSnapshot,
+    UniverseMembers,
+    VolatilitySnapshot,
 )
 from .market_data_store import build_market_data_store
+from .provider_data_store import build_provider_data_store
 from .providers import (
     CONFIGURED_JSON_SOURCE,
+    list_configured_fundamentals_snapshots,
+    list_configured_macro_snapshots,
     list_configured_market_data_snapshots,
+    list_configured_sentiment_snapshots,
+    list_configured_universe_members,
+    list_configured_volatility_snapshots,
     validate_configured_provider_imports,
 )
 
@@ -133,6 +144,78 @@ def _safe_market_snapshot(snapshot: MarketDataSnapshot) -> MarketDataSnapshot:
     )
 
 
+def _safe_universe_members(members: UniverseMembers) -> UniverseMembers:
+    return UniverseMembers(
+        provider_id=members.provider_id,
+        universe_id=members.universe_id,
+        source=CONFIGURED_JSON_SOURCE,
+        as_of=members.as_of,
+        symbols=members.symbols,
+        notes=[
+            "Configured universe membership imported through provider refresh.",
+            "Resolved source paths and raw provider payload details were not persisted.",
+        ],
+    )
+
+
+def _safe_fundamentals_snapshot(
+    snapshot: FundamentalsSnapshot,
+) -> FundamentalsSnapshot:
+    return FundamentalsSnapshot(
+        provider_id=snapshot.provider_id,
+        source=CONFIGURED_JSON_SOURCE,
+        symbol=snapshot.symbol,
+        as_of=snapshot.as_of,
+        metrics=_safe_metrics(snapshot.metrics),
+        notes=[
+            "Configured fundamentals snapshot imported through provider refresh.",
+            "Resolved source paths and raw provider payload details were not persisted.",
+        ],
+    )
+
+
+def _safe_sentiment_snapshot(snapshot: SentimentSnapshot) -> SentimentSnapshot:
+    return SentimentSnapshot(
+        provider_id=snapshot.provider_id,
+        source=CONFIGURED_JSON_SOURCE,
+        symbol=snapshot.symbol,
+        as_of=snapshot.as_of,
+        metrics=_safe_metrics(snapshot.metrics),
+        notes=[
+            "Configured sentiment snapshot imported through provider refresh.",
+            "Resolved source paths and raw provider payload details were not persisted.",
+        ],
+    )
+
+
+def _safe_volatility_snapshot(snapshot: VolatilitySnapshot) -> VolatilitySnapshot:
+    return VolatilitySnapshot(
+        provider_id=snapshot.provider_id,
+        source=CONFIGURED_JSON_SOURCE,
+        symbol=snapshot.symbol,
+        as_of=snapshot.as_of,
+        metrics=_safe_metrics(snapshot.metrics),
+        notes=[
+            "Configured volatility snapshot imported through provider refresh.",
+            "Resolved source paths and raw provider payload details were not persisted.",
+        ],
+    )
+
+
+def _safe_macro_snapshot(snapshot: MacroSnapshot) -> MacroSnapshot:
+    return MacroSnapshot(
+        provider_id=snapshot.provider_id,
+        source=CONFIGURED_JSON_SOURCE,
+        symbol=snapshot.symbol,
+        as_of=snapshot.as_of,
+        metrics=_safe_metrics(snapshot.metrics),
+        notes=[
+            "Configured macro snapshot imported through provider refresh.",
+            "Resolved source paths and raw provider payload details were not persisted.",
+        ],
+    )
+
+
 def _safe_execution_error(exc: Exception) -> str:
     if isinstance(exc, KeyError):
         return "Configured provider payload is missing a required field."
@@ -142,6 +225,67 @@ def _safe_execution_error(exc: Exception) -> str:
     if not message:
         return "Configured provider import failed."
     return message
+
+
+def _execute_valid_import(
+    validation: ProviderImportValidation,
+    env: Mapping[str, str] | None,
+) -> tuple[str, int]:
+    if validation.kind == "market_data":
+        snapshots = [
+            _safe_market_snapshot(snapshot)
+            for snapshot in list_configured_market_data_snapshots(env=env)
+        ]
+        market_store = build_market_data_store(env=env)
+        for snapshot in snapshots:
+            market_store.record_market_snapshot(snapshot)
+        return "market_data_snapshots", len(snapshots)
+    if validation.kind == "universe":
+        universes = [
+            _safe_universe_members(members)
+            for members in list_configured_universe_members(env=env)
+        ]
+        provider_store = build_provider_data_store(env=env)
+        for members in universes:
+            provider_store.record_universe_members(members)
+        return "provider_universe_members", len(universes)
+    if validation.kind == "fundamentals":
+        snapshots = [
+            _safe_fundamentals_snapshot(snapshot)
+            for snapshot in list_configured_fundamentals_snapshots(env=env)
+        ]
+        provider_store = build_provider_data_store(env=env)
+        for snapshot in snapshots:
+            provider_store.record_fundamentals_snapshot(snapshot)
+        return "provider_factor_snapshots", len(snapshots)
+    if validation.kind == "sentiment":
+        snapshots = [
+            _safe_sentiment_snapshot(snapshot)
+            for snapshot in list_configured_sentiment_snapshots(env=env)
+        ]
+        provider_store = build_provider_data_store(env=env)
+        for snapshot in snapshots:
+            provider_store.record_sentiment_snapshot(snapshot)
+        return "provider_factor_snapshots", len(snapshots)
+    if validation.kind == "volatility":
+        snapshots = [
+            _safe_volatility_snapshot(snapshot)
+            for snapshot in list_configured_volatility_snapshots(env=env)
+        ]
+        provider_store = build_provider_data_store(env=env)
+        for snapshot in snapshots:
+            provider_store.record_volatility_snapshot(snapshot)
+        return "provider_factor_snapshots", len(snapshots)
+    if validation.kind == "macro":
+        snapshots = [
+            _safe_macro_snapshot(snapshot)
+            for snapshot in list_configured_macro_snapshots(env=env)
+        ]
+        provider_store = build_provider_data_store(env=env)
+        for snapshot in snapshots:
+            provider_store.record_macro_snapshot(snapshot)
+        return "provider_factor_snapshots", len(snapshots)
+    raise ValueError("Unknown configured provider kind.")
 
 
 def _execution_result(
@@ -188,31 +332,9 @@ def _execution_result(
                 "target_store": "none",
             },
         }
-    if validation.kind != "market_data":
-        return {
-            "status": "completed",
-            "progress_state": "validated_metadata_only",
-            "imported_count": 0,
-            "skipped_count": validation.payload_count or 0,
-            "target_store": "metadata_only",
-            "message": validation.message,
-            "audit_event": {
-                **base_event,
-                "event_type": "provider_import_validated",
-                "imported_count": 0,
-                "skipped_count": validation.payload_count or 0,
-                "target_store": "metadata_only",
-            },
-        }
 
     try:
-        snapshots = [
-            _safe_market_snapshot(snapshot)
-            for snapshot in list_configured_market_data_snapshots(env=env)
-        ]
-        market_store = build_market_data_store(env=env)
-        for snapshot in snapshots:
-            market_store.record_market_snapshot(snapshot)
+        target_store, imported_count = _execute_valid_import(validation, env=env)
     except (KeyError, OSError, TypeError, ValueError) as exc:
         message = _safe_execution_error(exc)
         return {
@@ -220,30 +342,30 @@ def _execution_result(
             "progress_state": "import_failed",
             "imported_count": 0,
             "skipped_count": validation.payload_count or 0,
-            "target_store": "market_data_snapshots",
+            "target_store": "provider_import",
             "message": message,
             "audit_event": {
                 **base_event,
                 "event_type": "provider_import_failed",
                 "imported_count": 0,
                 "skipped_count": validation.payload_count or 0,
-                "target_store": "market_data_snapshots",
+                "target_store": "provider_import",
             },
         }
 
     return {
         "status": "completed",
         "progress_state": "imported",
-        "imported_count": len(snapshots),
+        "imported_count": imported_count,
         "skipped_count": 0,
-        "target_store": "market_data_snapshots",
+        "target_store": target_store,
         "message": validation.message,
         "audit_event": {
             **base_event,
             "event_type": "provider_import_executed",
-            "imported_count": len(snapshots),
+            "imported_count": imported_count,
             "skipped_count": 0,
-            "target_store": "market_data_snapshots",
+            "target_store": target_store,
         },
     }
 
@@ -278,7 +400,7 @@ def _job_from_validation(
         audit_event=dict(execution.get("audit_event") or {}),
         notes=[
             "Provider import refresh records sanitized execution metadata.",
-            "No raw provider payload, account data, credential, or resolved path is stored.",
+            "No raw provider payload, account data, sensitive value, or resolved path is stored.",
         ],
     )
 

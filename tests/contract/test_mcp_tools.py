@@ -1,6 +1,7 @@
 import json
 
 from portfolio_domain.market_data_store import SQLiteMarketDataStore
+from portfolio_domain.provider_data_store import SQLiteProviderDataStore
 from portfolio_mcp.tools import (
     EXPOSED_TOOL_NAMES,
     assert_exposed_tools_are_safe,
@@ -205,6 +206,60 @@ def test_provider_import_refresh_imports_valid_market_data_without_path_leaks(
     assert "private-market-provider" not in combined
     assert "api_key" not in combined
     assert "token" not in combined
+
+
+def test_provider_import_refresh_imports_valid_macro_context_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    metadata_db = tmp_path / "provider-config.db"
+    market_db = tmp_path / "market-data.db"
+    private_path = tmp_path / "private-macro-provider.json"
+    private_path.write_text(
+        json.dumps(
+            {
+                "macro": [
+                    {
+                        "symbol": "DEMODATA",
+                        "source": str(private_path),
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "market_regime_score": 0.72,
+                            "event_risk_score": 0.22,
+                            "private_key_hint": "should_not_persist",
+                        },
+                        "notes": ["private-macro-provider token leak candidate"],
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(metadata_db))
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", str(market_db))
+    monkeypatch.setenv("PORTFOLIO_MACRO_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MACRO_JSON_PATH", str(private_path))
+
+    result = refresh_provider_import_profile("configured_macro")
+    stored = SQLiteProviderDataStore(market_db).get_macro_snapshot(
+        "DEMODATA",
+        provider_id="configured_macro",
+    )
+
+    assert result["status"] == "completed"
+    assert result["policy"]["tier"] == "draft_only"
+    assert result["job"]["progress_state"] == "imported"
+    assert result["job"]["imported_count"] == 1
+    assert result["job"]["target_store"] == "provider_factor_snapshots"
+    assert stored.provider_id == "configured_macro"
+    assert stored.symbol == "DEMODATA"
+    assert stored.metrics["market_regime_score"] == 0.72
+
+    combined = f"{result} {stored.to_dict()}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-macro-provider" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "private_key" not in combined
 
 
 def test_forbidden_compatibility_traps_are_blocked_and_redacted() -> None:

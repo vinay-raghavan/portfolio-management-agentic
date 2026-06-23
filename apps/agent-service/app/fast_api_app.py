@@ -62,7 +62,9 @@ class PaperOrderRequest(BaseModel):
 
 
 class PaperOrderApprovalRequest(BaseModel):
-    approved_by: str = Field(default="web-console-reviewer", min_length=1, max_length=80)
+    approved_by: str = Field(
+        default="web-console-reviewer", min_length=1, max_length=80
+    )
     approval_note: str = Field(default="", max_length=500)
 
 
@@ -194,7 +196,7 @@ def post_console_paper_order_fill(order_id: str, request: PaperFillRequest) -> d
 
 @app.post("/console/workflows/provider-profiles/{provider_id}/refresh")
 def post_console_provider_profile_refresh(provider_id: str) -> dict:
-    """Refresh one configured provider profile metadata record."""
+    """Refresh one configured provider profile and sanitized import job."""
     return refresh_console_provider_profile(provider_id)
 
 
