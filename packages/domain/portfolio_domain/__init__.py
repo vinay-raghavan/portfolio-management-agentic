@@ -110,6 +110,7 @@ from .providers import (
     VolatilityProvider,
     build_data_provider_registry,
     get_data_provider_registry,
+    list_configured_market_data_snapshots,
     validate_configured_provider_imports,
 )
 from .product_data import (
@@ -208,6 +209,7 @@ __all__ = [
     "get_demo_signal_summary",
     "get_demo_watchlist_snapshot",
     "get_data_provider_registry",
+    "list_configured_market_data_snapshots",
     "get_provider_profile_storage_status",
     "validate_configured_provider_imports",
     "get_market_data_storage_status",

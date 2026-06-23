@@ -595,8 +595,7 @@ class JsonFileUniverseProvider:
 
     def list_universes(self) -> list[UniverseDefinition]:
         return [
-            _universe_from_payload(payload)
-            for payload in self._universe_payloads()
+            _universe_from_payload(payload) for payload in self._universe_payloads()
         ]
 
     def get_members(self, universe_id: str) -> UniverseMembers:
@@ -1381,7 +1380,11 @@ def _validate_configured_import(
     config: Mapping[str, str],
 ) -> ProviderImportValidation:
     provider_mode = config.get(spec.provider_env, "").strip().lower()
-    display_mode = provider_mode if provider_mode in {"", "fixture", JSON_FILE_PROVIDER} else "unsupported"
+    display_mode = (
+        provider_mode
+        if provider_mode in {"", "fixture", JSON_FILE_PROVIDER}
+        else "unsupported"
+    )
     required_env = [spec.provider_env, spec.json_path_env]
     if not provider_mode or provider_mode == "fixture":
         return ProviderImportValidation(
@@ -1454,8 +1457,20 @@ def validate_configured_provider_imports(
 ) -> list[ProviderImportValidation]:
     config = env if env is not None else os.environ
     return [
-        _validate_configured_import(spec, config)
-        for spec in _configured_import_specs()
+        _validate_configured_import(spec, config) for spec in _configured_import_specs()
+    ]
+
+
+def list_configured_market_data_snapshots(
+    env: Mapping[str, str] | None = None,
+) -> list[MarketDataSnapshot]:
+    config = env if env is not None else os.environ
+    provider = _configured_market_data_provider(config)
+    if provider is None:
+        raise ValueError("Configured JSON market data provider is not selected.")
+    return [
+        _snapshot_from_payload(payload, provider.provider_id)
+        for payload in provider._snapshot_payloads()
     ]
 
 
@@ -1478,7 +1493,9 @@ class DataProviderRegistry:
             self.volatility.descriptor(),
             self.macro.descriptor(),
         ]
-        return active + [provider.descriptor() for provider in self.configured_placeholders]
+        return active + [
+            provider.descriptor() for provider in self.configured_placeholders
+        ]
 
     def health(self) -> list[ProviderHealth]:
         active = [
@@ -1512,13 +1529,17 @@ def build_data_provider_registry(
     configured_sentiment = _configured_sentiment_provider(config)
     configured_volatility = _configured_volatility_provider(config)
     configured_macro = _configured_macro_provider(config)
-    market_data: MarketDataProvider = configured_market_data or FixtureMarketDataProvider()
+    market_data: MarketDataProvider = (
+        configured_market_data or FixtureMarketDataProvider()
+    )
     universe: UniverseProvider = configured_universe or FixtureUniverseProvider()
     fundamentals: FundamentalsProvider = (
         configured_fundamentals or FixtureFundamentalsProvider()
     )
     sentiment: SentimentProvider = configured_sentiment or FixtureSentimentProvider()
-    volatility: VolatilityProvider = configured_volatility or FixtureVolatilityProvider()
+    volatility: VolatilityProvider = (
+        configured_volatility or FixtureVolatilityProvider()
+    )
     macro: MacroProvider = configured_macro or FixtureMacroProvider()
     configured_placeholders: list[ConfiguredProviderPlaceholder] = []
     if configured_market_data is None:

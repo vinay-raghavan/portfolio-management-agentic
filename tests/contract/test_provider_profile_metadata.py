@@ -8,6 +8,7 @@ from portfolio_domain.provider_profiles import (
     list_provider_import_jobs,
     refresh_provider_import_profile_metadata,
 )
+from portfolio_domain.market_data_store import SQLiteMarketDataStore
 
 
 def _write_market_snapshot(tmp_path) -> str:
@@ -18,6 +19,7 @@ def _write_market_snapshot(tmp_path) -> str:
                 "snapshots": [
                     {
                         "symbol": "DEMODATA",
+                        "source": str(json_path),
                         "as_of": "2026-06-22",
                         "bars": [
                             {
@@ -34,7 +36,9 @@ def _write_market_snapshot(tmp_path) -> str:
                             "median_turnover_cr": 6.2,
                             "roc20_pct": 5.4,
                             "rsi14": 57.0,
+                            "api_token": "should_not_persist",
                         },
+                        "notes": ["private-market-snapshots token leak candidate"],
                     }
                 ]
             }
@@ -52,8 +56,7 @@ def test_provider_profiles_are_metadata_only_and_path_safe(tmp_path) -> None:
     }
 
     profiles = [
-        profile.to_dict()
-        for profile in list_provider_configuration_profiles(env=env)
+        profile.to_dict() for profile in list_provider_configuration_profiles(env=env)
     ]
     by_provider = {profile["provider_id"]: profile for profile in profiles}
 
@@ -108,6 +111,47 @@ def test_provider_import_refresh_tracks_job_without_storing_payload_or_path(
     assert jobs[0]["source_label"] == "env:PORTFOLIO_MARKET_DATA_JSON_PATH"
 
     combined = f"{job.to_dict()} {jobs}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-snapshots" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
+def test_provider_refresh_execution_imports_market_snapshots_to_structured_store(
+    tmp_path,
+) -> None:
+    json_path = _write_market_snapshot(tmp_path)
+    market_db = tmp_path / "market-data.db"
+    env = {
+        PROVIDER_CONFIG_DB_ENV: str(tmp_path / "provider-config.db"),
+        "MARKET_DATA_DB_PATH": str(market_db),
+        "PORTFOLIO_MARKET_DATA_PROVIDER": "json_file",
+        "PORTFOLIO_MARKET_DATA_JSON_PATH": json_path,
+    }
+
+    job = refresh_provider_import_profile_metadata(
+        "configured_market_data",
+        env=env,
+        trigger="execution_test",
+    )
+    stored = SQLiteMarketDataStore(market_db).get_market_snapshot(
+        "DEMODATA",
+        provider_id="configured_market_data",
+    )
+
+    assert job.status == "completed"
+    assert job.progress_state == "imported"
+    assert job.attempts == 1
+    assert job.imported_count == 1
+    assert job.skipped_count == 0
+    assert job.target_store == "market_data_snapshots"
+    assert job.audit_event["event_type"] == "provider_import_executed"
+    assert job.audit_event["provider_id"] == "configured_market_data"
+    assert job.audit_event["imported_count"] == 1
+    assert stored.symbol == "DEMODATA"
+    assert stored.provider_id == "configured_market_data"
+
+    combined = f"{job.to_dict()} {stored.to_dict()}".lower()
     assert str(tmp_path).lower() not in combined
     assert "private-market-snapshots" not in combined
     assert "api_key" not in combined

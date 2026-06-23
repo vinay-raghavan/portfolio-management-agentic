@@ -110,7 +110,10 @@ ledger, market-data, and provider-profile metadata state. It also passes
 snapshot, universe, fundamentals, sentiment, volatility, and macro adapters
 can be enabled without committing provider data. Import validation checks
 those configured JSON files without returning local file paths. Provider
-profile refresh jobs persist only metadata summaries and source env key names.
+profile refresh jobs persist sanitized validation and execution summaries,
+source env key names, and market snapshot import counts. Configured
+market-data refreshes can import normalized snapshots into
+`market_data_snapshots` when `MARKET_DATA_DB_PATH` is configured.
 
 The optional local LLM profile is disabled by default:
 

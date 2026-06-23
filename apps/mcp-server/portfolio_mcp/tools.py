@@ -222,8 +222,7 @@ def validate_data_provider_imports() -> dict[str, Any]:
     if not decision.allowed:
         return _blocked(tool_name)
     validations = [
-        validation.to_dict()
-        for validation in validate_configured_provider_imports()
+        validation.to_dict() for validation in validate_configured_provider_imports()
     ]
     needs_attention = sum(
         1
@@ -237,7 +236,9 @@ def validate_data_provider_imports() -> dict[str, Any]:
         "summary": {
             "total": len(validations),
             "configured": configured,
-            "valid": sum(1 for validation in validations if validation["status"] == "valid"),
+            "valid": sum(
+                1 for validation in validations if validation["status"] == "valid"
+            ),
             "needs_attention": needs_attention,
         },
         "validations": validations,
@@ -250,10 +251,7 @@ def list_provider_profiles() -> dict[str, Any]:
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
         return _blocked(tool_name)
-    profiles = [
-        profile.to_dict()
-        for profile in list_provider_configuration_profiles()
-    ]
+    profiles = [profile.to_dict() for profile in list_provider_configuration_profiles()]
     needs_attention = sum(
         1
         for profile in profiles
@@ -280,8 +278,7 @@ def list_provider_import_jobs(limit: int = 20) -> dict[str, Any]:
         return _blocked(tool_name)
     bounded_limit = max(1, min(limit, 50))
     jobs = [
-        job.to_dict()
-        for job in list_domain_provider_import_jobs(limit=bounded_limit)
+        job.to_dict() for job in list_domain_provider_import_jobs(limit=bounded_limit)
     ]
     return {
         "status": "success",
@@ -290,9 +287,7 @@ def list_provider_import_jobs(limit: int = 20) -> dict[str, Any]:
         "summary": {
             "total": len(jobs),
             "needs_attention": sum(
-                1
-                for job in jobs
-                if job["status"] == "needs_attention"
+                1 for job in jobs if job["status"] == "needs_attention"
             ),
         },
         "import_jobs": jobs,
@@ -300,7 +295,7 @@ def list_provider_import_jobs(limit: int = 20) -> dict[str, Any]:
 
 
 def refresh_provider_import_profile(provider_id: str) -> dict[str, Any]:
-    """Validate one configured provider and persist metadata-only refresh status."""
+    """Validate one configured provider and persist sanitized refresh status."""
     tool_name = "refresh_provider_import_profile"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -317,7 +312,9 @@ def refresh_provider_import_profile(provider_id: str) -> dict[str, Any]:
         "status": job.status,
         "policy": decision.to_dict(),
         "job": job.to_dict(),
-        "next_step": "review_provider_import_job" if job.status != "completed" else "ready",
+        "next_step": "review_provider_import_job"
+        if job.status != "completed"
+        else "ready",
     }
 
 
