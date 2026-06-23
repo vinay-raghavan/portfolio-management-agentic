@@ -2,6 +2,7 @@ import json
 
 from portfolio_domain.providers import (
     build_data_provider_registry,
+    list_configured_provider_source_templates,
     validate_configured_provider_imports,
 )
 from portfolio_mcp.tools import (
@@ -523,6 +524,31 @@ def test_configured_json_macro_provider_preserves_metrics_shape(tmp_path) -> Non
 
     combined = f"{descriptor} {health} {macro}".lower()
     assert str(json_path).lower() not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
+def test_configured_provider_source_templates_validate_through_adapters(
+    tmp_path,
+) -> None:
+    env: dict[str, str] = {}
+    for template in list_configured_provider_source_templates():
+        json_path = tmp_path / f"{template['provider_id']}.json"
+        json_path.write_text(json.dumps(template["template_json"]))
+        provider_env, path_env = template["required_env"]
+        env[provider_env] = "json_file"
+        env[path_env] = str(json_path)
+
+    validations = [
+        validation.to_dict()
+        for validation in validate_configured_provider_imports(env)
+    ]
+
+    assert {validation["status"] for validation in validations} == {"valid"}
+    assert {validation["payload_count"] for validation in validations} == {1}
+
+    combined = f"{validations}".lower()
+    assert str(tmp_path).lower() not in combined
     assert "api_key" not in combined
     assert "token" not in combined
 

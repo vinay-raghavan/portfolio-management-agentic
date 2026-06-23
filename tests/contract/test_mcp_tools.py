@@ -19,6 +19,7 @@ from portfolio_mcp.tools import (
     get_research_digest,
     get_universe_members,
     list_data_providers,
+    list_provider_source_templates,
     list_provider_import_jobs,
     list_provider_profiles,
     list_universes,
@@ -119,6 +120,40 @@ def test_provider_adapter_tools_are_read_only_and_fixture_backed() -> None:
     assert import_validation["summary"]["total"] == 6
     assert snapshot["snapshot"]["source"] == "offline_fixture"
     assert universe["universe"]["provider_id"] == "fixture_universe"
+
+
+def test_provider_source_templates_are_read_only_and_sanitized() -> None:
+    result = list_provider_source_templates()
+    templates = {
+        template["provider_id"]: template
+        for template in result["templates"]
+    }
+
+    assert result["status"] == "success"
+    assert result["policy"]["tier"] == "read_only"
+    assert result["summary"]["total"] == 6
+    assert set(templates) == {
+        "configured_market_data",
+        "configured_universe",
+        "configured_fundamentals",
+        "configured_sentiment",
+        "configured_volatility",
+        "configured_macro",
+    }
+    assert templates["configured_market_data"]["template_json"]["snapshots"][0][
+        "bars"
+    ][0]["date"]
+    assert templates["configured_universe"]["template_json"]["universes"][0][
+        "symbols"
+    ]
+    assert "snapshots" in templates["configured_market_data"]["accepted_wrappers"]
+    assert "json_file" in result["provider_mode_options"]
+
+    combined = f"{result}".lower()
+    assert "place_live_order" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "/users/" not in combined
 
 
 def test_provider_import_refresh_is_draft_only_and_path_safe(

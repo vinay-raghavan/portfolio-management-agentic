@@ -81,6 +81,19 @@ def test_web_console_exposes_configured_provider_source_management() -> None:
     assert "source_label" in source
 
 
+def test_web_console_exposes_provider_source_schema_guidance() -> None:
+    source = (WEB_ROOT / "src" / "App.tsx").read_text()
+
+    assert "ProviderSourceTemplates" in source
+    assert "Schema guidance" in source
+    assert "JSON template" in source
+    assert "Accepted wrappers" in source
+    assert "Required fields" in source
+    assert "provider_source_templates" in source
+    assert "template_json" in source
+    assert "accepted_wrappers" in source
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 

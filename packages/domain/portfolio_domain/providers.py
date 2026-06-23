@@ -1323,6 +1323,169 @@ def _configured_import_specs() -> list[ConfiguredProviderImportSpec]:
     ]
 
 
+def _template_payload_for_kind(kind: str) -> dict[str, Any]:
+    if kind == "market_data":
+        return {
+            "snapshots": [
+                {
+                    "symbol": "SAMPLE_EQTY",
+                    "as_of": "2026-06-22",
+                    "bars": [
+                        {
+                            "date": "2026-06-22",
+                            "open": 100.0,
+                            "high": 104.0,
+                            "low": 99.0,
+                            "close": 103.0,
+                            "volume": 123000,
+                        }
+                    ],
+                    "latest_close": 103.0,
+                    "metrics": {
+                        "atr_pct": 2.5,
+                        "median_turnover_cr": 8.1,
+                        "roc20_pct": 7.2,
+                        "rsi14": 59.4,
+                    },
+                    "notes": ["Synthetic example for local import validation."],
+                }
+            ]
+        }
+    if kind == "universe":
+        return {
+            "universes": [
+                {
+                    "universe_id": "sample_universe",
+                    "name": "Sample Universe",
+                    "as_of": "2026-06-22",
+                    "symbols": ["SAMPLE_EQTY"],
+                    "notes": ["Synthetic example for local import validation."],
+                }
+            ]
+        }
+    if kind == "fundamentals":
+        return {
+            "fundamentals": [
+                {
+                    "symbol": "SAMPLE_EQTY",
+                    "as_of": "2026-06-22",
+                    "metrics": {
+                        "quality_score": 0.65,
+                        "value_score": 0.55,
+                        "growth_score": 0.61,
+                        "earnings_revision_score": 0.58,
+                        "leverage_score": 0.66,
+                    },
+                    "notes": ["Synthetic example for local import validation."],
+                }
+            ]
+        }
+    if kind == "sentiment":
+        return {
+            "sentiment": [
+                {
+                    "symbol": "SAMPLE_EQTY",
+                    "as_of": "2026-06-22",
+                    "metrics": {
+                        "news_score": 0.57,
+                        "investor_score": 0.55,
+                        "contradiction_score": 0.25,
+                    },
+                    "notes": ["Synthetic example for local import validation."],
+                }
+            ]
+        }
+    if kind == "volatility":
+        return {
+            "volatility": [
+                {
+                    "symbol": "SAMPLE_EQTY",
+                    "as_of": "2026-06-22",
+                    "metrics": {
+                        "india_vix": 15.2,
+                        "vix_change_pct": 1.4,
+                        "regime_score": 0.58,
+                        "risk_multiplier": 0.72,
+                    },
+                    "notes": ["Synthetic example for local import validation."],
+                }
+            ]
+        }
+    if kind == "macro":
+        return {
+            "macro": [
+                {
+                    "symbol": "SAMPLE_EQTY",
+                    "as_of": "2026-06-22",
+                    "metrics": {
+                        "market_regime_score": 0.62,
+                        "breadth_score": 0.57,
+                        "rate_pressure_score": 0.51,
+                        "event_risk_score": 0.31,
+                        "liquidity_condition_score": 0.60,
+                    },
+                    "notes": ["Synthetic example for local import validation."],
+                }
+            ]
+        }
+    raise ValueError("Unknown configured provider kind.")
+
+
+def _template_metadata_for_kind(kind: str) -> dict[str, list[str]]:
+    if kind == "market_data":
+        return {
+            "accepted_wrappers": ["list", "snapshots", "single_object_with_symbol"],
+            "required_fields": [
+                "symbol",
+                "bars[].date",
+                "bars[].open",
+                "bars[].high",
+                "bars[].low",
+                "bars[].close",
+                "bars[].volume",
+            ],
+            "optional_fields": ["as_of", "latest_close", "metrics", "notes", "source"],
+        }
+    if kind == "universe":
+        return {
+            "accepted_wrappers": ["list", "universes", "single_object_with_universe_id"],
+            "required_fields": ["universe_id", "symbols[]"],
+            "optional_fields": ["name", "as_of", "notes", "source"],
+        }
+    wrapper = "macro" if kind == "macro" else kind
+    return {
+        "accepted_wrappers": ["list", wrapper, "single_object_with_symbol"],
+        "required_fields": ["symbol", "metrics"],
+        "optional_fields": ["as_of", "notes", "source"],
+    }
+
+
+def list_configured_provider_source_templates() -> list[dict[str, Any]]:
+    """Return sanitized configured-source JSON templates for operators."""
+    templates: list[dict[str, Any]] = []
+    for spec in _configured_import_specs():
+        metadata = _template_metadata_for_kind(spec.kind)
+        templates.append(
+            {
+                "provider_id": spec.provider_id,
+                "kind": spec.kind,
+                "display_name": spec.display_name,
+                "provider_mode": JSON_FILE_PROVIDER,
+                "required_env": [spec.provider_env, spec.json_path_env],
+                "path_env": spec.json_path_env,
+                "accepted_wrappers": metadata["accepted_wrappers"],
+                "required_fields": metadata["required_fields"],
+                "optional_fields": metadata["optional_fields"],
+                "template_json": _template_payload_for_kind(spec.kind),
+                "notes": [
+                    "Template values are synthetic and intended for local import validation.",
+                    "Store provider exports outside the repository and configure only env key names here.",
+                ],
+            }
+        )
+    return templates
+
+
 def _validated_import_identifiers(
     spec: ConfiguredProviderImportSpec,
     json_path: Path,

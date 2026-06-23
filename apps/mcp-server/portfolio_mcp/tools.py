@@ -26,6 +26,7 @@ from portfolio_domain import (
     get_demo_watchlist_snapshot,
     get_provider_profile_storage_status,
     list_provider_refresh_readiness as list_domain_provider_refresh_readiness,
+    list_configured_provider_source_templates,
     list_fixture_approval_queue,
     list_fixture_audit_events,
     list_fixture_backtest_requests,
@@ -61,6 +62,7 @@ EXPOSED_TOOL_NAMES = {
     "get_data_provider_health",
     "validate_data_provider_imports",
     "list_provider_profiles",
+    "list_provider_source_templates",
     "list_provider_import_jobs",
     "get_provider_refresh_readiness",
     "refresh_provider_import_profile",
@@ -271,6 +273,28 @@ def list_provider_profiles() -> dict[str, Any]:
             "needs_attention": needs_attention,
         },
         "profiles": profiles,
+    }
+
+
+def list_provider_source_templates() -> dict[str, Any]:
+    """Return sanitized JSON templates for configured local provider sources."""
+    tool_name = "list_provider_source_templates"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    templates = list_configured_provider_source_templates()
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "template_version": "configured-provider-json/v1",
+        "provider_mode_options": ["fixture", "json_file"],
+        "summary": {
+            "total": len(templates),
+            "market_data": sum(1 for item in templates if item["kind"] == "market_data"),
+            "context": sum(1 for item in templates if item["kind"] != "market_data"),
+        },
+        "templates": templates,
+        "next_step": "set_provider_mode_and_json_path_env",
     }
 
 

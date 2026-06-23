@@ -248,6 +248,104 @@ const fallbackProviderProfiles: JsonRecord[] = [
   },
 ];
 
+const fallbackTemplateByKind: JsonRecord = {
+  market_data: {
+    snapshots: [
+      {
+        symbol: 'SAMPLE_EQTY',
+        as_of: '2026-06-22',
+        bars: [
+          {
+            date: '2026-06-22',
+            open: 100,
+            high: 104,
+            low: 99,
+            close: 103,
+            volume: 123000,
+          },
+        ],
+        metrics: { atr_pct: 2.5, median_turnover_cr: 8.1, roc20_pct: 7.2, rsi14: 59.4 },
+      },
+    ],
+  },
+  universe: {
+    universes: [
+      {
+        universe_id: 'sample_universe',
+        name: 'Sample Universe',
+        as_of: '2026-06-22',
+        symbols: ['SAMPLE_EQTY'],
+      },
+    ],
+  },
+  fundamentals: {
+    fundamentals: [
+      {
+        symbol: 'SAMPLE_EQTY',
+        as_of: '2026-06-22',
+        metrics: { quality_score: 0.65, value_score: 0.55, growth_score: 0.61 },
+      },
+    ],
+  },
+  sentiment: {
+    sentiment: [
+      {
+        symbol: 'SAMPLE_EQTY',
+        as_of: '2026-06-22',
+        metrics: { news_score: 0.57, investor_score: 0.55, contradiction_score: 0.25 },
+      },
+    ],
+  },
+  volatility: {
+    volatility: [
+      {
+        symbol: 'SAMPLE_EQTY',
+        as_of: '2026-06-22',
+        metrics: { india_vix: 15.2, vix_change_pct: 1.4, regime_score: 0.58 },
+      },
+    ],
+  },
+  macro: {
+    macro: [
+      {
+        symbol: 'SAMPLE_EQTY',
+        as_of: '2026-06-22',
+        metrics: { market_regime_score: 0.62, breadth_score: 0.57, event_risk_score: 0.31 },
+      },
+    ],
+  },
+};
+
+const fallbackProviderSourceTemplates: JsonRecord[] = fallbackProviderProfiles.map((profile) => ({
+  provider_id: profile.provider_id,
+  kind: profile.kind,
+  display_name: profile.display_name,
+  provider_mode: 'json_file',
+  required_env: profile.required_env,
+  path_env: profile.path_env,
+  accepted_wrappers:
+    profile.kind === 'universe'
+      ? ['list', 'universes', 'single_object_with_universe_id']
+      : [
+          'list',
+          profile.kind === 'market_data' ? 'snapshots' : profile.kind,
+          'single_object_with_symbol',
+        ],
+  required_fields:
+    profile.kind === 'market_data'
+      ? ['symbol', 'bars[].date', 'bars[].open', 'bars[].high', 'bars[].low', 'bars[].close', 'bars[].volume']
+      : profile.kind === 'universe'
+        ? ['universe_id', 'symbols[]']
+        : ['symbol', 'metrics'],
+  optional_fields:
+    profile.kind === 'market_data'
+      ? ['as_of', 'latest_close', 'metrics', 'notes', 'source']
+      : profile.kind === 'universe'
+        ? ['name', 'as_of', 'notes', 'source']
+        : ['as_of', 'notes', 'source'],
+  template_json: fallbackTemplateByKind[profile.kind],
+}));
+
 const fallbackWorkflows: JsonRecord = {
   mode: 'paper_only',
   safety: fallbackOverview.safety,
@@ -386,6 +484,13 @@ const fallbackWorkflows: JsonRecord = {
       status: 'success',
       summary: { total: 6, configured: 0, needs_attention: 0 },
       profiles: fallbackProviderProfiles,
+    },
+    provider_source_templates: {
+      status: 'success',
+      template_version: 'configured-provider-json/v1',
+      provider_mode_options: ['fixture', 'json_file'],
+      summary: { total: 6, market_data: 1, context: 5 },
+      templates: fallbackProviderSourceTemplates,
     },
     provider_import_jobs: {
       status: 'success',
@@ -613,6 +718,9 @@ function App() {
   const providerProfiles =
     workflows.settings?.provider_profiles?.profiles ??
     fallbackWorkflows.settings.provider_profiles.profiles;
+  const providerSourceTemplates =
+    workflows.settings?.provider_source_templates ??
+    fallbackWorkflows.settings.provider_source_templates;
   const providerImportJobs =
     workflows.settings?.provider_import_jobs?.import_jobs ??
     fallbackWorkflows.settings.provider_import_jobs.import_jobs;
@@ -1258,13 +1366,22 @@ function App() {
               </div>
             </section>
 
-            <section className="panel wide-panel">
+            <section className="panel wide-panel source-panel">
               <PanelHeading
                 label="Source setup"
                 title="Configured source management"
                 icon={<Settings size={19} aria-hidden="true" />}
               />
               <ProviderSourceSetup profiles={providerProfiles} />
+            </section>
+
+            <section className="panel wide-panel template-panel">
+              <PanelHeading
+                label="Schema guidance"
+                title="JSON templates"
+                icon={<ClipboardCheck size={19} aria-hidden="true" />}
+              />
+              <ProviderSourceTemplates guidance={providerSourceTemplates} />
             </section>
 
             <section className="panel">
@@ -1510,6 +1627,64 @@ function ProviderSourceSetup({ profiles }: { profiles: JsonRecord[] }) {
                     </StatusPill>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProviderSourceTemplates({ guidance }: { guidance: JsonRecord }) {
+  const templates = guidance.templates ?? [];
+  if (!templates.length) {
+    return <div className="empty-state">No source templates available</div>;
+  }
+  return (
+    <div className="template-guidance-stack">
+      <div className="template-summary" aria-label="Configured provider schema guidance summary">
+        <div>
+          <span>Template version</span>
+          <strong>{guidance.template_version ?? 'configured-provider-json/v1'}</strong>
+        </div>
+        <div>
+          <span>Provider modes</span>
+          <strong>{(guidance.provider_mode_options ?? ['fixture', 'json_file']).join(' / ')}</strong>
+        </div>
+        <div>
+          <span>Template count</span>
+          <strong>{guidance.summary?.total ?? templates.length}</strong>
+        </div>
+      </div>
+      <div className="template-list">
+        {templates.slice(0, 6).map((template: JsonRecord) => (
+          <div className="template-row" key={template.provider_id}>
+            <div className="template-main">
+              <strong>{template.display_name ?? template.provider_id}</strong>
+              <span>{template.path_env ?? template.kind}</span>
+              <small>JSON template for {humanize(template.kind ?? 'provider')}</small>
+            </div>
+            <div className="template-fields">
+              <div>
+                <span>Accepted wrappers</span>
+                <div className="env-chip-list">
+                  {(template.accepted_wrappers ?? []).map((wrapper: string) => (
+                    <code key={`${template.provider_id}-${wrapper}`}>{wrapper}</code>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span>Required fields</span>
+                <div className="env-chip-list">
+                  {(template.required_fields ?? []).slice(0, 7).map((field: string) => (
+                    <code key={`${template.provider_id}-${field}`}>{field}</code>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span>JSON template</span>
+                <pre>{JSON.stringify(template.template_json ?? {}, null, 2)}</pre>
               </div>
             </div>
           </div>

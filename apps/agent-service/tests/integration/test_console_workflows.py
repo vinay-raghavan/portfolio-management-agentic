@@ -152,6 +152,36 @@ def test_console_workflows_expose_provider_source_setup_gaps_without_path_leaks(
     assert "token" not in combined
 
 
+def test_console_workflows_expose_provider_source_templates_without_path_leaks(
+    tmp_path,
+) -> None:
+    client = TestClient(app)
+
+    response = client.get("/console/workflows", params={"preset": "momentum"})
+
+    assert response.status_code == 200
+    guidance = response.json()["settings"]["provider_source_templates"]
+    templates = {
+        template["provider_id"]: template
+        for template in guidance["templates"]
+    }
+
+    assert guidance["status"] == "success"
+    assert guidance["policy"]["tier"] == "read_only"
+    assert guidance["summary"]["total"] == 6
+    assert templates["configured_market_data"]["template_json"]["snapshots"][0][
+        "symbol"
+    ]
+    assert templates["configured_macro"]["template_json"]["macro"][0]["metrics"]
+    assert "json_file" in guidance["provider_mode_options"]
+
+    combined = f"{guidance}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "secret" not in combined
+
+
 def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
     client = TestClient(app)
 
