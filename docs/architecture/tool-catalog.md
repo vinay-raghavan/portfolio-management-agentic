@@ -24,14 +24,14 @@ This catalog documents the first MCP-style tool slice. The MCP server must expos
 | `list_market_data_snapshots` | read-only | Return cached market-data snapshots without exposing storage paths. |
 | `get_universe_members` | read-only | Return fixture-backed or configured JSON universe members through the provider boundary. |
 | `list_universes` | read-only | Return fixture-backed or configured tradable universes with source metadata. |
-| `run_screener` | read-only | Run a deterministic screener over a selected fixture or configured universe using hard gates and weighted score components, with optional local run persistence. |
+| `run_screener` | read-only | Run a deterministic screener over a selected fixture or configured universe using hard gates, provider refresh readiness, and weighted score components, with optional local run persistence. |
 | `list_screener_runs` | read-only | Return cached screener runs without exposing storage paths. |
 | `explain_candidate_evidence` | read-only | Explain technical, fundamental, sentiment, volatility, market-regime, portfolio-fit, and missing-data evidence for a candidate. |
 | `search_pattern_library` | read-only | Search public-safe pattern cards and playbooks. |
 | `get_pattern_playbook` | read-only | Retrieve one versioned pattern card with citation metadata. |
 | `cite_strategy_evidence` | read-only | Return citation-backed evidence for a strategy explanation or draft paper proposal. |
 | `explain_factor_stack` | read-only | Compose deterministic factor evidence, retrieved citations, counterevidence, and paper-only next actions. |
-| `get_recommendation_explanation` | read-only | Join screener/factor evidence, strategy history, backtest history, risk gates, ledger context, and citations into a paper-only recommendation explanation. |
+| `get_recommendation_explanation` | read-only | Join screener/factor evidence, provider refresh readiness, strategy history, backtest history, risk gates, ledger context, and citations into a paper-only recommendation explanation. |
 | `generate_paper_trading_report` | read-only | Return a paper-trading review report with accounting, positions, orders, fills, approvals, risk state, optional recommendation context, and redacted audit export rows. |
 | `create_backtest_request` | draft-only | Draft an offline paper backtest request for a symbol, setup, and date window. |
 | `list_backtest_requests` | read-only | Return persisted paper backtest request history. |
