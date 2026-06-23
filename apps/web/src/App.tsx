@@ -296,6 +296,11 @@ const fallbackWorkflows: JsonRecord = {
   settings: {
     providers: { status: 'success', providers: [] },
     health: fallbackOverview.providers,
+    import_validation: {
+      status: 'success',
+      summary: { total: 6, configured: 0, valid: 0, needs_attention: 0 },
+      validations: [],
+    },
     risk: fallbackOverview.risk,
     safety: fallbackOverview.safety,
   },
@@ -504,6 +509,7 @@ function App() {
   const patterns = workflows.screener?.patterns?.patterns ?? [];
   const providers = workflows.settings?.providers?.providers ?? [];
   const providerHealth = workflows.settings?.health?.health ?? overview.providers?.health ?? [];
+  const importValidation = workflows.settings?.import_validation ?? fallbackWorkflows.settings.import_validation;
   const defaults = workflows.strategy_backtest?.defaults ?? {
     symbol: selectedCandidate.symbol,
     setup: selectedCandidate.setup,
@@ -1126,6 +1132,15 @@ function App() {
 
             <section className="panel">
               <PanelHeading
+                label="Import validation"
+                title="Configured files"
+                icon={<AlertTriangle size={19} aria-hidden="true" />}
+              />
+              <ProviderImportValidation validation={importValidation} />
+            </section>
+
+            <section className="panel">
+              <PanelHeading
                 label="Risk"
                 title="Safety switches"
                 icon={<LockKeyhole size={19} aria-hidden="true" />}
@@ -1234,6 +1249,45 @@ function ProviderHealth({ providers }: { providers: JsonRecord[] }) {
           </StatusPill>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ProviderImportValidation({ validation }: { validation: JsonRecord }) {
+  const summary = validation.summary ?? {};
+  const validations = validation.validations ?? [];
+  const needsAttention = Number(summary.needs_attention ?? 0);
+  return (
+    <div className="validation-stack">
+      <div className="result-band">
+        <span>Needs attention</span>
+        <strong>{needsAttention}</strong>
+      </div>
+      <div className="detail-list">
+        {validations.length ? (
+          validations.slice(0, 6).map((item: JsonRecord) => (
+            <div className="validation-row" key={item.provider_id}>
+              <div>
+                <strong>{item.provider_id}</strong>
+                <span>{item.message}</span>
+              </div>
+              <StatusPill
+                tone={
+                  item.status === 'valid'
+                    ? 'good'
+                    : item.status === 'not_configured'
+                      ? 'neutral'
+                      : 'warn'
+                }
+              >
+                {humanize(item.status ?? 'unknown')}
+              </StatusPill>
+            </div>
+          ))
+        ) : (
+          <div className="empty-state">Fixture providers active</div>
+        )}
+      </div>
     </div>
   );
 }

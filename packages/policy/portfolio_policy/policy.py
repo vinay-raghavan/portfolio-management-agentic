@@ -35,6 +35,7 @@ ACTION_TIERS: dict[str, ActionTier] = {
     "run_momentum_screener": ActionTier.READ_ONLY,
     "list_data_providers": ActionTier.READ_ONLY,
     "get_data_provider_health": ActionTier.READ_ONLY,
+    "validate_data_provider_imports": ActionTier.READ_ONLY,
     "get_market_data_snapshot": ActionTier.READ_ONLY,
     "list_market_data_snapshots": ActionTier.READ_ONLY,
     "get_universe_members": ActionTier.READ_ONLY,

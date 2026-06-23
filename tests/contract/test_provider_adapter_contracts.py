@@ -1,6 +1,9 @@
 import json
 
-from portfolio_domain.providers import build_data_provider_registry
+from portfolio_domain.providers import (
+    build_data_provider_registry,
+    validate_configured_provider_imports,
+)
 from portfolio_mcp.tools import (
     explain_factor_stack,
     get_data_provider_health,
@@ -9,6 +12,7 @@ from portfolio_mcp.tools import (
     list_market_data_snapshots,
     list_data_providers,
     run_screener,
+    validate_data_provider_imports,
 )
 
 
@@ -519,6 +523,78 @@ def test_configured_json_macro_provider_preserves_metrics_shape(tmp_path) -> Non
 
     combined = f"{descriptor} {health} {macro}".lower()
     assert str(json_path).lower() not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
+def test_configured_provider_import_validation_reports_errors_without_path_leaks(
+    tmp_path,
+) -> None:
+    market_path = _write_configured_snapshot(tmp_path)
+    bad_fundamentals_path = tmp_path / "bad-fundamentals.json"
+    bad_fundamentals_path.write_text("{not-json")
+    missing_volatility_path = tmp_path / "missing-volatility.json"
+
+    validations = [
+        validation.to_dict()
+        for validation in validate_configured_provider_imports(
+            {
+                "PORTFOLIO_MARKET_DATA_PROVIDER": "json_file",
+                "PORTFOLIO_MARKET_DATA_JSON_PATH": market_path,
+                "PORTFOLIO_FUNDAMENTALS_PROVIDER": "json_file",
+                "PORTFOLIO_FUNDAMENTALS_JSON_PATH": str(bad_fundamentals_path),
+                "PORTFOLIO_SENTIMENT_PROVIDER": "csv_file",
+                "PORTFOLIO_SENTIMENT_JSON_PATH": "private-secret-sentiment.csv",
+                "PORTFOLIO_VOLATILITY_PROVIDER": "json_file",
+                "PORTFOLIO_VOLATILITY_JSON_PATH": str(missing_volatility_path),
+                "PORTFOLIO_MACRO_PROVIDER": "json_file",
+            }
+        )
+    ]
+    by_provider = {item["provider_id"]: item for item in validations}
+
+    assert by_provider["configured_market_data"]["status"] == "valid"
+    assert by_provider["configured_market_data"]["payload_count"] == 1
+    assert by_provider["configured_market_data"]["sample_identifiers"] == ["DEMODATA"]
+    assert by_provider["configured_universe"]["status"] == "not_configured"
+    assert by_provider["configured_fundamentals"]["status"] == "error"
+    assert "not valid JSON" in by_provider["configured_fundamentals"]["message"]
+    assert by_provider["configured_sentiment"]["status"] == "unsupported_provider"
+    assert by_provider["configured_volatility"]["status"] == "error"
+    assert by_provider["configured_macro"]["status"] == "missing_path"
+    assert by_provider["configured_macro"]["missing_env"] == ["PORTFOLIO_MACRO_JSON_PATH"]
+
+    combined = f"{validations}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "bad-fundamentals" not in combined
+    assert "missing-volatility" not in combined
+    assert "private-secret-sentiment" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
+def test_validate_data_provider_imports_tool_is_read_only_and_summarized(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    bad_macro_path = tmp_path / "bad-macro.json"
+    bad_macro_path.write_text("{bad")
+    monkeypatch.setenv("PORTFOLIO_MACRO_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MACRO_JSON_PATH", str(bad_macro_path))
+
+    result = validate_data_provider_imports()
+    validations = {item["provider_id"]: item for item in result["validations"]}
+
+    assert result["status"] == "success"
+    assert result["policy"]["tier"] == "read_only"
+    assert result["summary"]["total"] == 6
+    assert result["summary"]["needs_attention"] == 1
+    assert validations["configured_macro"]["status"] == "error"
+    assert "not valid JSON" in validations["configured_macro"]["message"]
+
+    combined = f"{result}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "bad-macro" not in combined
     assert "api_key" not in combined
     assert "token" not in combined
 

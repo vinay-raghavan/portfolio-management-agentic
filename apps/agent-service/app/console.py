@@ -40,6 +40,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     run_screener,
     search_pattern_library,
     simulate_approved_paper_fill,
+    validate_data_provider_imports,
 )
 from portfolio_policy import authorize_tool_call  # noqa: E402
 
@@ -180,8 +181,8 @@ def build_console_workflows(
             _page(
                 "settings",
                 "Provider settings",
-                "get_data_provider_health",
-                "Review fixture and configured provider health without credential values.",
+                "validate_data_provider_imports",
+                "Review provider health and configured file validation without credential values.",
             ),
         ],
         "workflow_actions": _workflow_actions(),
@@ -241,6 +242,7 @@ def build_console_workflows(
         "settings": {
             "providers": list_data_providers(),
             "health": get_data_provider_health(),
+            "import_validation": validate_data_provider_imports(),
             "risk": get_risk_review(),
             "safety": _safety_payload(),
         },

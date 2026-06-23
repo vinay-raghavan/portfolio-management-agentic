@@ -43,6 +43,7 @@ from .tools import (
     run_momentum_screener,
     search_pattern_library,
     simulate_approved_paper_fill,
+    validate_data_provider_imports,
 )
 
 try:
@@ -81,6 +82,7 @@ def build_server():
     server.tool()(run_momentum_screener)
     server.tool()(list_data_providers)
     server.tool()(get_data_provider_health)
+    server.tool()(validate_data_provider_imports)
     server.tool()(get_market_data_snapshot)
     server.tool()(list_market_data_snapshots)
     server.tool()(get_universe_members)

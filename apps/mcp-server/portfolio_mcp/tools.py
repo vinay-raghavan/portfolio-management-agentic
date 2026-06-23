@@ -40,6 +40,7 @@ from portfolio_domain import (
     run_demo_momentum_screener,
     search_pattern_cards,
     simulate_fixture_approved_paper_fill,
+    validate_configured_provider_imports,
 )
 from portfolio_policy import ActionTier, authorize_tool_call, redact_sensitive
 
@@ -52,6 +53,7 @@ EXPOSED_TOOL_NAMES = {
     "run_momentum_screener",
     "list_data_providers",
     "get_data_provider_health",
+    "validate_data_provider_imports",
     "get_market_data_snapshot",
     "list_market_data_snapshots",
     "get_universe_members",
@@ -203,6 +205,35 @@ def get_data_provider_health() -> dict[str, Any]:
         "status": "success",
         "policy": decision.to_dict(),
         "health": [item.to_dict() for item in registry.health()],
+    }
+
+
+def validate_data_provider_imports() -> dict[str, Any]:
+    """Validate configured local provider JSON imports without exposing paths."""
+    tool_name = "validate_data_provider_imports"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    validations = [
+        validation.to_dict()
+        for validation in validate_configured_provider_imports()
+    ]
+    needs_attention = sum(
+        1
+        for validation in validations
+        if validation["status"] not in {"valid", "not_configured"}
+    )
+    configured = sum(1 for validation in validations if validation["configured"])
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "summary": {
+            "total": len(validations),
+            "configured": configured,
+            "valid": sum(1 for validation in validations if validation["status"] == "valid"),
+            "needs_attention": needs_attention,
+        },
+        "validations": validations,
     }
 
 

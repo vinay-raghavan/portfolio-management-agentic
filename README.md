@@ -11,13 +11,13 @@ This is a standalone repository boundary. Implementation should use documented A
 - MCP-style safe portfolio tools started in `apps/mcp-server` with streamable HTTP runtime support.
 - Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
 - Product data foundation adds fixture/configured universes, configured fundamentals, sentiment, volatility, macro/regime context, deterministic screener runs, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
-- Provider adapter contracts expose fixture defaults, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, provider catalog, health, market snapshot, and universe-member tools.
+- Provider adapter contracts expose fixture defaults, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, provider catalog, health, import validation, market snapshot, and universe-member tools.
 - Recommendation explanations join screener/factor evidence, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
 - Market-data persistence stores fixture/configured-provider market snapshots and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
-- Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings.
+- Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with configured-file validation feedback.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data snapshot and screener-run persistence is available through `MARKET_DATA_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
 - No copied portfolio data.
@@ -67,7 +67,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Add provider-settings import validation and UI feedback for configured JSON market, universe, fundamentals, sentiment, volatility, and macro files.
+2. Add provider configuration profiles and refresh/import workflows so validated local JSON sources can be refreshed into structured storage without committing provider data.
 
 ## Verification
 
@@ -162,6 +162,11 @@ metrics such as `market_regime_score`, `breadth_score`,
 Configured screeners remain read-only and paper-only; they rank candidates
 from configured market, fundamental, sentiment, volatility, and macro metrics
 and do not create trades.
+
+Use `validate_data_provider_imports` or the provider settings page to check
+configured JSON files before running screeners. Validation reports provider
+mode, missing environment keys, shape errors, and sample identifiers without
+returning local file paths or credential values.
 
 The optional Ollama service is profile-gated:
 

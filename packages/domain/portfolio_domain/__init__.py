@@ -34,6 +34,7 @@ from .models import (
     PreMarketBriefing,
     ProviderDescriptor,
     ProviderHealth,
+    ProviderImportValidation,
     RankedScreenerCandidate,
     RecommendationExplanation,
     ResearchDigest,
@@ -97,6 +98,7 @@ from .providers import (
     VolatilityProvider,
     build_data_provider_registry,
     get_data_provider_registry,
+    validate_configured_provider_imports,
 )
 from .product_data import (
     build_factor_stack_explanation,
@@ -135,6 +137,7 @@ __all__ = [
     "PreMarketBriefing",
     "ProviderDescriptor",
     "ProviderHealth",
+    "ProviderImportValidation",
     "RankedScreenerCandidate",
     "RecommendationExplanation",
     "ResearchDigest",
@@ -189,6 +192,7 @@ __all__ = [
     "get_demo_signal_summary",
     "get_demo_watchlist_snapshot",
     "get_data_provider_registry",
+    "validate_configured_provider_imports",
     "get_market_data_storage_status",
     "get_market_data_store",
     "list_fixture_approval_queue",

@@ -4,7 +4,7 @@ Thin React console for the agentic portfolio and paper-trading workbench.
 
 ## Scope
 
-- Shows the operator dashboard plus focused workflow pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings.
+- Shows the operator dashboard plus focused workflow pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with configured-file validation feedback.
 - Reads from `GET /console/overview` and `GET /console/workflows` on the agent service.
 - Calls only policy-controlled console workflow endpoints for paper strategy drafts, simulated backtest requests, paper order proposals, human approval, and simulated paper fills.
 - Falls back to deterministic fixture data when the API is unavailable, so local UI checks remain reproducible.

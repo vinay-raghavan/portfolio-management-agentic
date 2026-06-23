@@ -21,6 +21,7 @@ from portfolio_mcp.tools import (
     search_pattern_library,
     get_signal_summary,
     get_watchlist_snapshot,
+    validate_data_provider_imports,
 )
 
 
@@ -92,11 +93,14 @@ def test_product_data_pattern_foundation_tools_are_read_only() -> None:
 def test_provider_adapter_tools_are_read_only_and_fixture_backed() -> None:
     providers = list_data_providers()
     health = get_data_provider_health()
+    import_validation = validate_data_provider_imports()
     snapshot = get_market_data_snapshot("TATAMOTORS")
     universe = get_universe_members("fixture_nifty50")
 
     assert providers["policy"]["tier"] == "read_only"
     assert health["policy"]["tier"] == "read_only"
+    assert import_validation["policy"]["tier"] == "read_only"
+    assert import_validation["summary"]["total"] == 6
     assert snapshot["snapshot"]["source"] == "offline_fixture"
     assert universe["universe"]["provider_id"] == "fixture_universe"
 
