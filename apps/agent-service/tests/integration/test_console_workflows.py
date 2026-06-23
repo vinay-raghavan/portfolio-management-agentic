@@ -119,6 +119,39 @@ def test_console_workflows_track_provider_profiles_and_refresh_jobs_without_path
     assert "token" not in combined
 
 
+def test_console_workflows_expose_provider_source_setup_gaps_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(tmp_path / "provider-config.db"))
+    monkeypatch.setenv("PORTFOLIO_VOLATILITY_PROVIDER", "json_file")
+    client = TestClient(app)
+
+    response = client.get("/console/workflows", params={"preset": "momentum"})
+
+    assert response.status_code == 200
+    settings = response.json()["settings"]
+    profiles = {
+        profile["provider_id"]: profile
+        for profile in settings["provider_profiles"]["profiles"]
+    }
+    volatility = profiles["configured_volatility"]
+
+    assert volatility["provider_mode"] == "json_file"
+    assert volatility["required_env"] == [
+        "PORTFOLIO_VOLATILITY_PROVIDER",
+        "PORTFOLIO_VOLATILITY_JSON_PATH",
+    ]
+    assert volatility["missing_env"] == ["PORTFOLIO_VOLATILITY_JSON_PATH"]
+    assert volatility["source_label"] == "env:PORTFOLIO_VOLATILITY_JSON_PATH"
+
+    combined = f"{settings['provider_profiles']}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "provider-config.db" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
 def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
     client = TestClient(app)
 
