@@ -67,6 +67,20 @@ def test_web_console_exposes_provider_refresh_cycle_controls() -> None:
     assert "backoff" in source
 
 
+def test_web_console_exposes_configured_provider_source_management() -> None:
+    source = (WEB_ROOT / "src" / "App.tsx").read_text()
+
+    assert "ProviderSourceSetup" in source
+    assert "Source setup" in source
+    assert "Required env keys" in source
+    assert "Active mode" in source
+    assert "Setup gaps" in source
+    assert "required_env" in source
+    assert "missing_env" in source
+    assert "provider_mode" in source
+    assert "source_label" in source
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 

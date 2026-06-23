@@ -167,6 +167,87 @@ const fallbackOverview: JsonRecord = {
   },
 };
 
+const fallbackProviderProfiles: JsonRecord[] = [
+  {
+    profile_id: 'profile-configured-market-data',
+    provider_id: 'configured_market_data',
+    kind: 'market_data',
+    display_name: 'Configured Market Data',
+    configured: false,
+    provider_mode: 'fixture',
+    required_env: ['PORTFOLIO_MARKET_DATA_PROVIDER', 'PORTFOLIO_MARKET_DATA_JSON_PATH'],
+    missing_env: [],
+    path_env: 'PORTFOLIO_MARKET_DATA_JSON_PATH',
+    source_label: 'fixture_provider',
+    last_validation_status: 'not_configured',
+  },
+  {
+    profile_id: 'profile-configured-universe',
+    provider_id: 'configured_universe',
+    kind: 'universe',
+    display_name: 'Configured Universe',
+    configured: false,
+    provider_mode: 'fixture',
+    required_env: ['PORTFOLIO_UNIVERSE_PROVIDER', 'PORTFOLIO_UNIVERSE_JSON_PATH'],
+    missing_env: [],
+    path_env: 'PORTFOLIO_UNIVERSE_JSON_PATH',
+    source_label: 'fixture_provider',
+    last_validation_status: 'not_configured',
+  },
+  {
+    profile_id: 'profile-configured-fundamentals',
+    provider_id: 'configured_fundamentals',
+    kind: 'fundamentals',
+    display_name: 'Configured Fundamentals',
+    configured: false,
+    provider_mode: 'fixture',
+    required_env: ['PORTFOLIO_FUNDAMENTALS_PROVIDER', 'PORTFOLIO_FUNDAMENTALS_JSON_PATH'],
+    missing_env: [],
+    path_env: 'PORTFOLIO_FUNDAMENTALS_JSON_PATH',
+    source_label: 'fixture_provider',
+    last_validation_status: 'not_configured',
+  },
+  {
+    profile_id: 'profile-configured-sentiment',
+    provider_id: 'configured_sentiment',
+    kind: 'sentiment',
+    display_name: 'Configured Sentiment',
+    configured: false,
+    provider_mode: 'fixture',
+    required_env: ['PORTFOLIO_SENTIMENT_PROVIDER', 'PORTFOLIO_SENTIMENT_JSON_PATH'],
+    missing_env: [],
+    path_env: 'PORTFOLIO_SENTIMENT_JSON_PATH',
+    source_label: 'fixture_provider',
+    last_validation_status: 'not_configured',
+  },
+  {
+    profile_id: 'profile-configured-volatility',
+    provider_id: 'configured_volatility',
+    kind: 'volatility',
+    display_name: 'Configured Volatility',
+    configured: false,
+    provider_mode: 'fixture',
+    required_env: ['PORTFOLIO_VOLATILITY_PROVIDER', 'PORTFOLIO_VOLATILITY_JSON_PATH'],
+    missing_env: [],
+    path_env: 'PORTFOLIO_VOLATILITY_JSON_PATH',
+    source_label: 'fixture_provider',
+    last_validation_status: 'not_configured',
+  },
+  {
+    profile_id: 'profile-configured-macro',
+    provider_id: 'configured_macro',
+    kind: 'macro',
+    display_name: 'Configured Macro',
+    configured: false,
+    provider_mode: 'fixture',
+    required_env: ['PORTFOLIO_MACRO_PROVIDER', 'PORTFOLIO_MACRO_JSON_PATH'],
+    missing_env: [],
+    path_env: 'PORTFOLIO_MACRO_JSON_PATH',
+    source_label: 'fixture_provider',
+    last_validation_status: 'not_configured',
+  },
+];
+
 const fallbackWorkflows: JsonRecord = {
   mode: 'paper_only',
   safety: fallbackOverview.safety,
@@ -304,7 +385,7 @@ const fallbackWorkflows: JsonRecord = {
     provider_profiles: {
       status: 'success',
       summary: { total: 6, configured: 0, needs_attention: 0 },
-      profiles: [],
+      profiles: fallbackProviderProfiles,
     },
     provider_import_jobs: {
       status: 'success',
@@ -1177,6 +1258,15 @@ function App() {
               </div>
             </section>
 
+            <section className="panel wide-panel">
+              <PanelHeading
+                label="Source setup"
+                title="Configured source management"
+                icon={<Settings size={19} aria-hidden="true" />}
+              />
+              <ProviderSourceSetup profiles={providerProfiles} />
+            </section>
+
             <section className="panel">
               <PanelHeading
                 label="Provider profiles"
@@ -1332,6 +1422,99 @@ function ProviderHealth({ providers }: { providers: JsonRecord[] }) {
           </StatusPill>
         </div>
       ))}
+    </div>
+  );
+}
+
+function setupGapLabels(profile: JsonRecord) {
+  const missingEnv = profile.missing_env ?? [];
+  if (missingEnv.length) {
+    return missingEnv;
+  }
+  if (profile.last_validation_status === 'valid') {
+    return ['Ready'];
+  }
+  if (profile.last_validation_status === 'unsupported_provider') {
+    return ['Use fixture or json_file mode'];
+  }
+  if (profile.last_validation_status === 'not_configured') {
+    return ['Optional: configure env keys to enable'];
+  }
+  return [humanize(profile.last_validation_status ?? 'review_required')];
+}
+
+function ProviderSourceSetup({ profiles }: { profiles: JsonRecord[] }) {
+  if (!profiles.length) {
+    return <div className="empty-state">Fixture providers active</div>;
+  }
+  const configuredCount = profiles.filter((profile: JsonRecord) => profile.configured).length;
+  const gapCount = profiles.filter((profile: JsonRecord) => (profile.missing_env ?? []).length > 0).length;
+  const requiredKeyCount = profiles.reduce(
+    (total: number, profile: JsonRecord) => total + (profile.required_env?.length ?? 0),
+    0,
+  );
+  return (
+    <div className="source-setup-stack">
+      <div className="source-summary" aria-label="Configured provider source setup summary">
+        <div>
+          <span>Configured sources</span>
+          <strong>{configuredCount}</strong>
+        </div>
+        <div>
+          <span>Required env keys</span>
+          <strong>{requiredKeyCount}</strong>
+        </div>
+        <div>
+          <span>Setup gaps</span>
+          <strong>{gapCount}</strong>
+        </div>
+      </div>
+      <div className="source-list">
+        {profiles.slice(0, 6).map((profile: JsonRecord) => (
+          <div className="source-row" key={profile.profile_id ?? profile.provider_id}>
+            <div className="source-main">
+              <strong>{profile.display_name ?? profile.provider_id}</strong>
+              <span>{profile.provider_id}</span>
+              <small>{profile.source_label ?? 'fixture_provider'}</small>
+            </div>
+            <div className="source-fields">
+              <div>
+                <span>Active mode</span>
+                <StatusPill tone={profile.provider_mode === 'json_file' ? 'info' : 'neutral'}>
+                  {humanize(profile.provider_mode ?? 'fixture')}
+                </StatusPill>
+              </div>
+              <div>
+                <span>Required env keys</span>
+                <div className="env-chip-list">
+                  {(profile.required_env ?? []).map((envKey: string) => (
+                    <code key={`${profile.provider_id}-${envKey}`}>{envKey}</code>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span>Setup gaps</span>
+                <div className="setup-gap-list">
+                  {setupGapLabels(profile).map((gap: string) => (
+                    <StatusPill
+                      key={`${profile.provider_id}-${gap}`}
+                      tone={
+                        profile.missing_env?.includes(gap)
+                          ? 'warn'
+                          : profile.last_validation_status === 'valid'
+                            ? 'good'
+                            : 'neutral'
+                      }
+                    >
+                      {gap}
+                    </StatusPill>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
