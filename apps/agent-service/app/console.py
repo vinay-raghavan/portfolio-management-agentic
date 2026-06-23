@@ -35,8 +35,11 @@ from portfolio_mcp.tools import (  # noqa: E402
     list_paper_fills,
     list_paper_orders,
     list_paper_positions,
+    list_provider_import_jobs,
+    list_provider_profiles,
     list_strategy_drafts,
     list_universes,
+    refresh_provider_import_profile,
     run_screener,
     search_pattern_library,
     simulate_approved_paper_fill,
@@ -181,8 +184,8 @@ def build_console_workflows(
             _page(
                 "settings",
                 "Provider settings",
-                "validate_data_provider_imports",
-                "Review provider health and configured file validation without credential values.",
+                "list_provider_profiles",
+                "Review provider profiles, health, configured file validation, and import jobs without credential values.",
             ),
         ],
         "workflow_actions": _workflow_actions(),
@@ -243,6 +246,8 @@ def build_console_workflows(
             "providers": list_data_providers(),
             "health": get_data_provider_health(),
             "import_validation": validate_data_provider_imports(),
+            "provider_profiles": list_provider_profiles(),
+            "provider_import_jobs": list_provider_import_jobs(10),
             "risk": get_risk_review(),
             "safety": _safety_payload(),
         },
@@ -297,6 +302,11 @@ def simulate_console_paper_fill(
     fill_price: float | None = None,
 ) -> dict[str, Any]:
     action = simulate_approved_paper_fill(order_id, fill_price)
+    return {"action": action, "state": build_console_workflows()}
+
+
+def refresh_console_provider_profile(provider_id: str) -> dict[str, Any]:
+    action = refresh_provider_import_profile(provider_id)
     return {"action": action, "state": build_console_workflows()}
 
 

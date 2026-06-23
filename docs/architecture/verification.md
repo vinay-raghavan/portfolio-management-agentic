@@ -20,10 +20,11 @@ Current coverage:
 - Pre-market briefing contracts compose portfolio, watchlist, signal, research, and risk sections from synthetic data.
 - Product data and pattern contracts list fixture/configured universes, run hard-gated deterministic screeners, retrieve pattern cards, cite strategy evidence, and explain factor stacks.
 - Market-data persistence contracts store and reload fixture/configured-provider market snapshots and screener runs in their tool payload shape without exposing database paths or credentials.
+- Provider profile metadata contracts store configured-provider profile and import-refresh job summaries without exposing resolved local paths, file names, credentials, or raw provider payloads.
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with JSON-ready redacted audit exports and no file writes.
 - Model-backed eval preflight checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, and never print secret values.
-- Web console contracts verify the Vite/React app, safe product surfaces, Compose wiring, `/console/overview`, focused `/console/workflows` pages, provider import validation feedback, and the paper-only action lifecycle.
+- Web console contracts verify the Vite/React app, safe product surfaces, Compose wiring, `/console/overview`, focused `/console/workflows` pages, provider import validation feedback, provider profile/import-job settings, and the paper-only action lifecycle.
 - Provider adapter contracts expose fixture defaults, provider health, import validation, fixture market snapshots, configured read-only JSON market snapshots, configured read-only JSON universes, configured read-only JSON fundamentals, configured read-only JSON sentiment, configured read-only JSON volatility, configured read-only JSON macro context, and universe membership without credentials or network requirements.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
@@ -95,9 +96,11 @@ Default endpoints:
 - Web console: `http://localhost:3000`
 
 Compose config also validates the shared `paper-ledger-data` volume and
-`PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` plus
-`MARKET_DATA_DB_PATH=/data/market-data.db` defaults for durable local ledger and
-market-data state. It also passes `PORTFOLIO_MARKET_DATA_PROVIDER`,
+`PAPER_LEDGER_DB_PATH=/data/paper-ledger.db`,
+`MARKET_DATA_DB_PATH=/data/market-data.db`, and
+`PROVIDER_CONFIG_DB_PATH=/data/provider-config.db` defaults for durable local
+ledger, market-data, and provider-profile metadata state. It also passes
+`PORTFOLIO_MARKET_DATA_PROVIDER`,
 `PORTFOLIO_MARKET_DATA_JSON_PATH`, `PORTFOLIO_UNIVERSE_PROVIDER`,
 `PORTFOLIO_UNIVERSE_JSON_PATH`, `PORTFOLIO_FUNDAMENTALS_PROVIDER`,
 `PORTFOLIO_FUNDAMENTALS_JSON_PATH`, `PORTFOLIO_SENTIMENT_PROVIDER`,
@@ -106,7 +109,8 @@ market-data state. It also passes `PORTFOLIO_MARKET_DATA_PROVIDER`,
 `PORTFOLIO_MACRO_JSON_PATH` to the agent and MCP services so local JSON
 snapshot, universe, fundamentals, sentiment, volatility, and macro adapters
 can be enabled without committing provider data. Import validation checks
-those configured JSON files without returning local file paths.
+those configured JSON files without returning local file paths. Provider
+profile refresh jobs persist only metadata summaries and source env key names.
 
 The optional local LLM profile is disabled by default:
 

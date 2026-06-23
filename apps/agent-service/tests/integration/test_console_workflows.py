@@ -69,6 +69,56 @@ def test_console_workflows_expose_provider_import_validation_without_path_leaks(
     assert "token" not in combined
 
 
+def test_console_workflows_track_provider_profiles_and_refresh_jobs_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    market_path = tmp_path / "private-market-provider.json"
+    market_path.write_text("{bad")
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(tmp_path / "provider-config.db"))
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", str(market_path))
+    client = TestClient(app)
+
+    refresh_response = client.post(
+        "/console/workflows/provider-profiles/configured_market_data/refresh",
+    )
+    assert refresh_response.status_code == 200
+    refresh_payload = refresh_response.json()
+
+    assert refresh_payload["action"]["status"] == "needs_attention"
+    assert refresh_payload["action"]["policy"]["tier"] == "draft_only"
+    assert refresh_payload["action"]["job"]["validation_status"] == "error"
+    assert (
+        refresh_payload["state"]["settings"]["provider_import_jobs"]["import_jobs"][0][
+            "provider_id"
+        ]
+        == "configured_market_data"
+    )
+
+    workflow_response = client.get("/console/workflows", params={"preset": "momentum"})
+    assert workflow_response.status_code == 200
+    settings = workflow_response.json()["settings"]
+    profiles = {
+        profile["provider_id"]: profile
+        for profile in settings["provider_profiles"]["profiles"]
+    }
+
+    assert settings["provider_profiles"]["status"] == "success"
+    assert profiles["configured_market_data"]["last_validation_status"] == "error"
+    assert settings["provider_import_jobs"]["import_jobs"][0]["validation_status"] == "error"
+
+    combined = (
+        f"{refresh_payload['action']} "
+        f"{settings['provider_profiles']} "
+        f"{settings['provider_import_jobs']}"
+    ).lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-provider" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
 def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
     client = TestClient(app)
 

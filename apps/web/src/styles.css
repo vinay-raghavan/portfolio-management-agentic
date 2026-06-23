@@ -748,6 +748,10 @@ p {
 
 .segment-button,
 .command-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 34px;
   padding: 8px 10px;
   border: 1px solid var(--border);
@@ -786,6 +790,12 @@ p {
   border-color: var(--border);
   background: var(--surface-muted);
   cursor: not-allowed;
+}
+
+.compact-button {
+  min-height: 30px;
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 .workflow-summary {
@@ -868,6 +878,51 @@ p {
   min-height: 50px;
   padding: 10px 0;
   border-top: 1px solid var(--border);
+}
+
+.profile-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-height: 58px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.profile-row:first-child {
+  border-top: 0;
+}
+
+.profile-row div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-row strong,
+.profile-row span,
+.profile-row small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-row strong {
+  font-size: 13px;
+}
+
+.profile-row span,
+.profile-row small {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .validation-row:first-child {

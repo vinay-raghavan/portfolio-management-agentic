@@ -16,9 +16,10 @@ This is a standalone repository boundary. Implementation should use documented A
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
 - Market-data persistence stores fixture/configured-provider market snapshots and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
+- Provider configuration profiles and import-refresh jobs persist metadata-only validation summaries when `PROVIDER_CONFIG_DB_PATH` is configured. They store env key names, provider mode, validation status, counts, and sample identifiers, not resolved local file paths or raw provider payloads.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
-- Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with configured-file validation feedback.
-- SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data snapshot and screener-run persistence is available through `MARKET_DATA_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
+- Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with configured-file validation, provider profiles, and import-job feedback.
+- SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data snapshot and screener-run persistence is available through `MARKET_DATA_DB_PATH`; provider profile and import-job metadata persistence is available through `PROVIDER_CONFIG_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
 - No copied portfolio data.
 - No broker trading credentials.
@@ -67,7 +68,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Add provider configuration profiles and refresh/import workflows so validated local JSON sources can be refreshed into structured storage without committing provider data.
+2. Add provider refresh execution that copies validated configured JSON snapshots into structured market-data/screener-ready storage with job progress, retry state, and metadata-only audit events.
 
 ## Verification
 
@@ -117,10 +118,12 @@ The default services expose:
 - MCP server: `http://localhost:8081/mcp`
 - Web console: `http://localhost:3000`
 
-Both services use shared local databases when `PAPER_LEDGER_DB_PATH` and
-`MARKET_DATA_DB_PATH` are set. The Compose defaults are `/data/paper-ledger.db`
-and `/data/market-data.db` on the `paper-ledger-data` volume; the local
-`.env.example` defaults are `data/paper-ledger.db` and `data/market-data.db`.
+Both services use shared local databases when `PAPER_LEDGER_DB_PATH`,
+`MARKET_DATA_DB_PATH`, and `PROVIDER_CONFIG_DB_PATH` are set. The Compose
+defaults are `/data/paper-ledger.db`, `/data/market-data.db`, and
+`/data/provider-config.db` on the `paper-ledger-data` volume; the local
+`.env.example` defaults are `data/paper-ledger.db`, `data/market-data.db`, and
+`data/provider-config.db`.
 
 The default data-provider mode is offline-safe fixtures. To enable configured
 read-only market-data, universe, fundamentals, sentiment, volatility, and macro
@@ -167,6 +170,12 @@ Use `validate_data_provider_imports` or the provider settings page to check
 configured JSON files before running screeners. Validation reports provider
 mode, missing environment keys, shape errors, and sample identifiers without
 returning local file paths or credential values.
+
+Use `list_provider_profiles`, `refresh_provider_import_profile`, and
+`list_provider_import_jobs` to persist and review metadata-only provider
+profile readiness. Refresh jobs validate configured sources and store status,
+counts, sample identifiers, and env key names without storing raw provider
+payloads or resolved local paths.
 
 The optional Ollama service is profile-gated:
 

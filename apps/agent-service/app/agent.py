@@ -60,6 +60,8 @@ from portfolio_mcp.tools import (  # noqa: E402
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_provider_import_jobs,
+    list_provider_profiles,
     list_market_data_snapshots,
     list_backtest_requests,
     list_paper_fills,
@@ -72,6 +74,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     run_momentum_screener,
     search_pattern_library,
     simulate_approved_paper_fill,
+    refresh_provider_import_profile,
     validate_data_provider_imports,
 )
 
@@ -132,6 +135,7 @@ Core rules:
 - For pre-market briefing requests, use the pre-market briefing tool or collect portfolio, watchlist, signal, research, and risk context before answering.
 - Treat fixture data as offline-safe evidence, and clearly distinguish it from configured live data adapters.
 - Use provider catalog, health, and import-validation tools before claiming configured data is available.
+- Use provider profiles and import-job history to explain configured local data readiness without exposing file paths.
 - Use market snapshot and screener-run history tools when users ask what data has been cached or already screened.
 - Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
 - Use recommendation explanations to join screener, factor, strategy-history, backtest, risk, and paper-ledger evidence before proposing next steps.
@@ -155,6 +159,9 @@ Core rules:
         list_data_providers,
         get_data_provider_health,
         validate_data_provider_imports,
+        list_provider_profiles,
+        list_provider_import_jobs,
+        refresh_provider_import_profile,
         get_market_data_snapshot,
         list_market_data_snapshots,
         get_universe_members,

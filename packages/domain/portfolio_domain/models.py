@@ -129,6 +129,50 @@ class ProviderImportValidation:
 
 
 @dataclass(frozen=True)
+class ProviderConfigurationProfile:
+    profile_id: str
+    provider_id: str
+    kind: str
+    display_name: str
+    configured: bool
+    provider_mode: str
+    required_env: list[str]
+    path_env: str
+    source_label: str
+    last_validation_status: str
+    missing_env: list[str]
+    payload_count: int | None
+    sample_identifiers: list[str]
+    updated_at: str
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ProviderImportJob:
+    job_id: str
+    profile_id: str
+    provider_id: str
+    kind: str
+    status: str
+    trigger: str
+    provider_mode: str
+    source_label: str
+    validation_status: str
+    payload_count: int | None
+    sample_identifiers: list[str]
+    message: str
+    started_at: str
+    completed_at: str
+    notes: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class OHLCVBar:
     date: str
     open: float

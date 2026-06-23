@@ -19,3 +19,4 @@ Useful starting points:
 - Policy code: `packages/policy`
 - MCP tools: `apps/mcp-server`
 - ADK prototype: `apps/agent-service`
+- Provider metadata: `packages/domain/portfolio_domain/provider_profiles.py`

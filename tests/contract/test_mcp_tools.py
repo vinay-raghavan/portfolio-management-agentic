@@ -14,6 +14,8 @@ from portfolio_mcp.tools import (
     get_research_digest,
     get_universe_members,
     list_data_providers,
+    list_provider_import_jobs,
+    list_provider_profiles,
     list_universes,
     place_live_order,
     run_screener,
@@ -22,6 +24,7 @@ from portfolio_mcp.tools import (
     get_signal_summary,
     get_watchlist_snapshot,
     validate_data_provider_imports,
+    refresh_provider_import_profile,
 )
 
 
@@ -94,15 +97,42 @@ def test_provider_adapter_tools_are_read_only_and_fixture_backed() -> None:
     providers = list_data_providers()
     health = get_data_provider_health()
     import_validation = validate_data_provider_imports()
+    profiles = list_provider_profiles()
+    jobs = list_provider_import_jobs(5)
     snapshot = get_market_data_snapshot("TATAMOTORS")
     universe = get_universe_members("fixture_nifty50")
 
     assert providers["policy"]["tier"] == "read_only"
     assert health["policy"]["tier"] == "read_only"
     assert import_validation["policy"]["tier"] == "read_only"
+    assert profiles["policy"]["tier"] == "read_only"
+    assert jobs["policy"]["tier"] == "read_only"
     assert import_validation["summary"]["total"] == 6
     assert snapshot["snapshot"]["source"] == "offline_fixture"
     assert universe["universe"]["provider_id"] == "fixture_universe"
+
+
+def test_provider_import_refresh_is_draft_only_and_path_safe(monkeypatch, tmp_path) -> None:
+    metadata_db = tmp_path / "provider-config.db"
+    private_path = tmp_path / "private-provider-export.json"
+    private_path.write_text("{bad")
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(metadata_db))
+    monkeypatch.setenv("PORTFOLIO_MACRO_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MACRO_JSON_PATH", str(private_path))
+
+    result = refresh_provider_import_profile("configured_macro")
+    jobs = list_provider_import_jobs(5)
+
+    assert result["status"] == "needs_attention"
+    assert result["policy"]["tier"] == "draft_only"
+    assert result["job"]["validation_status"] == "error"
+    assert jobs["import_jobs"][0]["provider_id"] == "configured_macro"
+
+    combined = f"{result} {jobs}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-provider-export" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
 
 
 def test_forbidden_compatibility_traps_are_blocked_and_redacted() -> None:
