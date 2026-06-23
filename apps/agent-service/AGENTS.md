@@ -71,7 +71,7 @@ Ask the user: Option A (simple single-project) or Option B (full CI/CD pipeline 
 - **Code preservation**: Only modify code directly targeted by the user's request. Preserve all surrounding code, config values (e.g., `model`), comments, and formatting.
 - **NEVER change the model** unless explicitly asked.
 - **Trading boundary**: all tools must remain paper-only, offline-fixture-safe, or read-only unless the policy layer explicitly classifies otherwise.
-- **Provider metadata boundary**: provider profile refreshes may write only validation metadata and import-job summaries; never persist resolved local paths, raw provider payloads, broker tokens, or account data.
+- **Provider metadata boundary**: provider profile refreshes may write only sanitized validation metadata, import-job summaries, and normalized configured market snapshots; never persist resolved local paths, raw provider payloads, broker tokens, or account data.
 - **Model 404 errors**: Fix `GOOGLE_CLOUD_LOCATION` (e.g., `global` instead of `us-east1`), not the model name.
 - **ADK tool imports**: Import the tool instance, not the module: `from google.adk.tools.load_web_page import load_web_page`
 - **Run Python with `uv`**: `uv run python script.py`. Run `agents-cli install` first.

@@ -1,3 +1,6 @@
+import json
+
+from portfolio_domain.market_data_store import SQLiteMarketDataStore
 from portfolio_mcp.tools import (
     EXPOSED_TOOL_NAMES,
     assert_exposed_tools_are_safe,
@@ -58,7 +61,10 @@ def test_pre_market_briefing_workflow_uses_synthetic_read_only_sections() -> Non
     assert briefing["briefing"]["watchlist"]["items"]
     assert briefing["briefing"]["signal_summary"]["regime"] == "constructive"
     assert briefing["briefing"]["research_digest"]["notes"]
-    assert briefing["briefing"]["risk_review"]["safety_switches"]["live_trading"] == "disabled"
+    assert (
+        briefing["briefing"]["risk_review"]["safety_switches"]["live_trading"]
+        == "disabled"
+    )
     assert all(
         "order" not in action.lower()
         for action in briefing["briefing"]["suggested_review_actions"]
@@ -112,7 +118,9 @@ def test_provider_adapter_tools_are_read_only_and_fixture_backed() -> None:
     assert universe["universe"]["provider_id"] == "fixture_universe"
 
 
-def test_provider_import_refresh_is_draft_only_and_path_safe(monkeypatch, tmp_path) -> None:
+def test_provider_import_refresh_is_draft_only_and_path_safe(
+    monkeypatch, tmp_path
+) -> None:
     metadata_db = tmp_path / "provider-config.db"
     private_path = tmp_path / "private-provider-export.json"
     private_path.write_text("{bad")
@@ -131,6 +139,70 @@ def test_provider_import_refresh_is_draft_only_and_path_safe(monkeypatch, tmp_pa
     combined = f"{result} {jobs}".lower()
     assert str(tmp_path).lower() not in combined
     assert "private-provider-export" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
+def test_provider_import_refresh_imports_valid_market_data_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    metadata_db = tmp_path / "provider-config.db"
+    market_db = tmp_path / "market-data.db"
+    private_path = tmp_path / "private-market-provider.json"
+    private_path.write_text(
+        json.dumps(
+            {
+                "snapshots": [
+                    {
+                        "symbol": "DEMODATA",
+                        "source": str(private_path),
+                        "as_of": "2026-06-22",
+                        "bars": [
+                            {
+                                "date": "2026-06-22",
+                                "open": 101.0,
+                                "high": 104.0,
+                                "low": 99.0,
+                                "close": 103.0,
+                                "volume": 123000,
+                            }
+                        ],
+                        "metrics": {
+                            "atr_pct": 2.5,
+                            "median_turnover_cr": 8.1,
+                            "roc20_pct": 7.2,
+                            "rsi14": 59.4,
+                            "api_token": "should_not_persist",
+                        },
+                        "notes": ["private-market-provider token leak candidate"],
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(metadata_db))
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", str(market_db))
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", str(private_path))
+
+    result = refresh_provider_import_profile("configured_market_data")
+    stored = SQLiteMarketDataStore(market_db).get_market_snapshot(
+        "DEMODATA",
+        provider_id="configured_market_data",
+    )
+
+    assert result["status"] == "completed"
+    assert result["policy"]["tier"] == "draft_only"
+    assert result["job"]["progress_state"] == "imported"
+    assert result["job"]["imported_count"] == 1
+    assert result["job"]["target_store"] == "market_data_snapshots"
+    assert stored.provider_id == "configured_market_data"
+    assert stored.symbol == "DEMODATA"
+
+    combined = f"{result} {stored.to_dict()}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-provider" not in combined
     assert "api_key" not in combined
     assert "token" not in combined
 

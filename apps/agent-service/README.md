@@ -52,7 +52,7 @@ The agent exposes only policy-classified tools:
 
 - Pre-market briefing: portfolio summary, watchlist snapshot, signal summary, research digest, risk review, and composed briefing.
 - Screener and strategy drafting: synthetic momentum screener, fixture-backed deterministic screener, persisted paper strategy drafts, strategy history retrieval, and pending paper proposal.
-- Provider checks: read-only provider catalog, provider health, configured import validation, metadata-only provider profiles, provider import-job history, fixture market snapshots, and fixture universe members.
+- Provider checks: read-only provider catalog, provider health, configured import validation, sanitized provider profiles and import-job history, configured market snapshot imports, fixture market snapshots, and fixture universe members.
 - Market-data storage: fixture/provider snapshots and screener runs are cached in the same JSON shape returned by tools when `MARKET_DATA_DB_PATH` is configured.
 - Pattern, factor, and recommendation evidence: universe listing, pattern search, pattern playbook retrieval, strategy evidence citations, factor-stack explanations, and read-only recommendation explanations that join history, risk, and ledger context.
 - Backtest, ledger, and report review: persisted simulated backtest requests, backtest history retrieval, deterministic results, paper order proposals, approval-gated simulated fills, paper positions, paper accounting, approval queue, redacted audit events, and read-only paper-trading reports.
@@ -69,6 +69,9 @@ use SQLite-backed state. The repository Compose file mounts
 When `PROVIDER_CONFIG_DB_PATH` is configured, provider profile and import-job
 tools use SQLite-backed metadata state. The repository Compose file mounts
 `/data/provider-config.db` on the same named volume for local container runs.
+Configured market-data refreshes can import normalized snapshots into the
+market-data store while keeping job records free of resolved paths and raw
+provider payloads.
 
 ## Commands
 

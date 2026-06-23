@@ -9,15 +9,31 @@ from pathlib import Path
 from typing import Any
 
 from .models import (
+    MarketDataSnapshot,
     ProviderConfigurationProfile,
     ProviderImportJob,
     ProviderImportValidation,
 )
-from .providers import validate_configured_provider_imports
+from .market_data_store import build_market_data_store
+from .providers import (
+    CONFIGURED_JSON_SOURCE,
+    list_configured_market_data_snapshots,
+    validate_configured_provider_imports,
+)
 
 PROVIDER_CONFIG_DB_ENV = "PROVIDER_CONFIG_DB_PATH"
 PROFILE_UPDATED_AT = "2026-06-22T09:20:00+05:30"
 JOB_TIMESTAMP = "2026-06-22T09:21:00+05:30"
+SENSITIVE_METRIC_KEY_PARTS = (
+    "api_key",
+    "apikey",
+    "access_key",
+    "credential",
+    "password",
+    "private_key",
+    "secret",
+    "token",
+)
 
 
 def _to_json(value: Any) -> str:
@@ -86,10 +102,157 @@ def _job_status(validation_status: str) -> str:
     return "needs_attention"
 
 
+def _contains_sensitive_key(value: str) -> bool:
+    normalized = value.lower().replace("-", "_")
+    return any(part in normalized for part in SENSITIVE_METRIC_KEY_PARTS)
+
+
+def _safe_metrics(
+    metrics: Mapping[str, float | int | str],
+) -> dict[str, float | int | str]:
+    return {
+        str(key): value
+        for key, value in metrics.items()
+        if not _contains_sensitive_key(str(key))
+    }
+
+
+def _safe_market_snapshot(snapshot: MarketDataSnapshot) -> MarketDataSnapshot:
+    return MarketDataSnapshot(
+        provider_id=snapshot.provider_id,
+        source=CONFIGURED_JSON_SOURCE,
+        symbol=snapshot.symbol,
+        as_of=snapshot.as_of,
+        bars=snapshot.bars,
+        latest_close=snapshot.latest_close,
+        metrics=_safe_metrics(snapshot.metrics),
+        notes=[
+            "Configured market data snapshot imported through provider refresh.",
+            "Resolved source paths and raw provider payload details were not persisted.",
+        ],
+    )
+
+
+def _safe_execution_error(exc: Exception) -> str:
+    if isinstance(exc, KeyError):
+        return "Configured provider payload is missing a required field."
+    if isinstance(exc, OSError):
+        return "Configured provider file is not readable."
+    message = str(exc).strip()
+    if not message:
+        return "Configured provider import failed."
+    return message
+
+
+def _execution_result(
+    validation: ProviderImportValidation,
+    env: Mapping[str, str] | None,
+    attempt: int,
+) -> dict[str, Any]:
+    base_event: dict[str, Any] = {
+        "provider_id": validation.provider_id,
+        "kind": validation.kind,
+        "provider_mode": validation.provider_mode,
+        "validation_status": validation.status,
+        "attempt": attempt,
+    }
+    if validation.status == "not_configured":
+        return {
+            "status": "skipped",
+            "progress_state": "skipped",
+            "imported_count": 0,
+            "skipped_count": 0,
+            "target_store": "none",
+            "message": validation.message,
+            "audit_event": {
+                **base_event,
+                "event_type": "provider_import_skipped",
+                "imported_count": 0,
+                "skipped_count": 0,
+                "target_store": "none",
+            },
+        }
+    if validation.status != "valid":
+        return {
+            "status": "needs_attention",
+            "progress_state": "validation_failed",
+            "imported_count": 0,
+            "skipped_count": validation.payload_count or 0,
+            "target_store": "none",
+            "message": validation.message,
+            "audit_event": {
+                **base_event,
+                "event_type": "provider_import_validation_failed",
+                "imported_count": 0,
+                "skipped_count": validation.payload_count or 0,
+                "target_store": "none",
+            },
+        }
+    if validation.kind != "market_data":
+        return {
+            "status": "completed",
+            "progress_state": "validated_metadata_only",
+            "imported_count": 0,
+            "skipped_count": validation.payload_count or 0,
+            "target_store": "metadata_only",
+            "message": validation.message,
+            "audit_event": {
+                **base_event,
+                "event_type": "provider_import_validated",
+                "imported_count": 0,
+                "skipped_count": validation.payload_count or 0,
+                "target_store": "metadata_only",
+            },
+        }
+
+    try:
+        snapshots = [
+            _safe_market_snapshot(snapshot)
+            for snapshot in list_configured_market_data_snapshots(env=env)
+        ]
+        market_store = build_market_data_store(env=env)
+        for snapshot in snapshots:
+            market_store.record_market_snapshot(snapshot)
+    except (KeyError, OSError, TypeError, ValueError) as exc:
+        message = _safe_execution_error(exc)
+        return {
+            "status": "needs_attention",
+            "progress_state": "import_failed",
+            "imported_count": 0,
+            "skipped_count": validation.payload_count or 0,
+            "target_store": "market_data_snapshots",
+            "message": message,
+            "audit_event": {
+                **base_event,
+                "event_type": "provider_import_failed",
+                "imported_count": 0,
+                "skipped_count": validation.payload_count or 0,
+                "target_store": "market_data_snapshots",
+            },
+        }
+
+    return {
+        "status": "completed",
+        "progress_state": "imported",
+        "imported_count": len(snapshots),
+        "skipped_count": 0,
+        "target_store": "market_data_snapshots",
+        "message": validation.message,
+        "audit_event": {
+            **base_event,
+            "event_type": "provider_import_executed",
+            "imported_count": len(snapshots),
+            "skipped_count": 0,
+            "target_store": "market_data_snapshots",
+        },
+    }
+
+
 def _job_from_validation(
     validation: ProviderImportValidation,
     trigger: str,
     sequence: int,
+    execution: Mapping[str, Any],
 ) -> ProviderImportJob:
     profile_id = _profile_id(validation.provider_id)
     return ProviderImportJob(
@@ -97,18 +260,24 @@ def _job_from_validation(
         profile_id=profile_id,
         provider_id=validation.provider_id,
         kind=validation.kind,
-        status=_job_status(validation.status),
+        status=str(execution.get("status") or _job_status(validation.status)),
         trigger=trigger.strip() or "manual",
         provider_mode=validation.provider_mode,
         source_label=_source_label(validation),
         validation_status=validation.status,
         payload_count=validation.payload_count,
         sample_identifiers=validation.sample_identifiers or [],
-        message=validation.message,
+        message=str(execution.get("message") or validation.message),
         started_at=JOB_TIMESTAMP,
         completed_at=JOB_TIMESTAMP,
+        progress_state=str(execution.get("progress_state") or "metadata_only"),
+        attempts=sequence,
+        imported_count=int(execution.get("imported_count") or 0),
+        skipped_count=int(execution.get("skipped_count") or 0),
+        target_store=str(execution.get("target_store") or "metadata_only"),
+        audit_event=dict(execution.get("audit_event") or {}),
         notes=[
-            "Metadata-only provider import refresh.",
+            "Provider import refresh records sanitized execution metadata.",
             "No raw provider payload, account data, credential, or resolved path is stored.",
         ],
     )
@@ -128,7 +297,9 @@ def _profile_from_dict(payload: Mapping[str, Any]) -> ProviderConfigurationProfi
         last_validation_status=str(payload["last_validation_status"]),
         missing_env=[str(item) for item in payload["missing_env"]],
         payload_count=(
-            None if payload.get("payload_count") is None else int(payload["payload_count"])
+            None
+            if payload.get("payload_count") is None
+            else int(payload["payload_count"])
         ),
         sample_identifiers=[str(item) for item in payload["sample_identifiers"]],
         updated_at=str(payload["updated_at"]),
@@ -148,12 +319,20 @@ def _job_from_dict(payload: Mapping[str, Any]) -> ProviderImportJob:
         source_label=str(payload["source_label"]),
         validation_status=str(payload["validation_status"]),
         payload_count=(
-            None if payload.get("payload_count") is None else int(payload["payload_count"])
+            None
+            if payload.get("payload_count") is None
+            else int(payload["payload_count"])
         ),
         sample_identifiers=[str(item) for item in payload["sample_identifiers"]],
         message=str(payload["message"]),
         started_at=str(payload["started_at"]),
         completed_at=str(payload["completed_at"]),
+        progress_state=str(payload.get("progress_state") or payload["status"]),
+        attempts=int(payload.get("attempts") or 1),
+        imported_count=int(payload.get("imported_count") or 0),
+        skipped_count=int(payload.get("skipped_count") or 0),
+        target_store=str(payload.get("target_store") or "metadata_only"),
+        audit_event=dict(payload.get("audit_event") or {}),
         notes=[str(item) for item in payload["notes"]],
     )
 
@@ -391,7 +570,10 @@ def refresh_provider_import_profile_metadata(
         + 1
     )
     store.upsert_profile(_profile_from_validation(validation))
-    return store.record_import_job(_job_from_validation(validation, trigger, sequence))
+    execution = _execution_result(validation, env=env, attempt=sequence)
+    return store.record_import_job(
+        _job_from_validation(validation, trigger, sequence, execution)
+    )
 
 
 def list_provider_import_jobs(

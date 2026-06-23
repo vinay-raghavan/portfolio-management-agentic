@@ -83,7 +83,7 @@ Use a layered approach:
 
 ## Implementation Status
 
-Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured import validation with provider-settings UI feedback, metadata-only provider profiles and import-refresh job history, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured import validation with provider-settings UI feedback, sanitized provider profiles and import-refresh job history, configured market snapshot refresh execution into the structured market-data store, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
 
 The implementation sequence for this foundation was:
 
@@ -101,7 +101,8 @@ The implementation sequence for this foundation was:
 12. Add configured JSON sentiment and volatility adapters that replace missing-data disclosures with sentiment and volatility evidence when configured.
 13. Add a configured JSON macro/regime adapter that contributes macro evidence to configured screener scoring and sources the market-regime explanation from provider data when configured.
 14. Add provider-settings import validation and UI feedback that reports valid, missing, unsupported, or malformed configured JSON files without leaking local paths or credential-like values.
-15. Add metadata-only provider configuration profiles and import-refresh job history so configured local sources can be validated and tracked without committing provider data, paths, or payloads.
+15. Add sanitized provider configuration profiles and import-refresh job history so configured local sources can be validated and tracked without committing provider data, paths, or payloads.
+16. Add configured market-data refresh execution that imports normalized snapshots into the structured market-data store while keeping job records sanitized.
 
 ## Acceptance Criteria
 
@@ -109,12 +110,17 @@ The implementation sequence for this foundation was:
 - The screener can run against offline-safe fixtures or configured local JSON market/universe/fundamentals/sentiment/volatility/macro inputs and return ranked candidates with filter-level reasons.
 - Candidate explanations include technical, fundamental, sentiment, volatility, macro, market-regime, portfolio-fit, and pattern evidence sections when data exists.
 - Provider settings expose read-only import validation for configured JSON sources without returning local paths, file names, or provider secrets.
-- Provider settings expose metadata-only profile readiness and refresh-job history without returning local paths, file names, raw provider payloads, or provider secrets.
+- Provider settings expose profile readiness and refresh-job history without returning local paths, file names, raw provider payloads, or provider secrets.
+- Configured market-data refreshes import normalized snapshots into `market_data_snapshots` and record sanitized progress, import counts, retry attempts, and audit metadata.
 - Public citations are present for pattern and factor definitions.
 - Missing data is visible in outputs and lowers confidence where appropriate.
 - RAG tools are read-only and cannot create, authorize, or execute paper or live trades.
 - Paper proposals remain draft or pending until an explicit approval workflow is implemented and tested.
 - No tracked file contains local absolute paths, private source imports, broker tokens, real account data, or live-trading affordances.
+
+## Remaining Implementation Plan
+
+Next, extend refresh execution beyond market snapshots in small provider-specific slices: configured universe membership, fundamentals, sentiment, volatility, and macro imports should write to typed structured stores with the same sanitized job progress contract. After that, add scheduled refresh orchestration with retry/backoff, stale-data detection, and UI controls that show readiness without exposing local source paths.
 
 ## BDD Scenarios
 

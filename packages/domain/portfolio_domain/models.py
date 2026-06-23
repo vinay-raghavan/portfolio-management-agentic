@@ -166,6 +166,12 @@ class ProviderImportJob:
     message: str
     started_at: str
     completed_at: str
+    progress_state: str
+    attempts: int
+    imported_count: int
+    skipped_count: int
+    target_store: str
+    audit_event: dict[str, Any]
     notes: list[str]
 
     def to_dict(self) -> dict[str, Any]:
