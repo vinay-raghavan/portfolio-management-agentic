@@ -23,6 +23,7 @@ from .tools import (
     get_pattern_playbook,
     get_paper_portfolio_accounting,
     get_portfolio_summary,
+    get_provider_refresh_readiness,
     get_recommendation_explanation,
     get_research_digest,
     get_risk_review,
@@ -46,6 +47,7 @@ from .tools import (
     search_pattern_library,
     simulate_approved_paper_fill,
     refresh_provider_import_profile,
+    run_provider_refresh_schedule,
     validate_data_provider_imports,
 )
 
@@ -88,7 +90,9 @@ def build_server():
     server.tool()(validate_data_provider_imports)
     server.tool()(list_provider_profiles)
     server.tool()(list_provider_import_jobs)
+    server.tool()(get_provider_refresh_readiness)
     server.tool()(refresh_provider_import_profile)
+    server.tool()(run_provider_refresh_schedule)
     server.tool()(get_market_data_snapshot)
     server.tool()(list_market_data_snapshots)
     server.tool()(get_universe_members)

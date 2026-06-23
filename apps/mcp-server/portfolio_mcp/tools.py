@@ -25,6 +25,7 @@ from portfolio_domain import (
     get_demo_signal_summary,
     get_demo_watchlist_snapshot,
     get_provider_profile_storage_status,
+    list_provider_refresh_readiness as list_domain_provider_refresh_readiness,
     list_fixture_approval_queue,
     list_fixture_audit_events,
     list_fixture_backtest_requests,
@@ -44,6 +45,7 @@ from portfolio_domain import (
     search_pattern_cards,
     simulate_fixture_approved_paper_fill,
     refresh_provider_import_profile_metadata,
+    run_provider_refresh_schedule as run_domain_provider_refresh_schedule,
     validate_configured_provider_imports,
 )
 from portfolio_policy import ActionTier, authorize_tool_call, redact_sensitive
@@ -60,7 +62,9 @@ EXPOSED_TOOL_NAMES = {
     "validate_data_provider_imports",
     "list_provider_profiles",
     "list_provider_import_jobs",
+    "get_provider_refresh_readiness",
     "refresh_provider_import_profile",
+    "run_provider_refresh_schedule",
     "get_market_data_snapshot",
     "list_market_data_snapshots",
     "get_universe_members",
@@ -294,6 +298,41 @@ def list_provider_import_jobs(limit: int = 20) -> dict[str, Any]:
     }
 
 
+def get_provider_refresh_readiness(
+    stale_after_seconds: int = 86_400,
+) -> dict[str, Any]:
+    """Return provider refresh readiness, stale state, and retry backoff."""
+    tool_name = "get_provider_refresh_readiness"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    bounded_stale_after = max(0, min(stale_after_seconds, 2_592_000))
+    readiness = list_domain_provider_refresh_readiness(
+        stale_after_seconds=bounded_stale_after,
+    )
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "storage": get_provider_profile_storage_status(),
+        "summary": {
+            "total": len(readiness),
+            "ready": sum(
+                1 for item in readiness if item["readiness_status"] == "ready"
+            ),
+            "stale": sum(
+                1 for item in readiness if item["readiness_status"] == "stale"
+            ),
+            "needs_attention": sum(
+                1
+                for item in readiness
+                if item["readiness_status"]
+                in {"needs_attention", "backoff", "retry_due"}
+            ),
+        },
+        "readiness": readiness,
+    }
+
+
 def refresh_provider_import_profile(provider_id: str) -> dict[str, Any]:
     """Validate one configured provider and persist sanitized refresh status."""
     tool_name = "refresh_provider_import_profile"
@@ -314,6 +353,29 @@ def refresh_provider_import_profile(provider_id: str) -> dict[str, Any]:
         "job": job.to_dict(),
         "next_step": "review_provider_import_job"
         if job.status != "completed"
+        else "ready",
+    }
+
+
+def run_provider_refresh_schedule(
+    stale_after_seconds: int = 86_400,
+) -> dict[str, Any]:
+    """Run a bounded scheduled refresh cycle for configured providers."""
+    tool_name = "run_provider_refresh_schedule"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    bounded_stale_after = max(0, min(stale_after_seconds, 2_592_000))
+    result = run_domain_provider_refresh_schedule(
+        stale_after_seconds=bounded_stale_after,
+    )
+    return {
+        "status": result["status"],
+        "policy": decision.to_dict(),
+        "storage": get_provider_profile_storage_status(),
+        "schedule": result,
+        "next_step": "review_provider_refresh_readiness"
+        if result["status"] != "completed"
         else "ready",
     }
 

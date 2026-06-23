@@ -5,6 +5,8 @@ import os
 import re
 import sqlite3
 from collections.abc import Mapping
+from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +37,10 @@ from .providers import (
 PROVIDER_CONFIG_DB_ENV = "PROVIDER_CONFIG_DB_PATH"
 PROFILE_UPDATED_AT = "2026-06-22T09:20:00+05:30"
 JOB_TIMESTAMP = "2026-06-22T09:21:00+05:30"
+REFRESH_ORCHESTRATION_TIMESTAMP = "2026-06-22T09:30:00+05:30"
+DEFAULT_STALE_AFTER_SECONDS = 86_400
+BASE_RETRY_AFTER_SECONDS = 900
+MAX_RETRY_AFTER_SECONDS = 21_600
 SENSITIVE_METRIC_KEY_PARTS = (
     "api_key",
     "apikey",
@@ -459,6 +465,127 @@ def _job_from_dict(payload: Mapping[str, Any]) -> ProviderImportJob:
     )
 
 
+def _parse_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value)
+
+
+def _format_timestamp(value: datetime) -> str:
+    return value.isoformat(timespec="seconds")
+
+
+def _retry_after_seconds(attempts: int) -> int:
+    attempt_count = max(1, attempts)
+    retry_after = BASE_RETRY_AFTER_SECONDS * (2 ** (attempt_count - 1))
+    return min(retry_after, MAX_RETRY_AFTER_SECONDS)
+
+
+def _latest_jobs_by_provider(
+    jobs: list[ProviderImportJob],
+) -> dict[str, ProviderImportJob]:
+    latest: dict[str, ProviderImportJob] = {}
+    for job in jobs:
+        if job.provider_id not in latest:
+            latest[job.provider_id] = job
+    return latest
+
+
+def _readiness_from_validation(
+    validation: ProviderImportValidation,
+    latest_job: ProviderImportJob | None,
+    current_at: str,
+    stale_after_seconds: int,
+) -> dict[str, Any]:
+    current_timestamp = _parse_timestamp(current_at)
+    base = {
+        "provider_id": validation.provider_id,
+        "kind": validation.kind,
+        "provider_mode": validation.provider_mode,
+        "validation_status": validation.status,
+        "configured": validation.configured,
+        "source_label": _source_label(validation),
+        "payload_count": validation.payload_count,
+        "sample_identifiers": validation.sample_identifiers or [],
+        "stale_after_seconds": max(0, stale_after_seconds),
+        "latest_job_id": "",
+        "latest_status": "none",
+        "last_completed_at": "",
+        "attempts": 0,
+        "retry_after_seconds": 0,
+        "next_attempt_at": "",
+        "needs_refresh": False,
+        "message": validation.message,
+    }
+    if validation.status == "not_configured":
+        return {
+            **base,
+            "readiness_status": "not_configured",
+        }
+    if latest_job is None:
+        readiness_status = (
+            "pending_refresh" if validation.status == "valid" else "needs_attention"
+        )
+        return {
+            **base,
+            "readiness_status": readiness_status,
+            "needs_refresh": True,
+        }
+
+    latest = {
+        **base,
+        "latest_job_id": latest_job.job_id,
+        "latest_status": latest_job.status,
+        "last_completed_at": latest_job.completed_at,
+        "attempts": latest_job.attempts,
+        "message": latest_job.message,
+    }
+    if latest_job.status == "completed":
+        age_seconds = (
+            current_timestamp - _parse_timestamp(latest_job.completed_at)
+        ).total_seconds()
+        stale = age_seconds > max(0, stale_after_seconds)
+        return {
+            **latest,
+            "readiness_status": "stale" if stale else "ready",
+            "needs_refresh": stale,
+        }
+    if latest_job.status == "skipped":
+        return {
+            **latest,
+            "readiness_status": "not_configured",
+        }
+
+    retry_after = _retry_after_seconds(latest_job.attempts)
+    next_attempt = _parse_timestamp(latest_job.completed_at) + timedelta(
+        seconds=retry_after
+    )
+    retry_due = current_timestamp >= next_attempt
+    return {
+        **latest,
+        "readiness_status": "retry_due" if retry_due else "backoff",
+        "retry_after_seconds": retry_after,
+        "next_attempt_at": _format_timestamp(next_attempt),
+        "needs_refresh": retry_due,
+    }
+
+
+def _readiness_from_validations(
+    validations: list[ProviderImportValidation],
+    jobs: list[ProviderImportJob],
+    current_at: str,
+    stale_after_seconds: int,
+) -> list[dict[str, Any]]:
+    latest_jobs = _latest_jobs_by_provider(jobs)
+    return [
+        _readiness_from_validation(
+            validation,
+            latest_jobs.get(validation.provider_id),
+            current_at=current_at,
+            stale_after_seconds=stale_after_seconds,
+        )
+        for validation in validations
+    ]
+
+
 class ProviderProfileStore:
     """In-memory provider profile store for unconfigured local runs."""
 
@@ -703,3 +830,73 @@ def list_provider_import_jobs(
     limit: int = 20,
 ) -> list[ProviderImportJob]:
     return build_provider_profile_store(env=env).list_import_jobs(limit=limit)
+
+
+def list_provider_refresh_readiness(
+    env: Mapping[str, str] | None = None,
+    current_at: str = REFRESH_ORCHESTRATION_TIMESTAMP,
+    stale_after_seconds: int = DEFAULT_STALE_AFTER_SECONDS,
+) -> list[dict[str, Any]]:
+    store = build_provider_profile_store(env=env)
+    return _readiness_from_validations(
+        validate_configured_provider_imports(env=env),
+        store.list_import_jobs(limit=1000),
+        current_at=current_at,
+        stale_after_seconds=stale_after_seconds,
+    )
+
+
+def run_provider_refresh_schedule(
+    env: Mapping[str, str] | None = None,
+    trigger: str = "scheduled",
+    current_at: str = REFRESH_ORCHESTRATION_TIMESTAMP,
+    stale_after_seconds: int = DEFAULT_STALE_AFTER_SECONDS,
+) -> dict[str, Any]:
+    validations = validate_configured_provider_imports(env=env)
+    jobs: list[ProviderImportJob] = []
+    normalized_trigger = trigger.strip() or "scheduled"
+    for validation in validations:
+        if validation.status == "not_configured":
+            continue
+        jobs.append(
+            refresh_provider_import_profile_metadata(
+                validation.provider_id,
+                env=env,
+                trigger=normalized_trigger,
+            )
+        )
+
+    readiness = _readiness_from_validations(
+        validations,
+        jobs,
+        current_at=current_at,
+        stale_after_seconds=stale_after_seconds,
+    )
+    summary = {
+        "providers_evaluated": len(validations),
+        "jobs_recorded": len(jobs),
+        "completed": sum(1 for job in jobs if job.status == "completed"),
+        "needs_attention": sum(1 for job in jobs if job.status == "needs_attention"),
+        "skipped": sum(1 for job in jobs if job.status == "skipped"),
+        "ready": sum(1 for item in readiness if item["readiness_status"] == "ready"),
+        "stale": sum(1 for item in readiness if item["readiness_status"] == "stale"),
+        "backoff": sum(
+            1 for item in readiness if item["readiness_status"] == "backoff"
+        ),
+        "retry_due": sum(
+            1 for item in readiness if item["readiness_status"] == "retry_due"
+        ),
+        "not_configured": sum(
+            1 for item in readiness if item["readiness_status"] == "not_configured"
+        ),
+    }
+    return {
+        "status": "needs_attention" if summary["needs_attention"] > 0 else "completed",
+        "run_id": "provider-refresh-scheduled-20260622-093000",
+        "trigger": normalized_trigger,
+        "current_at": current_at,
+        "stale_after_seconds": max(0, stale_after_seconds),
+        "summary": summary,
+        "jobs": [job.to_dict() for job in jobs],
+        "readiness": readiness,
+    }

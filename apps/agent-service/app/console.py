@@ -28,6 +28,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     get_backtest_result,
     get_data_provider_health,
     get_paper_portfolio_accounting,
+    get_provider_refresh_readiness,
     get_recommendation_explanation,
     get_risk_review,
     list_backtest_requests,
@@ -40,6 +41,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     list_strategy_drafts,
     list_universes,
     refresh_provider_import_profile,
+    run_provider_refresh_schedule,
     run_screener,
     search_pattern_library,
     simulate_approved_paper_fill,
@@ -248,6 +250,11 @@ def build_console_workflows(
             "import_validation": validate_data_provider_imports(),
             "provider_profiles": list_provider_profiles(),
             "provider_import_jobs": list_provider_import_jobs(10),
+            "provider_refresh_readiness": get_provider_refresh_readiness(),
+            "provider_refresh_actions": {
+                "run_schedule": _action_policy("run_provider_refresh_schedule"),
+                "read_readiness": _action_policy("get_provider_refresh_readiness"),
+            },
             "risk": get_risk_review(),
             "safety": _safety_payload(),
         },
@@ -266,7 +273,10 @@ def create_console_backtest(
     end_date: str,
 ) -> dict[str, Any]:
     action = create_backtest_request(symbol, setup, start_date, end_date)
-    return {"action": action, "state": build_console_workflows(preset=DEFAULT_SCREENER_PRESET)}
+    return {
+        "action": action,
+        "state": build_console_workflows(preset=DEFAULT_SCREENER_PRESET),
+    }
 
 
 def create_console_paper_order(
@@ -307,6 +317,11 @@ def simulate_console_paper_fill(
 
 def refresh_console_provider_profile(provider_id: str) -> dict[str, Any]:
     action = refresh_provider_import_profile(provider_id)
+    return {"action": action, "state": build_console_workflows()}
+
+
+def run_console_provider_refresh_schedule() -> dict[str, Any]:
+    action = run_provider_refresh_schedule()
     return {"action": action, "state": build_console_workflows()}
 
 

@@ -15,6 +15,7 @@ from portfolio_mcp.tools import (
     get_pattern_playbook,
     get_broker_trading_token,
     get_portfolio_summary,
+    get_provider_refresh_readiness,
     get_research_digest,
     get_universe_members,
     list_data_providers,
@@ -29,6 +30,7 @@ from portfolio_mcp.tools import (
     get_watchlist_snapshot,
     validate_data_provider_imports,
     refresh_provider_import_profile,
+    run_provider_refresh_schedule,
 )
 
 
@@ -257,6 +259,56 @@ def test_provider_import_refresh_imports_valid_macro_context_without_path_leaks(
     combined = f"{result} {stored.to_dict()}".lower()
     assert str(tmp_path).lower() not in combined
     assert "private-macro-provider" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "private_key" not in combined
+
+
+def test_provider_refresh_schedule_tool_reports_readiness_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    metadata_db = tmp_path / "provider-config.db"
+    market_db = tmp_path / "market-data.db"
+    private_path = tmp_path / "private-schedule-macro.json"
+    private_path.write_text(
+        json.dumps(
+            {
+                "macro": [
+                    {
+                        "symbol": "DEMODATA",
+                        "source": str(private_path),
+                        "as_of": "2026-06-22",
+                        "metrics": {
+                            "market_regime_score": 0.72,
+                            "private_key_hint": "should_not_persist",
+                        },
+                        "notes": ["private-schedule-macro token leak candidate"],
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(metadata_db))
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", str(market_db))
+    monkeypatch.setenv("PORTFOLIO_MACRO_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MACRO_JSON_PATH", str(private_path))
+
+    before = get_provider_refresh_readiness()
+    result = run_provider_refresh_schedule()
+    after = get_provider_refresh_readiness()
+
+    assert before["policy"]["tier"] == "read_only"
+    assert result["policy"]["tier"] == "draft_only"
+    assert result["status"] == "completed"
+    assert result["schedule"]["summary"]["jobs_recorded"] == 1
+    assert result["schedule"]["readiness"][-1]["provider_id"] == "configured_macro"
+    assert result["schedule"]["readiness"][-1]["readiness_status"] == "ready"
+    assert after["summary"]["ready"] == 1
+
+    combined = f"{before} {result} {after}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-schedule-macro" not in combined
     assert "api_key" not in combined
     assert "token" not in combined
     assert "private_key" not in combined
