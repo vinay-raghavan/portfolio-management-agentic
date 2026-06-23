@@ -32,6 +32,8 @@ from .tools import (  # noqa: E402
     get_watchlist_snapshot,
     get_universe_members,
     list_data_providers,
+    list_provider_import_jobs,
+    list_provider_profiles,
     list_market_data_snapshots,
     list_backtest_requests,
     list_paper_fills,
@@ -45,6 +47,7 @@ from .tools import (  # noqa: E402
     run_momentum_screener,
     search_pattern_library,
     simulate_approved_paper_fill,
+    refresh_provider_import_profile,
     validate_data_provider_imports,
 )
 
@@ -78,6 +81,8 @@ __all__ = [
     "get_watchlist_snapshot",
     "get_universe_members",
     "list_data_providers",
+    "list_provider_import_jobs",
+    "list_provider_profiles",
     "list_market_data_snapshots",
     "list_backtest_requests",
     "list_paper_fills",
@@ -91,5 +96,6 @@ __all__ = [
     "run_momentum_screener",
     "search_pattern_library",
     "simulate_approved_paper_fill",
+    "refresh_provider_import_profile",
     "validate_data_provider_imports",
 ]

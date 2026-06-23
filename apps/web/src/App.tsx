@@ -301,6 +301,16 @@ const fallbackWorkflows: JsonRecord = {
       summary: { total: 6, configured: 0, valid: 0, needs_attention: 0 },
       validations: [],
     },
+    provider_profiles: {
+      status: 'success',
+      summary: { total: 6, configured: 0, needs_attention: 0 },
+      profiles: [],
+    },
+    provider_import_jobs: {
+      status: 'success',
+      summary: { total: 0, needs_attention: 0 },
+      import_jobs: [],
+    },
     risk: fallbackOverview.risk,
     safety: fallbackOverview.safety,
   },
@@ -510,6 +520,12 @@ function App() {
   const providers = workflows.settings?.providers?.providers ?? [];
   const providerHealth = workflows.settings?.health?.health ?? overview.providers?.health ?? [];
   const importValidation = workflows.settings?.import_validation ?? fallbackWorkflows.settings.import_validation;
+  const providerProfiles =
+    workflows.settings?.provider_profiles?.profiles ??
+    fallbackWorkflows.settings.provider_profiles.profiles;
+  const providerImportJobs =
+    workflows.settings?.provider_import_jobs?.import_jobs ??
+    fallbackWorkflows.settings.provider_import_jobs.import_jobs;
   const defaults = workflows.strategy_backtest?.defaults ?? {
     symbol: selectedCandidate.symbol,
     setup: selectedCandidate.setup,
@@ -619,6 +635,14 @@ function App() {
       `/console/workflows/paper-orders/${order.order_id}/fill`,
       { fill_price: 982.5 },
       'Simulate paper fill',
+    );
+  }
+
+  function runProviderProfileRefresh(providerId: string) {
+    void postWorkflowAction(
+      `/console/workflows/provider-profiles/${providerId}/refresh`,
+      {},
+      'Refresh profile',
     );
   }
 
@@ -1132,11 +1156,33 @@ function App() {
 
             <section className="panel">
               <PanelHeading
+                label="Provider profiles"
+                title="Last validation"
+                icon={<ListChecks size={19} aria-hidden="true" />}
+              />
+              <ProviderProfiles
+                busyAction={busyAction}
+                profiles={providerProfiles}
+                onRefresh={runProviderProfileRefresh}
+              />
+            </section>
+
+            <section className="panel">
+              <PanelHeading
                 label="Import validation"
                 title="Configured files"
                 icon={<AlertTriangle size={19} aria-hidden="true" />}
               />
               <ProviderImportValidation validation={importValidation} />
+            </section>
+
+            <section className="panel">
+              <PanelHeading
+                label="Import jobs"
+                title="Refresh history"
+                icon={<RefreshCw size={19} aria-hidden="true" />}
+              />
+              <ProviderImportJobs jobs={providerImportJobs} />
             </section>
 
             <section className="panel">
@@ -1249,6 +1295,74 @@ function ProviderHealth({ providers }: { providers: JsonRecord[] }) {
           </StatusPill>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ProviderProfiles({
+  busyAction,
+  onRefresh,
+  profiles,
+}: {
+  busyAction: string;
+  onRefresh: (providerId: string) => void;
+  profiles: JsonRecord[];
+}) {
+  return (
+    <div className="validation-stack">
+      <div className="detail-list">
+        {profiles.length ? (
+          profiles.slice(0, 6).map((profile: JsonRecord) => (
+            <div className="profile-row" key={profile.profile_id ?? profile.provider_id}>
+              <div>
+                <strong>{profile.provider_id}</strong>
+                <span>{profile.source_label ?? 'fixture_provider'}</span>
+                <small>{profile.path_env ?? 'provider env'}</small>
+              </div>
+              <div className="profile-actions">
+                <StatusPill
+                  tone={
+                    profile.last_validation_status === 'valid'
+                      ? 'good'
+                      : profile.last_validation_status === 'not_configured'
+                        ? 'neutral'
+                        : 'warn'
+                  }
+                >
+                  {humanize(profile.last_validation_status ?? 'unknown')}
+                </StatusPill>
+                <button
+                  className="command-button compact-button"
+                  disabled={busyAction === 'Refresh profile'}
+                  onClick={() => onRefresh(String(profile.provider_id))}
+                >
+                  <RefreshCw size={14} aria-hidden="true" />
+                  <span>Refresh profile</span>
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="empty-state">Fixture profiles active</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProviderImportJobs({ jobs }: { jobs: JsonRecord[] }) {
+  return (
+    <div className="detail-list">
+      {jobs.length ? (
+        jobs.slice(0, 5).map((job: JsonRecord) => (
+          <div className="detail-row" key={job.job_id}>
+            <strong>{job.provider_id}</strong>
+            <span>{`${humanize(job.status ?? 'unknown')} / ${humanize(job.validation_status ?? 'unknown')}`}</span>
+          </div>
+        ))
+      ) : (
+        <div className="empty-state">No import jobs yet</div>
+      )}
     </div>
   );
 }

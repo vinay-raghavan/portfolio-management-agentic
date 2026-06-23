@@ -22,6 +22,7 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "MCP_TRANSPORT=streamable-http" in env_example
     assert "PAPER_LEDGER_DB_PATH=data/paper-ledger.db" in env_example
     assert "MARKET_DATA_DB_PATH=data/market-data.db" in env_example
+    assert "PROVIDER_CONFIG_DB_PATH=data/provider-config.db" in env_example
     assert "PORTFOLIO_MARKET_DATA_PROVIDER=fixture" in env_example
     assert "# PORTFOLIO_MARKET_DATA_PROVIDER=json_file" in env_example
     assert "# PORTFOLIO_MARKET_DATA_JSON_PATH=data/market-snapshots.json" in env_example
@@ -65,6 +66,7 @@ def test_compose_mounts_paper_ledger_volume() -> None:
 
     assert "PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}" in compose
     assert "MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}" in compose
+    assert "PROVIDER_CONFIG_DB_PATH: ${PROVIDER_CONFIG_DB_PATH:-/data/provider-config.db}" in compose
     assert "PORTFOLIO_MARKET_DATA_PROVIDER: ${PORTFOLIO_MARKET_DATA_PROVIDER:-fixture}" in compose
     assert "PORTFOLIO_MARKET_DATA_JSON_PATH: ${PORTFOLIO_MARKET_DATA_JSON_PATH:-}" in compose
     assert "PORTFOLIO_UNIVERSE_PROVIDER: ${PORTFOLIO_UNIVERSE_PROVIDER:-fixture}" in compose

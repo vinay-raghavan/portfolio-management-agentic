@@ -24,6 +24,7 @@ from portfolio_domain import (
     get_demo_risk_review,
     get_demo_signal_summary,
     get_demo_watchlist_snapshot,
+    get_provider_profile_storage_status,
     list_fixture_approval_queue,
     list_fixture_audit_events,
     list_fixture_backtest_requests,
@@ -32,6 +33,8 @@ from portfolio_domain import (
     list_fixture_paper_positions,
     list_fixture_strategy_drafts,
     list_fixture_universes,
+    list_provider_configuration_profiles,
+    list_provider_import_jobs as list_domain_provider_import_jobs,
     list_stored_market_snapshots,
     list_stored_screener_runs,
     record_market_data_snapshot,
@@ -40,6 +43,7 @@ from portfolio_domain import (
     run_demo_momentum_screener,
     search_pattern_cards,
     simulate_fixture_approved_paper_fill,
+    refresh_provider_import_profile_metadata,
     validate_configured_provider_imports,
 )
 from portfolio_policy import ActionTier, authorize_tool_call, redact_sensitive
@@ -54,6 +58,9 @@ EXPOSED_TOOL_NAMES = {
     "list_data_providers",
     "get_data_provider_health",
     "validate_data_provider_imports",
+    "list_provider_profiles",
+    "list_provider_import_jobs",
+    "refresh_provider_import_profile",
     "get_market_data_snapshot",
     "list_market_data_snapshots",
     "get_universe_members",
@@ -234,6 +241,83 @@ def validate_data_provider_imports() -> dict[str, Any]:
             "needs_attention": needs_attention,
         },
         "validations": validations,
+    }
+
+
+def list_provider_profiles() -> dict[str, Any]:
+    """Return current configured provider profiles without resolved paths."""
+    tool_name = "list_provider_profiles"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    profiles = [
+        profile.to_dict()
+        for profile in list_provider_configuration_profiles()
+    ]
+    needs_attention = sum(
+        1
+        for profile in profiles
+        if profile["last_validation_status"] not in {"valid", "not_configured"}
+    )
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "storage": get_provider_profile_storage_status(),
+        "summary": {
+            "total": len(profiles),
+            "configured": sum(1 for profile in profiles if profile["configured"]),
+            "needs_attention": needs_attention,
+        },
+        "profiles": profiles,
+    }
+
+
+def list_provider_import_jobs(limit: int = 20) -> dict[str, Any]:
+    """Return provider import-refresh job summaries without payloads or paths."""
+    tool_name = "list_provider_import_jobs"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    bounded_limit = max(1, min(limit, 50))
+    jobs = [
+        job.to_dict()
+        for job in list_domain_provider_import_jobs(limit=bounded_limit)
+    ]
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "storage": get_provider_profile_storage_status(),
+        "summary": {
+            "total": len(jobs),
+            "needs_attention": sum(
+                1
+                for job in jobs
+                if job["status"] == "needs_attention"
+            ),
+        },
+        "import_jobs": jobs,
+    }
+
+
+def refresh_provider_import_profile(provider_id: str) -> dict[str, Any]:
+    """Validate one configured provider and persist metadata-only refresh status."""
+    tool_name = "refresh_provider_import_profile"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name, {"provider_id": provider_id})
+    try:
+        job = refresh_provider_import_profile_metadata(provider_id)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": job.status,
+        "policy": decision.to_dict(),
+        "job": job.to_dict(),
+        "next_step": "review_provider_import_job" if job.status != "completed" else "ready",
     }
 
 

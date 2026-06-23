@@ -28,6 +28,7 @@ from app.console import (
     create_console_backtest,
     create_console_paper_order,
     draft_console_strategy,
+    refresh_console_provider_profile,
     simulate_console_paper_fill,
 )
 
@@ -189,6 +190,12 @@ def post_console_paper_order_approval(
 def post_console_paper_order_fill(order_id: str, request: PaperFillRequest) -> dict:
     """Create a simulated paper fill after approval."""
     return simulate_console_paper_fill(order_id, request.fill_price)
+
+
+@app.post("/console/workflows/provider-profiles/{provider_id}/refresh")
+def post_console_provider_profile_refresh(provider_id: str) -> dict:
+    """Refresh one configured provider profile metadata record."""
+    return refresh_console_provider_profile(provider_id)
 
 
 # Main execution
