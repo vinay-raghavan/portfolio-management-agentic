@@ -19,6 +19,9 @@ templates and accepted wrapper names for each configured source kind without
 returning provider data or local paths. Use `list_provider_source_onboarding`
 to review each configured source's template, validation state, setup gaps,
 refresh readiness, and safe next actions in one read-only payload. Use
+`list_provider_import_previews` to dry-run configured imports before refresh;
+it reports normalized counts, sample identifiers, target stores, warnings, and
+would-write status without initializing stores or writing cache rows. Use
 `list_provider_profiles`, `get_provider_refresh_readiness`,
 `refresh_provider_import_profile`, `run_provider_refresh_schedule`, and
 `list_provider_import_jobs` to review provider readiness and sanitized refresh

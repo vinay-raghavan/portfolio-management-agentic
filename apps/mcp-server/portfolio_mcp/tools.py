@@ -26,6 +26,7 @@ from portfolio_domain import (
     get_demo_watchlist_snapshot,
     get_provider_profile_storage_status,
     list_provider_refresh_readiness as list_domain_provider_refresh_readiness,
+    list_provider_import_previews as list_domain_provider_import_previews,
     list_configured_provider_source_templates,
     list_fixture_approval_queue,
     list_fixture_audit_events,
@@ -64,6 +65,7 @@ EXPOSED_TOOL_NAMES = {
     "list_provider_profiles",
     "list_provider_source_templates",
     "list_provider_source_onboarding",
+    "list_provider_import_previews",
     "list_provider_import_jobs",
     "get_provider_refresh_readiness",
     "refresh_provider_import_profile",
@@ -490,6 +492,56 @@ def list_provider_source_onboarding() -> dict[str, Any]:
         },
         "onboarding_cards": cards,
         "next_step": "review_recommended_next_step_per_provider",
+    }
+
+
+def _safe_preview_actions(preview: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "label": "Refresh provider profile",
+            "tool": "refresh_provider_import_profile",
+            "tier": _policy_payload("refresh_provider_import_profile")["tier"],
+            "enabled": bool(preview.get("would_write")),
+        },
+        {
+            "label": "Validate configured import",
+            "tool": "validate_data_provider_imports",
+            "tier": _policy_payload("validate_data_provider_imports")["tier"],
+            "enabled": True,
+        },
+    ]
+
+
+def list_provider_import_previews() -> dict[str, Any]:
+    """Return configured-provider import dry-run previews without writing stores."""
+    tool_name = "list_provider_import_previews"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    previews = list_domain_provider_import_previews()
+    enriched_previews = [
+        {
+            **preview,
+            "safe_actions": _safe_preview_actions(preview),
+        }
+        for preview in previews
+    ]
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "summary": {
+            "total": len(enriched_previews),
+            "configured": sum(1 for preview in enriched_previews if preview["configured"]),
+            "would_write": sum(1 for preview in enriched_previews if preview["would_write"]),
+            "normalized_count": sum(
+                int(preview["normalized_count"]) for preview in enriched_previews
+            ),
+            "needs_attention": sum(
+                1 for preview in enriched_previews if preview["status"] == "needs_attention"
+            ),
+        },
+        "previews": enriched_previews,
+        "next_step": "review_dry_run_before_refresh",
     }
 
 

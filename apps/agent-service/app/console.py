@@ -33,6 +33,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     get_risk_review,
     list_backtest_requests,
     list_data_providers,
+    list_provider_import_previews,
     list_paper_fills,
     list_paper_orders,
     list_paper_positions,
@@ -253,6 +254,7 @@ def build_console_workflows(
             "provider_profiles": list_provider_profiles(),
             "provider_source_templates": list_provider_source_templates(),
             "provider_source_onboarding": list_provider_source_onboarding(),
+            "provider_import_previews": list_provider_import_previews(),
             "provider_import_jobs": list_provider_import_jobs(10),
             "provider_refresh_readiness": get_provider_refresh_readiness(),
             "provider_refresh_actions": {
