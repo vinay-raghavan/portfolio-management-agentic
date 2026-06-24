@@ -182,6 +182,69 @@ def test_console_workflows_expose_provider_source_templates_without_path_leaks(
     assert "secret" not in combined
 
 
+def test_console_workflows_expose_guided_provider_onboarding_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    market_path = tmp_path / "private-market-export.json"
+    market_path.write_text(
+        """
+        {
+          "snapshots": [
+            {
+              "symbol": "SAMPLE_EQTY",
+              "as_of": "2026-06-22",
+              "bars": [
+                {
+                  "date": "2026-06-22",
+                  "open": 100,
+                  "high": 104,
+                  "low": 99,
+                  "close": 103,
+                  "volume": 123000
+                }
+              ],
+              "metrics": {"rsi14": 59.4}
+            }
+          ]
+        }
+        """
+    )
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(tmp_path / "provider-config.db"))
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", str(market_path))
+    client = TestClient(app)
+
+    response = client.get("/console/workflows", params={"preset": "momentum"})
+
+    assert response.status_code == 200
+    guidance = response.json()["settings"]["provider_source_onboarding"]
+    cards = {
+        card["provider_id"]: card
+        for card in guidance["onboarding_cards"]
+    }
+    market = cards["configured_market_data"]
+
+    assert guidance["status"] == "success"
+    assert guidance["policy"]["tier"] == "read_only"
+    assert guidance["summary"]["configured"] == 1
+    assert market["validation"]["status"] == "valid"
+    assert market["refresh_readiness"]["status"] == "pending_refresh"
+    assert market["setup_state"] == "ready_for_refresh"
+    assert market["recommended_next_step"] == "refresh_provider_profile"
+    assert "Run profile refresh" in market["operator_steps"]
+    assert market["template"]["path_env"] == "PORTFOLIO_MARKET_DATA_JSON_PATH"
+    assert market["safe_actions"][-1]["tool"] == "refresh_provider_import_profile"
+    assert market["safe_actions"][-1]["enabled"] is True
+
+    combined = f"{guidance}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-export" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "secret" not in combined
+
+
 def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
     client = TestClient(app)
 

@@ -38,6 +38,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     list_paper_positions,
     list_provider_import_jobs,
     list_provider_profiles,
+    list_provider_source_onboarding,
     list_provider_source_templates,
     list_strategy_drafts,
     list_universes,
@@ -251,6 +252,7 @@ def build_console_workflows(
             "import_validation": validate_data_provider_imports(),
             "provider_profiles": list_provider_profiles(),
             "provider_source_templates": list_provider_source_templates(),
+            "provider_source_onboarding": list_provider_source_onboarding(),
             "provider_import_jobs": list_provider_import_jobs(10),
             "provider_refresh_readiness": get_provider_refresh_readiness(),
             "provider_refresh_actions": {

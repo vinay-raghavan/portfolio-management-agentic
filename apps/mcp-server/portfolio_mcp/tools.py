@@ -63,6 +63,7 @@ EXPOSED_TOOL_NAMES = {
     "validate_data_provider_imports",
     "list_provider_profiles",
     "list_provider_source_templates",
+    "list_provider_source_onboarding",
     "list_provider_import_jobs",
     "get_provider_refresh_readiness",
     "refresh_provider_import_profile",
@@ -295,6 +296,200 @@ def list_provider_source_templates() -> dict[str, Any]:
         },
         "templates": templates,
         "next_step": "set_provider_mode_and_json_path_env",
+    }
+
+
+def _onboarding_setup_state(
+    validation: dict[str, Any],
+    readiness: dict[str, Any],
+) -> str:
+    if validation["missing_env"]:
+        return "needs_env"
+    if validation["status"] == "not_configured":
+        return "optional_fixture_mode"
+    if validation["status"] != "valid":
+        return "needs_valid_json"
+
+    readiness_status = readiness.get("readiness_status", "unknown")
+    if readiness_status in {"pending_refresh", "stale", "retry_due"}:
+        return "ready_for_refresh"
+    if readiness_status == "ready":
+        return "ready_for_screener"
+    if readiness_status == "backoff":
+        return "refresh_backoff"
+    return "review_refresh_readiness"
+
+
+def _onboarding_next_step(setup_state: str) -> str:
+    return {
+        "needs_env": "set_required_env",
+        "optional_fixture_mode": "configure_provider_env",
+        "needs_valid_json": "repair_configured_json",
+        "ready_for_refresh": "refresh_provider_profile",
+        "ready_for_screener": "ready_for_configured_screening",
+        "refresh_backoff": "wait_for_retry_window",
+    }.get(setup_state, "review_provider_state")
+
+
+def _onboarding_operator_steps(setup_state: str) -> list[str]:
+    if setup_state == "needs_env":
+        return [
+            "Create JSON from the matching template.",
+            "Set the provider mode and JSON path env keys.",
+            "Run configured import validation.",
+        ]
+    if setup_state == "needs_valid_json":
+        return [
+            "Compare the configured source against the template.",
+            "Fix missing fields or unsupported wrappers.",
+            "Run configured import validation again.",
+        ]
+    if setup_state == "ready_for_refresh":
+        return [
+            "Run profile refresh",
+            "Review the sanitized import job result.",
+            "Confirm refresh readiness before configured screeners.",
+        ]
+    if setup_state == "ready_for_screener":
+        return [
+            "Configured data is refreshed.",
+            "Run configured screeners.",
+            "Keep stale-data readiness visible before paper decisions.",
+        ]
+    if setup_state == "refresh_backoff":
+        return [
+            "Wait until the next attempt window.",
+            "Review validation status before retrying.",
+            "Run profile refresh after backoff clears.",
+        ]
+    return [
+        "Use fixture mode or configure JSON source env keys.",
+        "Create JSON from the matching template.",
+        "Validate imports before refresh.",
+    ]
+
+
+def _safe_onboarding_actions(setup_state: str) -> list[dict[str, Any]]:
+    refresh_enabled = setup_state in {
+        "ready_for_refresh",
+        "ready_for_screener",
+        "refresh_backoff",
+    }
+    return [
+        {
+            "label": "Review JSON template",
+            "tool": "list_provider_source_templates",
+            "tier": _policy_payload("list_provider_source_templates")["tier"],
+            "enabled": True,
+        },
+        {
+            "label": "Validate configured import",
+            "tool": "validate_data_provider_imports",
+            "tier": _policy_payload("validate_data_provider_imports")["tier"],
+            "enabled": True,
+        },
+        {
+            "label": "Refresh provider profile",
+            "tool": "refresh_provider_import_profile",
+            "tier": _policy_payload("refresh_provider_import_profile")["tier"],
+            "enabled": refresh_enabled,
+        },
+    ]
+
+
+def list_provider_source_onboarding() -> dict[str, Any]:
+    """Return guided configured-source setup, validation, and refresh readiness."""
+    tool_name = "list_provider_source_onboarding"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+
+    templates = {
+        template["provider_id"]: template
+        for template in list_configured_provider_source_templates()
+    }
+    validations = {
+        validation.provider_id: validation.to_dict()
+        for validation in validate_configured_provider_imports()
+    }
+    profiles = {
+        profile.provider_id: profile.to_dict()
+        for profile in list_provider_configuration_profiles()
+    }
+    readiness = {
+        item["provider_id"]: item
+        for item in list_domain_provider_refresh_readiness()
+    }
+    cards = []
+    for provider_id in templates:
+        validation = validations[provider_id]
+        profile = profiles[provider_id]
+        refresh = readiness[provider_id]
+        setup_state = _onboarding_setup_state(validation, refresh)
+        template = templates[provider_id]
+        cards.append(
+            {
+                "provider_id": provider_id,
+                "kind": template["kind"],
+                "display_name": template["display_name"],
+                "provider_mode": validation["provider_mode"],
+                "setup_state": setup_state,
+                "recommended_next_step": _onboarding_next_step(setup_state),
+                "operator_steps": _onboarding_operator_steps(setup_state),
+                "required_env": validation["required_env"],
+                "missing_env": validation["missing_env"],
+                "template": {
+                    "path_env": template["path_env"],
+                    "accepted_wrappers": template["accepted_wrappers"],
+                    "required_fields": template["required_fields"],
+                    "optional_fields": template["optional_fields"],
+                    "template_json": template["template_json"],
+                },
+                "validation": {
+                    "status": validation["status"],
+                    "configured": validation["configured"],
+                    "message": validation["message"],
+                    "payload_count": validation["payload_count"],
+                    "sample_identifiers": validation["sample_identifiers"] or [],
+                },
+                "profile": {
+                    "source_label": profile["source_label"],
+                    "last_validation_status": profile["last_validation_status"],
+                    "payload_count": profile["payload_count"],
+                    "sample_identifiers": profile["sample_identifiers"],
+                },
+                "refresh_readiness": {
+                    "status": refresh["readiness_status"],
+                    "needs_refresh": refresh["needs_refresh"],
+                    "latest_status": refresh["latest_status"],
+                    "latest_job_id": refresh["latest_job_id"],
+                    "retry_after_seconds": refresh["retry_after_seconds"],
+                    "next_attempt_at": refresh["next_attempt_at"],
+                },
+                "safe_actions": _safe_onboarding_actions(setup_state),
+            }
+        )
+
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "summary": {
+            "total": len(cards),
+            "configured": sum(1 for card in cards if card["validation"]["configured"]),
+            "ready_for_refresh": sum(
+                1 for card in cards if card["setup_state"] == "ready_for_refresh"
+            ),
+            "ready": sum(
+                1 for card in cards if card["setup_state"] == "ready_for_screener"
+            ),
+            "needs_setup": sum(
+                1
+                for card in cards
+                if card["setup_state"] in {"needs_env", "needs_valid_json"}
+            ),
+        },
+        "onboarding_cards": cards,
+        "next_step": "review_recommended_next_step_per_provider",
     }
 
 

@@ -20,6 +20,7 @@ from portfolio_mcp.tools import (
     get_universe_members,
     list_data_providers,
     list_provider_source_templates,
+    list_provider_source_onboarding,
     list_provider_import_jobs,
     list_provider_profiles,
     list_universes,
@@ -153,6 +154,53 @@ def test_provider_source_templates_are_read_only_and_sanitized() -> None:
     assert "place_live_order" not in combined
     assert "api_key" not in combined
     assert "token" not in combined
+    assert "/users/" not in combined
+
+
+def test_provider_source_onboarding_links_guidance_and_refresh_path_safely() -> None:
+    result = list_provider_source_onboarding()
+    cards = {
+        card["provider_id"]: card
+        for card in result["onboarding_cards"]
+    }
+    market = cards["configured_market_data"]
+
+    assert result["status"] == "success"
+    assert result["policy"]["tier"] == "read_only"
+    assert result["summary"]["total"] == 6
+    assert result["summary"]["needs_setup"] == 0
+    assert set(cards) == {
+        "configured_market_data",
+        "configured_universe",
+        "configured_fundamentals",
+        "configured_sentiment",
+        "configured_volatility",
+        "configured_macro",
+    }
+    assert market["validation"]["status"] == "not_configured"
+    assert market["refresh_readiness"]["status"] == "not_configured"
+    assert market["setup_state"] == "optional_fixture_mode"
+    assert market["recommended_next_step"] == "configure_provider_env"
+    assert market["template"]["accepted_wrappers"][0] == "list"
+    assert market["template"]["template_json"]["snapshots"][0]["bars"][0]["date"]
+    assert [
+        action["tool"]
+        for action in market["safe_actions"]
+    ] == [
+        "list_provider_source_templates",
+        "validate_data_provider_imports",
+        "refresh_provider_import_profile",
+    ]
+    assert {action["tier"] for action in market["safe_actions"]} <= {
+        "read_only",
+        "draft_only",
+    }
+
+    combined = f"{result}".lower()
+    assert "place_live_order" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "secret" not in combined
     assert "/users/" not in combined
 
 

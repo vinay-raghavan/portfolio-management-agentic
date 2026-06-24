@@ -626,7 +626,8 @@ p {
 .validation-stack,
 .readiness-stack,
 .source-setup-stack,
-.template-guidance-stack {
+.template-guidance-stack,
+.onboarding-stack {
   display: grid;
   gap: 8px;
 }
@@ -742,6 +743,7 @@ p {
 }
 
 .source-panel,
+.onboarding-panel,
 .template-panel {
   grid-column: 1 / -1;
 }
@@ -906,7 +908,8 @@ p {
   gap: 8px;
 }
 
-.template-summary {
+.template-summary,
+.onboarding-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
@@ -932,7 +935,8 @@ p {
   background: var(--surface-muted);
 }
 
-.template-summary div {
+.template-summary div,
+.onboarding-summary div {
   display: grid;
   gap: 4px;
   min-height: 58px;
@@ -950,7 +954,11 @@ p {
 .source-row small,
 .template-summary span,
 .template-row span,
-.template-row small {
+.template-row small,
+.onboarding-summary span,
+.onboarding-row span,
+.onboarding-row small,
+.onboarding-row li {
   color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.35;
@@ -958,12 +966,14 @@ p {
 
 .readiness-summary strong,
 .source-summary strong,
-.template-summary strong {
+.template-summary strong,
+.onboarding-summary strong {
   font-size: 18px;
 }
 
 .source-list,
-.template-list {
+.template-list,
+.onboarding-list {
   display: grid;
 }
 
@@ -1060,6 +1070,65 @@ p {
   font-size: 11px;
   line-height: 1.35;
   white-space: pre;
+}
+
+.onboarding-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.5fr) minmax(260px, 0.8fr) minmax(320px, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-height: 96px;
+  padding: 13px 0;
+  border-top: 1px solid var(--border);
+}
+
+.onboarding-row:first-child {
+  border-top: 0;
+}
+
+.onboarding-main,
+.onboarding-status-grid,
+.onboarding-status-grid div,
+.onboarding-guidance,
+.onboarding-guidance div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.onboarding-main strong,
+.onboarding-status-grid strong,
+.onboarding-row span,
+.onboarding-row li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.onboarding-main strong,
+.onboarding-status-grid strong {
+  font-size: 13px;
+}
+
+.onboarding-status-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.onboarding-guidance {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+}
+
+.onboarding-guidance ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.action-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
 }
 
 .readiness-row {
@@ -1185,7 +1254,10 @@ p {
   .source-row,
   .source-fields,
   .template-row,
-  .template-fields {
+  .template-fields,
+  .onboarding-row,
+  .onboarding-status-grid,
+  .onboarding-guidance {
     grid-template-columns: 1fr;
   }
 
@@ -1247,6 +1319,7 @@ p {
   .readiness-summary,
   .source-summary,
   .template-summary,
+  .onboarding-summary,
   .ledger-stats,
   .workflow-summary {
     grid-template-columns: 1fr;

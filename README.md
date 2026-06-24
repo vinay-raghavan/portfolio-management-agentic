@@ -16,9 +16,9 @@ This is a standalone repository boundary. Implementation should use documented A
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
 - Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
-- Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates provide synthetic, adapter-valid JSON shapes for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
+- Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates and guided onboarding provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
-- Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with configured-source setup, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, provider profiles, refresh readiness, full-refresh controls, per-provider backoff state, and import-job feedback.
+- Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with guided configured-source onboarding, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, provider profiles, refresh readiness, full-refresh controls, per-provider backoff state, and import-job feedback.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data, provider-context, and screener-run persistence is available through `MARKET_DATA_DB_PATH`; provider profile and import-job metadata persistence is available through `PROVIDER_CONFIG_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
 - No copied portfolio data.
@@ -68,7 +68,7 @@ Primary constraints:
 Next implementation milestones:
 
 1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Add guided configured-source onboarding that links each template to validation status, setup gaps, and the safe refresh path in one operator workflow.
+2. Add configured-provider import dry-run previews that show normalized counts, sample identifiers, target stores, and warnings before refresh jobs write local caches.
 
 ## Verification
 
@@ -166,9 +166,11 @@ Configured screeners remain read-only and paper-only; they rank candidates
 from configured market, fundamental, sentiment, volatility, macro metrics, and
 provider refresh readiness, and do not create trades.
 
-Use `validate_data_provider_imports` or the provider settings page to check
-configured JSON files before running screeners. Validation reports provider
-mode, missing environment keys, shape errors, and sample identifiers without
+Use `list_provider_source_onboarding`, `validate_data_provider_imports`, or
+the provider settings page to check configured JSON files before running
+screeners. Guided onboarding links schema templates, validation, setup gaps,
+refresh readiness, and safe next actions. Validation reports provider mode,
+missing environment keys, shape errors, and sample identifiers without
 returning local file paths or credential values.
 
 Use `list_provider_profiles`, `get_provider_refresh_readiness`,

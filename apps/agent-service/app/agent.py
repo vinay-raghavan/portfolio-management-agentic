@@ -63,6 +63,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     list_data_providers,
     list_provider_import_jobs,
     list_provider_profiles,
+    list_provider_source_onboarding,
     list_provider_source_templates,
     list_market_data_snapshots,
     list_backtest_requests,
@@ -138,7 +139,7 @@ Core rules:
 - For pre-market briefing requests, use the pre-market briefing tool or collect portfolio, watchlist, signal, research, and risk context before answering.
 - Treat fixture data as offline-safe evidence, and clearly distinguish it from configured live data adapters.
 - Use provider catalog, health, and import-validation tools before claiming configured data is available.
-- Use provider profiles, source templates, refresh readiness, and import-job history to explain configured local data readiness without exposing file paths.
+- Use provider source onboarding, profiles, source templates, refresh readiness, and import-job history to explain configured local data readiness without exposing file paths.
 - Use market snapshot and screener-run history tools when users ask what data has been cached or already screened.
 - Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
 - Use recommendation explanations to join screener, factor, strategy-history, backtest, risk, and paper-ledger evidence before proposing next steps.
@@ -164,6 +165,7 @@ Core rules:
         validate_data_provider_imports,
         list_provider_profiles,
         list_provider_source_templates,
+        list_provider_source_onboarding,
         list_provider_import_jobs,
         get_provider_refresh_readiness,
         refresh_provider_import_profile,

@@ -16,8 +16,10 @@ Set `PORTFOLIO_MACRO_PROVIDER=json_file` and `PORTFOLIO_MACRO_JSON_PATH` to read
 Use `validate_data_provider_imports` to validate configured local JSON files before running provider-backed workflows. It reports validation status and sample identifiers without exposing local paths or credential values.
 Use `list_provider_source_templates` to retrieve synthetic, adapter-valid JSON
 templates and accepted wrapper names for each configured source kind without
-returning provider data or local paths. Use `list_provider_profiles`,
-`get_provider_refresh_readiness`,
+returning provider data or local paths. Use `list_provider_source_onboarding`
+to review each configured source's template, validation state, setup gaps,
+refresh readiness, and safe next actions in one read-only payload. Use
+`list_provider_profiles`, `get_provider_refresh_readiness`,
 `refresh_provider_import_profile`, `run_provider_refresh_schedule`, and
 `list_provider_import_jobs` to review provider readiness and sanitized refresh
 execution. Configured refreshes can import normalized market, universe,
