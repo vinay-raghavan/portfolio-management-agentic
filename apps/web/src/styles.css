@@ -625,7 +625,8 @@ p {
 .provider-list,
 .validation-stack,
 .readiness-stack,
-.source-setup-stack {
+.source-setup-stack,
+.template-guidance-stack {
   display: grid;
   gap: 8px;
 }
@@ -738,6 +739,11 @@ p {
 
 .wide-panel {
   grid-column: span 1;
+}
+
+.source-panel,
+.template-panel {
+  grid-column: 1 / -1;
 }
 
 .segmented-control,
@@ -900,6 +906,12 @@ p {
   gap: 8px;
 }
 
+.template-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .readiness-summary div {
   display: grid;
   gap: 4px;
@@ -920,29 +932,45 @@ p {
   background: var(--surface-muted);
 }
 
+.template-summary div {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
 .readiness-summary span,
 .readiness-row span,
 .readiness-row small,
 .source-summary span,
 .source-row span,
-.source-row small {
+.source-row small,
+.template-summary span,
+.template-row span,
+.template-row small {
   color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.35;
 }
 
 .readiness-summary strong,
-.source-summary strong {
+.source-summary strong,
+.template-summary strong {
   font-size: 18px;
 }
 
-.source-list {
+.source-list,
+.template-list {
   display: grid;
 }
 
-.source-row {
+.source-row,
+.template-row {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(220px, 0.55fr) minmax(0, 1.45fr);
   gap: 12px;
   align-items: start;
   min-height: 74px;
@@ -950,33 +978,52 @@ p {
   border-top: 1px solid var(--border);
 }
 
-.source-row:first-child {
+.source-row {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.source-row:first-child,
+.template-row:first-child {
   border-top: 0;
 }
 
 .source-main,
 .source-fields,
-.source-fields div {
+.source-fields div,
+.template-main,
+.template-fields,
+.template-fields div {
   display: grid;
   gap: 5px;
   min-width: 0;
 }
 
-.source-fields {
-  grid-template-columns: minmax(90px, 0.45fr) minmax(0, 1fr) minmax(0, 1fr);
+.source-fields,
+.template-fields {
+  grid-template-columns: minmax(120px, 0.35fr) minmax(160px, 0.45fr) minmax(320px, 1.2fr);
   align-items: start;
   gap: 10px;
+}
+
+.source-fields {
+  grid-template-columns: minmax(90px, 0.45fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .source-row strong,
 .source-row span,
 .source-row small,
-.source-row code {
+.source-row code,
+.template-row strong,
+.template-row span,
+.template-row small,
+.template-row code,
+.template-row pre {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.source-row strong {
+.source-row strong,
+.template-row strong {
   font-size: 13px;
 }
 
@@ -998,6 +1045,21 @@ p {
   font-size: 11px;
   font-weight: 750;
   line-height: 1.25;
+}
+
+.template-row pre {
+  max-width: 100%;
+  max-height: 150px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: #334155;
+  background: #f8fafc;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: pre;
 }
 
 .readiness-row {
@@ -1121,7 +1183,9 @@ p {
   }
 
   .source-row,
-  .source-fields {
+  .source-fields,
+  .template-row,
+  .template-fields {
     grid-template-columns: 1fr;
   }
 
@@ -1182,6 +1246,7 @@ p {
   .index-strip,
   .readiness-summary,
   .source-summary,
+  .template-summary,
   .ledger-stats,
   .workflow-summary {
     grid-template-columns: 1fr;

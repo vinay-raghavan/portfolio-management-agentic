@@ -37,6 +37,7 @@ ACTION_TIERS: dict[str, ActionTier] = {
     "get_data_provider_health": ActionTier.READ_ONLY,
     "validate_data_provider_imports": ActionTier.READ_ONLY,
     "list_provider_profiles": ActionTier.READ_ONLY,
+    "list_provider_source_templates": ActionTier.READ_ONLY,
     "list_provider_import_jobs": ActionTier.READ_ONLY,
     "get_provider_refresh_readiness": ActionTier.READ_ONLY,
     "refresh_provider_import_profile": ActionTier.DRAFT_ONLY,

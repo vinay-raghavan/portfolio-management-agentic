@@ -34,6 +34,7 @@ from .tools import (
     list_data_providers,
     list_provider_import_jobs,
     list_provider_profiles,
+    list_provider_source_templates,
     list_market_data_snapshots,
     list_backtest_requests,
     list_paper_fills,
@@ -89,6 +90,7 @@ def build_server():
     server.tool()(get_data_provider_health)
     server.tool()(validate_data_provider_imports)
     server.tool()(list_provider_profiles)
+    server.tool()(list_provider_source_templates)
     server.tool()(list_provider_import_jobs)
     server.tool()(get_provider_refresh_readiness)
     server.tool()(refresh_provider_import_profile)

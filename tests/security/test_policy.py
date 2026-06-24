@@ -33,6 +33,7 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
         "get_data_provider_health",
         "validate_data_provider_imports",
         "list_provider_profiles",
+        "list_provider_source_templates",
         "list_provider_import_jobs",
         "get_provider_refresh_readiness",
         "get_market_data_snapshot",
