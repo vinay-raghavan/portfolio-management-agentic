@@ -346,6 +346,75 @@ const fallbackProviderSourceTemplates: JsonRecord[] = fallbackProviderProfiles.m
   template_json: fallbackTemplateByKind[profile.kind],
 }));
 
+const fallbackProviderSourceOnboarding: JsonRecord[] = fallbackProviderProfiles.map((profile) => {
+  const template = fallbackProviderSourceTemplates.find(
+    (item) => item.provider_id === profile.provider_id,
+  ) ?? {};
+  return {
+    provider_id: profile.provider_id,
+    kind: profile.kind,
+    display_name: profile.display_name,
+    provider_mode: profile.provider_mode,
+    setup_state: 'optional_fixture_mode',
+    recommended_next_step: 'configure_provider_env',
+    operator_steps: [
+      'Use fixture mode or configure JSON source env keys.',
+      'Create JSON from the matching template.',
+      'Validate imports before refresh.',
+    ],
+    required_env: profile.required_env,
+    missing_env: profile.missing_env,
+    template: {
+      path_env: profile.path_env,
+      accepted_wrappers: template.accepted_wrappers ?? [],
+      required_fields: template.required_fields ?? [],
+      optional_fields: template.optional_fields ?? [],
+      template_json: template.template_json ?? {},
+    },
+    validation: {
+      status: 'not_configured',
+      configured: false,
+      message: 'Fixture provider remains active.',
+      payload_count: null,
+      sample_identifiers: [],
+    },
+    profile: {
+      source_label: profile.source_label,
+      last_validation_status: profile.last_validation_status,
+      payload_count: null,
+      sample_identifiers: [],
+    },
+    refresh_readiness: {
+      status: 'not_configured',
+      needs_refresh: false,
+      latest_status: 'none',
+      latest_job_id: '',
+      retry_after_seconds: 0,
+      next_attempt_at: '',
+    },
+    safe_actions: [
+      {
+        label: 'Review JSON template',
+        tool: 'list_provider_source_templates',
+        tier: 'read_only',
+        enabled: true,
+      },
+      {
+        label: 'Validate configured import',
+        tool: 'validate_data_provider_imports',
+        tier: 'read_only',
+        enabled: true,
+      },
+      {
+        label: 'Refresh provider profile',
+        tool: 'refresh_provider_import_profile',
+        tier: 'draft_only',
+        enabled: false,
+      },
+    ],
+  };
+});
+
 const fallbackWorkflows: JsonRecord = {
   mode: 'paper_only',
   safety: fallbackOverview.safety,
@@ -491,6 +560,11 @@ const fallbackWorkflows: JsonRecord = {
       provider_mode_options: ['fixture', 'json_file'],
       summary: { total: 6, market_data: 1, context: 5 },
       templates: fallbackProviderSourceTemplates,
+    },
+    provider_source_onboarding: {
+      status: 'success',
+      summary: { total: 6, configured: 0, ready_for_refresh: 0, ready: 0, needs_setup: 0 },
+      onboarding_cards: fallbackProviderSourceOnboarding,
     },
     provider_import_jobs: {
       status: 'success',
@@ -721,6 +795,9 @@ function App() {
   const providerSourceTemplates =
     workflows.settings?.provider_source_templates ??
     fallbackWorkflows.settings.provider_source_templates;
+  const providerSourceOnboarding =
+    workflows.settings?.provider_source_onboarding ??
+    fallbackWorkflows.settings.provider_source_onboarding;
   const providerImportJobs =
     workflows.settings?.provider_import_jobs?.import_jobs ??
     fallbackWorkflows.settings.provider_import_jobs.import_jobs;
@@ -1366,6 +1443,15 @@ function App() {
               </div>
             </section>
 
+            <section className="panel wide-panel onboarding-panel">
+              <PanelHeading
+                label="Onboarding flow"
+                title="Configured source path"
+                icon={<ListChecks size={19} aria-hidden="true" />}
+              />
+              <ProviderSourceOnboarding onboarding={providerSourceOnboarding} />
+            </section>
+
             <section className="panel wide-panel source-panel">
               <PanelHeading
                 label="Source setup"
@@ -1685,6 +1771,94 @@ function ProviderSourceTemplates({ guidance }: { guidance: JsonRecord }) {
               <div>
                 <span>JSON template</span>
                 <pre>{JSON.stringify(template.template_json ?? {}, null, 2)}</pre>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProviderSourceOnboarding({ onboarding }: { onboarding: JsonRecord }) {
+  const cards = onboarding.onboarding_cards ?? [];
+  const summary = onboarding.summary ?? {};
+  if (!cards.length) {
+    return <div className="empty-state">No configured source onboarding available</div>;
+  }
+  return (
+    <div className="onboarding-stack">
+      <div className="onboarding-summary" aria-label="Configured provider onboarding summary">
+        <div>
+          <span>Configured</span>
+          <strong>{summary.configured ?? 0}</strong>
+        </div>
+        <div>
+          <span>Ready to refresh</span>
+          <strong>{summary.ready_for_refresh ?? 0}</strong>
+        </div>
+        <div>
+          <span>Needs setup</span>
+          <strong>{summary.needs_setup ?? 0}</strong>
+        </div>
+      </div>
+      <div className="onboarding-list">
+        {cards.slice(0, 6).map((card: JsonRecord) => (
+          <div className="onboarding-row" key={card.provider_id}>
+            <div className="onboarding-main">
+              <strong>{card.display_name ?? card.provider_id}</strong>
+              <span>{card.template?.path_env ?? card.kind}</span>
+              <StatusPill tone={readinessTone(card.refresh_readiness?.status ?? 'unknown')}>
+                {humanize(card.setup_state ?? 'review_required')}
+              </StatusPill>
+            </div>
+            <div className="onboarding-status-grid">
+              <div>
+                <span>Validation</span>
+                <StatusPill
+                  tone={
+                    card.validation?.status === 'valid'
+                      ? 'good'
+                      : card.validation?.status === 'not_configured'
+                        ? 'neutral'
+                        : 'warn'
+                  }
+                >
+                  {humanize(card.validation?.status ?? 'unknown')}
+                </StatusPill>
+              </div>
+              <div>
+                <span>Refresh readiness</span>
+                <StatusPill tone={readinessTone(card.refresh_readiness?.status ?? 'unknown')}>
+                  {humanize(card.refresh_readiness?.status ?? 'unknown')}
+                </StatusPill>
+              </div>
+              <div>
+                <span>Safe next step</span>
+                <strong>{humanize(card.recommended_next_step ?? 'review_provider_state')}</strong>
+              </div>
+            </div>
+            <div className="onboarding-guidance">
+              <div>
+                <span>Operator steps</span>
+                <ol>
+                  {(card.operator_steps ?? []).slice(0, 3).map((step: string) => (
+                    <li key={`${card.provider_id}-${step}`}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+              <div>
+                <span>Safe actions</span>
+                <div className="action-chip-list">
+                  {(card.safe_actions ?? []).map((action: JsonRecord) => (
+                    <StatusPill
+                      key={`${card.provider_id}-${action.tool}`}
+                      tone={action.enabled ? 'info' : 'neutral'}
+                    >
+                      {`${action.label ?? humanize(action.tool ?? 'action')} / ${action.tier ?? 'read_only'}`}
+                    </StatusPill>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

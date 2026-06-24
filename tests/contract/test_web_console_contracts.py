@@ -94,6 +94,20 @@ def test_web_console_exposes_provider_source_schema_guidance() -> None:
     assert "accepted_wrappers" in source
 
 
+def test_web_console_exposes_guided_provider_source_onboarding() -> None:
+    source = (WEB_ROOT / "src" / "App.tsx").read_text()
+
+    assert "ProviderSourceOnboarding" in source
+    assert "Onboarding flow" in source
+    assert "Safe next step" in source
+    assert "Validation" in source
+    assert "Refresh readiness" in source
+    assert "Operator steps" in source
+    assert "provider_source_onboarding" in source
+    assert "recommended_next_step" in source
+    assert "safe_actions" in source
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 
