@@ -415,6 +415,39 @@ const fallbackProviderSourceOnboarding: JsonRecord[] = fallbackProviderProfiles.
   };
 });
 
+const fallbackProviderImportPreviews: JsonRecord[] = fallbackProviderProfiles.map((profile) => ({
+  preview_id: `provider-import-preview-${String(profile.provider_id).replace(/_/g, '-')}`,
+  provider_id: profile.provider_id,
+  kind: profile.kind,
+  display_name: profile.display_name,
+  status: 'skipped',
+  provider_mode: profile.provider_mode,
+  configured: false,
+  validation_status: 'not_configured',
+  source_label: profile.source_label,
+  target_store: 'none',
+  payload_count: null,
+  normalized_count: 0,
+  skipped_count: 0,
+  would_write: false,
+  sample_identifiers: [],
+  warnings: ['Fixture provider remains active; no configured import would run.'],
+  safe_actions: [
+    {
+      label: 'Refresh provider profile',
+      tool: 'refresh_provider_import_profile',
+      tier: 'draft_only',
+      enabled: false,
+    },
+    {
+      label: 'Validate configured import',
+      tool: 'validate_data_provider_imports',
+      tier: 'read_only',
+      enabled: true,
+    },
+  ],
+}));
+
 const fallbackWorkflows: JsonRecord = {
   mode: 'paper_only',
   safety: fallbackOverview.safety,
@@ -565,6 +598,12 @@ const fallbackWorkflows: JsonRecord = {
       status: 'success',
       summary: { total: 6, configured: 0, ready_for_refresh: 0, ready: 0, needs_setup: 0 },
       onboarding_cards: fallbackProviderSourceOnboarding,
+    },
+    provider_import_previews: {
+      status: 'success',
+      summary: { total: 6, configured: 0, would_write: 0, normalized_count: 0, needs_attention: 0 },
+      previews: fallbackProviderImportPreviews,
+      next_step: 'review_dry_run_before_refresh',
     },
     provider_import_jobs: {
       status: 'success',
@@ -798,6 +837,9 @@ function App() {
   const providerSourceOnboarding =
     workflows.settings?.provider_source_onboarding ??
     fallbackWorkflows.settings.provider_source_onboarding;
+  const providerImportPreviews =
+    workflows.settings?.provider_import_previews ??
+    fallbackWorkflows.settings.provider_import_previews;
   const providerImportJobs =
     workflows.settings?.provider_import_jobs?.import_jobs ??
     fallbackWorkflows.settings.provider_import_jobs.import_jobs;
@@ -1452,6 +1494,15 @@ function App() {
               <ProviderSourceOnboarding onboarding={providerSourceOnboarding} />
             </section>
 
+            <section className="panel wide-panel preview-panel">
+              <PanelHeading
+                label="Dry-run preview"
+                title="Configured import impact"
+                icon={<Gauge size={19} aria-hidden="true" />}
+              />
+              <ProviderImportPreviews previews={providerImportPreviews} />
+            </section>
+
             <section className="panel wide-panel source-panel">
               <PanelHeading
                 label="Source setup"
@@ -1853,6 +1904,100 @@ function ProviderSourceOnboarding({ onboarding }: { onboarding: JsonRecord }) {
                   {(card.safe_actions ?? []).map((action: JsonRecord) => (
                     <StatusPill
                       key={`${card.provider_id}-${action.tool}`}
+                      tone={action.enabled ? 'info' : 'neutral'}
+                    >
+                      {`${action.label ?? humanize(action.tool ?? 'action')} / ${action.tier ?? 'read_only'}`}
+                    </StatusPill>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProviderImportPreviews({ previews }: { previews: JsonRecord }) {
+  const rows = previews.previews ?? [];
+  const summary = previews.summary ?? {};
+  if (!rows.length) {
+    return <div className="empty-state">No import previews available</div>;
+  }
+  return (
+    <div className="preview-stack">
+      <div className="preview-summary" aria-label="Configured import dry-run summary">
+        <div>
+          <span>Would write</span>
+          <strong>{summary.would_write ?? 0}</strong>
+        </div>
+        <div>
+          <span>Normalized count</span>
+          <strong>{summary.normalized_count ?? 0}</strong>
+        </div>
+        <div>
+          <span>Needs attention</span>
+          <strong>{summary.needs_attention ?? 0}</strong>
+        </div>
+      </div>
+      <div className="preview-list">
+        {rows.slice(0, 6).map((preview: JsonRecord) => (
+          <div className="preview-row" key={preview.preview_id ?? preview.provider_id}>
+            <div className="preview-main">
+              <strong>{preview.display_name ?? preview.provider_id}</strong>
+              <span>{preview.source_label ?? preview.kind}</span>
+              <StatusPill
+                tone={
+                  preview.status === 'ready'
+                    ? 'good'
+                    : preview.status === 'needs_attention'
+                      ? 'warn'
+                      : 'neutral'
+                }
+              >
+                {humanize(preview.status ?? 'unknown')}
+              </StatusPill>
+            </div>
+            <div className="preview-fields">
+              <div>
+                <span>Target store</span>
+                <strong>{humanize(preview.target_store ?? 'none')}</strong>
+              </div>
+              <div>
+                <span>Normalized count</span>
+                <strong>{preview.normalized_count ?? 0}</strong>
+              </div>
+              <div>
+                <span>Would write</span>
+                <StatusPill tone={preview.would_write ? 'info' : 'neutral'}>
+                  {preview.would_write ? 'yes' : 'no'}
+                </StatusPill>
+              </div>
+            </div>
+            <div className="preview-context">
+              <div>
+                <span>Sample identifiers</span>
+                <div className="env-chip-list">
+                  {(preview.sample_identifiers ?? []).length ? (
+                    preview.sample_identifiers.slice(0, 4).map((identifier: string) => (
+                      <code key={`${preview.provider_id}-${identifier}`}>{identifier}</code>
+                    ))
+                  ) : (
+                    <small>None</small>
+                  )}
+                </div>
+              </div>
+              <div>
+                <span>Warnings</span>
+                <small>{(preview.warnings ?? [])[0] ?? 'No preview warnings'}</small>
+              </div>
+              <div>
+                <span>Safe action</span>
+                <div className="action-chip-list">
+                  {(preview.safe_actions ?? []).slice(0, 2).map((action: JsonRecord) => (
+                    <StatusPill
+                      key={`${preview.provider_id}-${action.tool}`}
                       tone={action.enabled ? 'info' : 'neutral'}
                     >
                       {`${action.label ?? humanize(action.tool ?? 'action')} / ${action.tier ?? 'read_only'}`}

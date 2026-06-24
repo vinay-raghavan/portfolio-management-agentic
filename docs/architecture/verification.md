@@ -25,6 +25,7 @@ Current coverage:
 - Provider refresh orchestration contracts record bounded scheduled refresh cycles, retry/backoff state, and stale-data readiness without exposing local provider paths.
 - Configured-source template contracts expose adapter-valid synthetic JSON shapes for market, universe, fundamentals, sentiment, volatility, and macro sources, and verify each template validates through the same configured-provider adapters without leaking source paths or credential-like values.
 - Guided configured-source onboarding contracts link templates, validation, setup gaps, refresh readiness, and safe next actions without exposing source paths or credential-like values.
+- Configured-provider import preview contracts dry-run normalized target-store counts, sample identifiers, warnings, and would-write status without initializing provider profile or market-data stores, writing cache rows, or leaking source paths or credential-like values.
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with JSON-ready redacted audit exports and no file writes.
 - Model-backed eval preflight checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, and never print secret values.
@@ -112,11 +113,13 @@ ledger, market-data, and provider-profile metadata state. It also passes
 `PORTFOLIO_VOLATILITY_JSON_PATH`, `PORTFOLIO_MACRO_PROVIDER`, and
 `PORTFOLIO_MACRO_JSON_PATH` to the agent and MCP services so local JSON
 snapshot, universe, fundamentals, sentiment, volatility, and macro adapters
-can be enabled without committing provider data. Import validation checks
-those configured JSON files without returning local file paths. Provider
-profile refresh jobs persist sanitized validation and execution summaries,
-source env key names, import counts, retry/backoff state, and stale-data
-readiness. Configured refreshes can import normalized snapshots into
+can be enabled without committing provider data. Import validation and dry-run
+import previews check those configured JSON files without returning local file
+paths. Preview output includes normalized counts, target stores, sample
+identifiers, warnings, and would-write status before refresh writes run.
+Provider profile refresh jobs persist sanitized validation and execution
+summaries, source env key names, import counts, retry/backoff state, and
+stale-data readiness. Configured refreshes can import normalized snapshots into
 `market_data_snapshots`, `provider_universe_members`, and
 `provider_factor_snapshots` when `MARKET_DATA_DB_PATH` is configured.
 

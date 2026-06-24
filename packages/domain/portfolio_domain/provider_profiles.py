@@ -233,6 +233,122 @@ def _safe_execution_error(exc: Exception) -> str:
     return message
 
 
+def _preview_valid_import(
+    validation: ProviderImportValidation,
+    env: Mapping[str, str] | None,
+) -> tuple[str, int]:
+    if validation.kind == "market_data":
+        snapshots = [
+            _safe_market_snapshot(snapshot)
+            for snapshot in list_configured_market_data_snapshots(env=env)
+        ]
+        return "market_data_snapshots", len(snapshots)
+    if validation.kind == "universe":
+        universes = [
+            _safe_universe_members(members)
+            for members in list_configured_universe_members(env=env)
+        ]
+        return "provider_universe_members", len(universes)
+    if validation.kind == "fundamentals":
+        snapshots = [
+            _safe_fundamentals_snapshot(snapshot)
+            for snapshot in list_configured_fundamentals_snapshots(env=env)
+        ]
+        return "provider_factor_snapshots", len(snapshots)
+    if validation.kind == "sentiment":
+        snapshots = [
+            _safe_sentiment_snapshot(snapshot)
+            for snapshot in list_configured_sentiment_snapshots(env=env)
+        ]
+        return "provider_factor_snapshots", len(snapshots)
+    if validation.kind == "volatility":
+        snapshots = [
+            _safe_volatility_snapshot(snapshot)
+            for snapshot in list_configured_volatility_snapshots(env=env)
+        ]
+        return "provider_factor_snapshots", len(snapshots)
+    if validation.kind == "macro":
+        snapshots = [
+            _safe_macro_snapshot(snapshot)
+            for snapshot in list_configured_macro_snapshots(env=env)
+        ]
+        return "provider_factor_snapshots", len(snapshots)
+    raise ValueError("Unknown configured provider kind.")
+
+
+def _preview_status(validation_status: str) -> str:
+    if validation_status == "valid":
+        return "ready"
+    if validation_status == "not_configured":
+        return "skipped"
+    return "needs_attention"
+
+
+def _preview_warnings(
+    validation: ProviderImportValidation,
+    normalized_count: int,
+) -> list[str]:
+    if validation.status == "not_configured":
+        return ["Fixture provider remains active; no configured import would run."]
+    if validation.status != "valid":
+        return [validation.message]
+    expected_count = validation.payload_count or 0
+    if expected_count != normalized_count:
+        return [
+            "Normalized record count differs from the validated payload count; review the configured source before refresh."
+        ]
+    return []
+
+
+def _preview_from_validation(
+    validation: ProviderImportValidation,
+    env: Mapping[str, str] | None,
+) -> dict[str, Any]:
+    normalized_count = 0
+    skipped_count = 0
+    target_store = "none"
+    status = _preview_status(validation.status)
+    warnings: list[str] = []
+
+    if validation.status == "valid":
+        try:
+            target_store, normalized_count = _preview_valid_import(validation, env=env)
+        except (KeyError, OSError, TypeError, ValueError) as exc:
+            status = "needs_attention"
+            skipped_count = validation.payload_count or 0
+            target_store = "provider_import"
+            warnings = [_safe_execution_error(exc)]
+        else:
+            warnings = _preview_warnings(validation, normalized_count)
+    else:
+        skipped_count = validation.payload_count or 0
+        warnings = _preview_warnings(validation, normalized_count)
+
+    would_write = validation.status == "valid" and status == "ready"
+    return {
+        "preview_id": f"provider-import-preview-{_slug(validation.provider_id)}",
+        "provider_id": validation.provider_id,
+        "kind": validation.kind,
+        "display_name": validation.display_name,
+        "status": status,
+        "provider_mode": validation.provider_mode,
+        "configured": validation.configured,
+        "validation_status": validation.status,
+        "source_label": _source_label(validation),
+        "target_store": target_store,
+        "payload_count": validation.payload_count,
+        "normalized_count": normalized_count,
+        "skipped_count": skipped_count,
+        "would_write": would_write,
+        "sample_identifiers": validation.sample_identifiers or [],
+        "warnings": warnings,
+        "notes": [
+            "Dry-run preview parses and normalizes configured provider data without writing stores.",
+            "Raw provider payloads, resolved paths, account data, and sensitive values are not returned.",
+        ],
+    }
+
+
 def _execute_valid_import(
     validation: ProviderImportValidation,
     env: Mapping[str, str] | None,
@@ -790,6 +906,16 @@ def list_provider_configuration_profiles(
 ) -> list[ProviderConfigurationProfile]:
     return [
         _profile_from_validation(validation)
+        for validation in validate_configured_provider_imports(env=env)
+    ]
+
+
+def list_provider_import_previews(
+    env: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return dry-run import previews without initializing or writing stores."""
+    return [
+        _preview_from_validation(validation, env=env)
         for validation in validate_configured_provider_imports(env=env)
     ]
 

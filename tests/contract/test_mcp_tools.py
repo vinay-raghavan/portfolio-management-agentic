@@ -19,6 +19,7 @@ from portfolio_mcp.tools import (
     get_research_digest,
     get_universe_members,
     list_data_providers,
+    list_provider_import_previews,
     list_provider_source_templates,
     list_provider_source_onboarding,
     list_provider_import_jobs,
@@ -202,6 +203,79 @@ def test_provider_source_onboarding_links_guidance_and_refresh_path_safely() -> 
     assert "token" not in combined
     assert "secret" not in combined
     assert "/users/" not in combined
+
+
+def test_provider_import_previews_dry_run_without_writing_or_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    metadata_db = tmp_path / "provider-config.db"
+    market_db = tmp_path / "market-data.db"
+    private_path = tmp_path / "private-market-export.json"
+    private_path.write_text(
+        json.dumps(
+            {
+                "snapshots": [
+                    {
+                        "symbol": "SAMPLE_EQTY",
+                        "source": str(private_path),
+                        "as_of": "2026-06-22",
+                        "bars": [
+                            {
+                                "date": "2026-06-22",
+                                "open": 100.0,
+                                "high": 104.0,
+                                "low": 99.0,
+                                "close": 103.0,
+                                "volume": 123000,
+                            }
+                        ],
+                        "metrics": {
+                            "atr_pct": 2.5,
+                            "api_token": "should_not_persist",
+                        },
+                        "notes": ["private-market-export token leak candidate"],
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(metadata_db))
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", str(market_db))
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", str(private_path))
+
+    result = list_provider_import_previews()
+    previews = {
+        preview["provider_id"]: preview
+        for preview in result["previews"]
+    }
+    market = previews["configured_market_data"]
+
+    assert result["status"] == "success"
+    assert result["policy"]["tier"] == "read_only"
+    assert result["summary"]["total"] == 6
+    assert result["summary"]["configured"] == 1
+    assert result["summary"]["would_write"] == 1
+    assert result["summary"]["normalized_count"] == 1
+    assert market["status"] == "ready"
+    assert market["validation_status"] == "valid"
+    assert market["target_store"] == "market_data_snapshots"
+    assert market["would_write"] is True
+    assert market["normalized_count"] == 1
+    assert market["skipped_count"] == 0
+    assert market["sample_identifiers"] == ["SAMPLE_EQTY"]
+    assert market["safe_actions"][0]["tool"] == "refresh_provider_import_profile"
+    assert market["safe_actions"][0]["enabled"] is True
+    assert not metadata_db.exists()
+    assert not market_db.exists()
+
+    combined = f"{result}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-export" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "secret" not in combined
 
 
 def test_provider_import_refresh_is_draft_only_and_path_safe(

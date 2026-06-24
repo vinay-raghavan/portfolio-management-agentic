@@ -108,6 +108,19 @@ def test_web_console_exposes_guided_provider_source_onboarding() -> None:
     assert "safe_actions" in source
 
 
+def test_web_console_exposes_provider_import_dry_run_previews() -> None:
+    source = (WEB_ROOT / "src" / "App.tsx").read_text()
+
+    assert "ProviderImportPreviews" in source
+    assert "Dry-run preview" in source
+    assert "Target store" in source
+    assert "Normalized count" in source
+    assert "Would write" in source
+    assert "provider_import_previews" in source
+    assert "sample_identifiers" in source
+    assert "would_write" in source
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 

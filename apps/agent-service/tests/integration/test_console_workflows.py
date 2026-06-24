@@ -245,6 +245,69 @@ def test_console_workflows_expose_guided_provider_onboarding_without_path_leaks(
     assert "secret" not in combined
 
 
+def test_console_workflows_expose_provider_import_previews_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    market_path = tmp_path / "private-market-preview.json"
+    market_path.write_text(
+        """
+        {
+          "snapshots": [
+            {
+              "symbol": "SAMPLE_EQTY",
+              "as_of": "2026-06-22",
+              "bars": [
+                {
+                  "date": "2026-06-22",
+                  "open": 100,
+                  "high": 104,
+                  "low": 99,
+                  "close": 103,
+                  "volume": 123000
+                }
+              ],
+              "metrics": {"rsi14": 59.4, "api_token": "should_not_persist"},
+              "notes": ["private-market-preview token leak candidate"]
+            }
+          ]
+        }
+        """
+    )
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(tmp_path / "provider-config.db"))
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", str(tmp_path / "market-data.db"))
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", str(market_path))
+    client = TestClient(app)
+
+    response = client.get("/console/workflows", params={"preset": "momentum"})
+
+    assert response.status_code == 200
+    previews = response.json()["settings"]["provider_import_previews"]
+    by_provider = {
+        preview["provider_id"]: preview
+        for preview in previews["previews"]
+    }
+    market = by_provider["configured_market_data"]
+
+    assert previews["status"] == "success"
+    assert previews["policy"]["tier"] == "read_only"
+    assert previews["summary"]["configured"] == 1
+    assert previews["summary"]["would_write"] == 1
+    assert previews["summary"]["normalized_count"] == 1
+    assert market["target_store"] == "market_data_snapshots"
+    assert market["normalized_count"] == 1
+    assert market["would_write"] is True
+    assert market["sample_identifiers"] == ["SAMPLE_EQTY"]
+
+    combined = f"{previews}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-preview" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "secret" not in combined
+
+
 def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
     client = TestClient(app)
 

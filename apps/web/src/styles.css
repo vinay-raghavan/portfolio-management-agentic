@@ -909,7 +909,8 @@ p {
 }
 
 .template-summary,
-.onboarding-summary {
+.onboarding-summary,
+.preview-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
@@ -936,7 +937,8 @@ p {
 }
 
 .template-summary div,
-.onboarding-summary div {
+.onboarding-summary div,
+.preview-summary div {
   display: grid;
   gap: 4px;
   min-height: 58px;
@@ -958,7 +960,10 @@ p {
 .onboarding-summary span,
 .onboarding-row span,
 .onboarding-row small,
-.onboarding-row li {
+.onboarding-row li,
+.preview-summary span,
+.preview-row span,
+.preview-row small {
   color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.35;
@@ -967,13 +972,15 @@ p {
 .readiness-summary strong,
 .source-summary strong,
 .template-summary strong,
-.onboarding-summary strong {
+.onboarding-summary strong,
+.preview-summary strong {
   font-size: 18px;
 }
 
 .source-list,
 .template-list,
-.onboarding-list {
+.onboarding-list,
+.preview-list {
   display: grid;
 }
 
@@ -1124,6 +1131,52 @@ p {
   padding-left: 18px;
 }
 
+.preview-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.5fr) minmax(260px, 0.8fr) minmax(320px, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-height: 94px;
+  padding: 13px 0;
+  border-top: 1px solid var(--border);
+}
+
+.preview-row:first-child {
+  border-top: 0;
+}
+
+.preview-main,
+.preview-fields,
+.preview-fields div,
+.preview-context,
+.preview-context div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.preview-main strong,
+.preview-fields strong,
+.preview-row span,
+.preview-row small,
+.preview-row code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.preview-main strong,
+.preview-fields strong {
+  font-size: 13px;
+}
+
+.preview-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.preview-context {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.05fr) minmax(0, 1fr);
+}
+
 .action-chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -1257,7 +1310,10 @@ p {
   .template-fields,
   .onboarding-row,
   .onboarding-status-grid,
-  .onboarding-guidance {
+  .onboarding-guidance,
+  .preview-row,
+  .preview-fields,
+  .preview-context {
     grid-template-columns: 1fr;
   }
 
@@ -1320,6 +1376,7 @@ p {
   .source-summary,
   .template-summary,
   .onboarding-summary,
+  .preview-summary,
   .ledger-stats,
   .workflow-summary {
     grid-template-columns: 1fr;
