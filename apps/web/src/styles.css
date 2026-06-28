@@ -676,6 +676,87 @@ p {
   font-size: 12px;
 }
 
+.approval-card,
+.paper-order-card {
+  display: grid;
+  gap: 8px;
+  padding: 2px 0 10px;
+  border-top: 1px solid var(--border);
+}
+
+.approval-card:first-child,
+.paper-order-card:first-child {
+  border-top: 0;
+}
+
+.approval-card .approval-row,
+.paper-order-card .detail-row {
+  border-top: 0;
+}
+
+.paper-preflight {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.paper-preflight.compact {
+  padding: 8px;
+}
+
+.preflight-head,
+.preflight-policy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.preflight-head span,
+.preflight-policy span,
+.preflight-grid span,
+.preflight-blockers span,
+.preflight-blockers li {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.preflight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.preflight-grid div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.preflight-grid strong,
+.preflight-policy strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.preflight-blockers {
+  display: grid;
+  gap: 4px;
+}
+
+.preflight-blockers ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+}
+
 .ledger-stats,
 .report-stack,
 .provider-list,
@@ -694,14 +775,14 @@ p {
 }
 
 .ledger-stats span,
-.report-stack div {
+.report-stack > div:not(.paper-preflight) {
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-muted);
 }
 
-.report-stack div {
+.report-stack > div:not(.paper-preflight) {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -761,8 +842,7 @@ p {
 }
 
 .action-result {
-  display: flex;
-  align-items: center;
+  display: grid;
   gap: 10px;
   min-height: 38px;
   margin-bottom: 12px;
@@ -778,9 +858,21 @@ p {
   background: var(--profit-soft);
 }
 
+.action-result.warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
 .action-result.danger {
   border-color: #fecaca;
   background: var(--loss-soft);
+}
+
+.action-result > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .action-result span {

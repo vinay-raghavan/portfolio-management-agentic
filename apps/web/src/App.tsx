@@ -171,6 +171,17 @@ const fallbackOverview: JsonRecord = {
         audit_event_count: 0,
         pending_approval_count: 0,
         simulated_fills: 0,
+        readiness_preflight_count: 0,
+      },
+      sections: {
+        paper_order_readiness: {
+          schema_version: 'paper-order-readiness-report/v1',
+          preflight_count: 0,
+          ready_for_approval_count: 0,
+          blocked_count: 0,
+          latest_preflight: null,
+          preflights: [],
+        },
       },
       audit_export: {
         schema_version: 'paper-audit-export/v1',
@@ -728,6 +739,37 @@ function humanize(value: string) {
   return value.replace(/_/g, ' ');
 }
 
+function paperPreflightTone(status: string): 'good' | 'warn' | 'danger' | 'info' | 'neutral' {
+  if (status === 'ready_for_approval' || status === 'pass') {
+    return 'good';
+  }
+  if (status === 'blocked' || status === 'fail') {
+    return 'danger';
+  }
+  if (status === 'review' || status === 'pending') {
+    return 'warn';
+  }
+  return status ? 'info' : 'neutral';
+}
+
+function gateByName(preflight: JsonRecord, name: string): JsonRecord {
+  return (
+    (preflight.risk_gates ?? []).find((gate: JsonRecord) => gate.name === name) ?? {
+      name,
+      status: 'unknown',
+      reason: 'Gate was not recorded.',
+    }
+  );
+}
+
+function submittedStrategyGate(preflight: JsonRecord): JsonRecord {
+  return preflight.submitted_strategy_gate ?? gateByName(preflight, 'submitted_strategy');
+}
+
+function latestReportPreflight(report: JsonRecord): JsonRecord | null {
+  return report.sections?.paper_order_readiness?.latest_preflight ?? null;
+}
+
 function pickCandidates(payload: JsonRecord) {
   return (
     payload.screener?.run?.screener_run?.candidates ??
@@ -1023,10 +1065,20 @@ function App() {
         setWorkflows(payload.state);
         setWorkflowState('ready');
       }
+      const action = payload.action ?? {};
+      const preflight = action.readiness_preflight ?? action.paper_order?.readiness_preflight;
+      const actionStatus = String(action.status ?? 'completed');
+      const preflightStatus = String(preflight?.status ?? '');
+      const blockingReasons = preflight?.blocking_reasons ?? [];
+      const isBlocked = actionStatus === 'blocked' || preflightStatus === 'blocked';
       setActionResult({
-        tone: 'good',
+        tone: isBlocked ? 'warn' : 'good',
         title: label,
-        message: `${payload.action?.status ?? 'completed'} via ${payload.action?.policy?.tier ?? 'policy'} action`,
+        message: preflight
+          ? `${humanize(actionStatus)} via ${action.policy?.tier ?? 'policy'} action / preflight ${humanize(preflightStatus)}`
+          : `${actionStatus} via ${action.policy?.tier ?? 'policy'} action`,
+        preflight,
+        blockingReasons,
       });
     } catch (error) {
       setActionResult({
@@ -1065,11 +1117,10 @@ function App() {
   }
 
   function runPaperOrderProposal() {
-    const proposalSuffix = new Date().toISOString().replace(/[^0-9]/g, '');
     void postWorkflowAction(
       '/console/workflows/paper-orders',
       {
-        strategy_id: `${latestStrategyId}-proposal-${proposalSuffix}`,
+        strategy_id: latestStrategyId,
         symbol: defaults.symbol,
         side: 'buy',
         quantity: 2,
@@ -1214,8 +1265,13 @@ function App() {
 
         {actionResult ? (
           <section className={`action-result ${actionResult.tone}`}>
-            <strong>{actionResult.title}</strong>
-            <span>{actionResult.message}</span>
+            <div>
+              <strong>{actionResult.title}</strong>
+              <span>{actionResult.message}</span>
+            </div>
+            {actionResult.preflight ? (
+              <PaperPreflightSummary compact preflight={actionResult.preflight} />
+            ) : null}
           </section>
         ) : null}
 
@@ -1316,7 +1372,7 @@ function App() {
                 title="Approval queue"
                 icon={<ClipboardCheck size={19} aria-hidden="true" />}
               />
-              <ApprovalList approvals={approvals} />
+              <ApprovalList approvals={approvals} orders={paperOrders} />
               <div className="ledger-stats">
                 <span>{accounting.simulated_fills ?? 0} simulated fills</span>
                 <span>{formatCurrency(accounting.total_unrealized_pnl ?? 0)}</span>
@@ -1525,7 +1581,7 @@ function App() {
                   Simulate paper fill
                 </ActionButton>
               </div>
-              <ApprovalList approvals={approvals} />
+              <ApprovalList approvals={approvals} orders={paperOrders} />
             </section>
 
             <section className="panel">
@@ -1536,14 +1592,7 @@ function App() {
               />
               <div className="detail-list">
                 {paperOrders.length ? (
-                  paperOrders.map((order: JsonRecord) => (
-                    <div className="detail-row" key={order.order_id}>
-                      <strong>{order.symbol}</strong>
-                      <span>
-                        {order.side} {order.quantity} / {order.status}
-                      </span>
-                    </div>
-                  ))
+                  <PaperOrderList orders={paperOrders} />
                 ) : (
                   <div className="empty-state">No paper order proposals yet</div>
                 )}
@@ -1759,29 +1808,121 @@ function CandidateTable({ candidates }: { candidates: JsonRecord[] }) {
   );
 }
 
-function ApprovalList({ approvals }: { approvals: JsonRecord[] }) {
+function ApprovalList({ approvals, orders }: { approvals: JsonRecord[]; orders: JsonRecord[] }) {
   if (!approvals.length) {
     return <div className="empty-state">No pending approvals</div>;
   }
   return (
     <>
-      {approvals.slice(0, 4).map((approval: JsonRecord) => (
-        <div className="approval-row" key={approval.approval_id ?? approval.entity_id}>
-          <AlertTriangle size={17} aria-hidden="true" />
-          <div>
-            <strong>{approval.action_type ?? approval.requested_action ?? 'simulate_paper_fill'}</strong>
-            <span>{approval.related_id ?? approval.entity_id ?? approval.approval_id}</span>
+      {approvals.slice(0, 4).map((approval: JsonRecord) => {
+        const relatedOrder = orders.find((order: JsonRecord) => order.order_id === approval.related_id);
+        const preflight = relatedOrder?.readiness_preflight;
+        return (
+          <div className="approval-card" key={approval.approval_id ?? approval.entity_id}>
+            <div className="approval-row">
+              <AlertTriangle size={17} aria-hidden="true" />
+              <div>
+                <strong>{approval.action_type ?? approval.requested_action ?? 'simulate_paper_fill'}</strong>
+                <span>{approval.related_id ?? approval.entity_id ?? approval.approval_id}</span>
+              </div>
+              <StatusPill tone={approval.status === 'approved' ? 'good' : 'warn'}>
+                {approval.status ?? 'pending'}
+              </StatusPill>
+            </div>
+            {preflight ? <PaperPreflightSummary compact preflight={preflight} /> : null}
           </div>
-          <StatusPill tone={approval.status === 'approved' ? 'good' : 'warn'}>
-            {approval.status ?? 'pending'}
-          </StatusPill>
+        );
+      })}
+    </>
+  );
+}
+
+function PaperOrderList({ orders }: { orders: JsonRecord[] }) {
+  return (
+    <>
+      {orders.map((order: JsonRecord) => (
+        <div className="paper-order-card" key={order.order_id}>
+          <div className="detail-row">
+            <strong>{order.symbol}</strong>
+            <span>
+              {order.side} {order.quantity} / {order.status}
+            </span>
+          </div>
+          <PaperPreflightSummary compact preflight={order.readiness_preflight} />
         </div>
       ))}
     </>
   );
 }
 
+function PaperPreflightSummary({
+  preflight,
+  compact = false,
+}: {
+  preflight: JsonRecord | null | undefined;
+  compact?: boolean;
+}) {
+  if (!preflight) {
+    return <div className="empty-state">No readiness preflight captured</div>;
+  }
+  const importStatus = String(preflight.provider_import_reconciliation?.status ?? 'unknown');
+  const refreshStatus = String(preflight.provider_refresh_readiness?.status ?? 'unknown');
+  const strategyGate = submittedStrategyGate(preflight);
+  const approval = String(preflight.required_approval ?? 'human');
+  const policy = preflight.paper_only_policy ?? {};
+  const blockingReasons = Array.isArray(preflight.blocking_reasons)
+    ? preflight.blocking_reasons
+    : [];
+  return (
+    <div className={`paper-preflight ${compact ? 'compact' : ''}`} aria-label="Readiness preflight">
+      <div className="preflight-head">
+        <span>Readiness preflight</span>
+        <StatusPill tone={paperPreflightTone(String(preflight.status ?? 'unknown'))}>
+          {humanize(String(preflight.status ?? 'unknown'))}
+        </StatusPill>
+      </div>
+      <div className="preflight-grid">
+        <div>
+          <span>Provider reconciliation</span>
+          <strong>{humanize(importStatus)}</strong>
+        </div>
+        <div>
+          <span>Provider refresh</span>
+          <strong>{humanize(refreshStatus)}</strong>
+        </div>
+        <div>
+          <span>Submitted strategy</span>
+          <strong>{humanize(String(strategyGate.status ?? 'unknown'))}</strong>
+        </div>
+        <div>
+          <span>Human approval</span>
+          <strong>{humanize(approval)}</strong>
+        </div>
+      </div>
+      <div className="preflight-policy">
+        <span>Paper policy</span>
+        <strong>
+          live {policy.live_trading ?? 'disabled'} / fills {policy.simulated_fills ?? 'approval_required'}
+        </strong>
+      </div>
+      <div className="preflight-blockers">
+        <strong>Blocking reasons</strong>
+        {blockingReasons.length ? (
+          <ul>
+            {blockingReasons.slice(0, 3).map((reason: string) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        ) : (
+          <span>None</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ReportStack({ report }: { report: JsonRecord }) {
+  const latestPreflight = latestReportPreflight(report);
   return (
     <div className="report-stack">
       <div>
@@ -1796,6 +1937,11 @@ function ReportStack({ report }: { report: JsonRecord }) {
         <span>Audit rows</span>
         <strong>{report.summary?.audit_event_count ?? 0}</strong>
       </div>
+      <div>
+        <span>Readiness preflights</span>
+        <strong>{report.summary?.readiness_preflight_count ?? 0}</strong>
+      </div>
+      <PaperPreflightSummary preflight={latestPreflight} />
     </div>
   );
 }

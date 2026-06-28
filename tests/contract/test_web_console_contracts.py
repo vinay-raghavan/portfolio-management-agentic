@@ -136,6 +136,25 @@ def test_web_console_exposes_provider_import_reconciliation() -> None:
     assert "stored_count" in source
 
 
+def test_web_console_exposes_paper_order_readiness_preflight() -> None:
+    source = (WEB_ROOT / "src" / "App.tsx").read_text()
+
+    assert "PaperPreflightSummary" in source
+    assert "PaperOrderList" in source
+    assert "Readiness preflight" in source
+    assert "Provider reconciliation" in source
+    assert "Provider refresh" in source
+    assert "Submitted strategy" in source
+    assert "Human approval" in source
+    assert "Blocking reasons" in source
+    assert "readiness_preflight" in source
+    assert "paper_order_readiness" in source
+    assert "blocking_reasons" in source
+    assert "submitted_strategy_gate" in source
+    assert "proposalSuffix" not in source
+    assert "-proposal-" not in source
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 

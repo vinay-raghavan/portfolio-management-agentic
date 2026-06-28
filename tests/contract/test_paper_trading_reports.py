@@ -53,6 +53,21 @@ def test_paper_trading_report_includes_review_sections_and_audit_export() -> Non
     assert report["sections"]["positions"]
     assert report["sections"]["orders"]
     assert report["sections"]["fills"]
+    readiness = report["sections"]["paper_order_readiness"]
+    latest_preflight = readiness["latest_preflight"]
+
+    assert report["summary"]["readiness_preflight_count"] >= 1
+    assert report["summary"]["blocked_readiness_preflight_count"] == 0
+    assert readiness["schema_version"] == "paper-order-readiness-report/v1"
+    assert readiness["preflight_count"] >= 1
+    assert readiness["ready_for_approval_count"] >= 1
+    assert latest_preflight["status"] == "ready_for_approval"
+    assert latest_preflight["required_approval"] == "human"
+    assert latest_preflight["provider_import_reconciliation"]["status"] == "pass"
+    assert latest_preflight["provider_refresh_readiness"]["status"] == "pass"
+    assert latest_preflight["submitted_strategy_gate"]["status"] == "pass"
+    assert latest_preflight["paper_only_policy"]["live_trading"] == "disabled"
+    assert latest_preflight["blocking_reasons"] == []
     assert report["recommendation"]["stance"] == "paper_draft_candidate"
 
     assert audit_export["schema_version"] == "paper-audit-export/v1"

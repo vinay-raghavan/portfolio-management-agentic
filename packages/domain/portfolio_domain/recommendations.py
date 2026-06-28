@@ -454,6 +454,7 @@ def build_paper_order_readiness_preflight(
         },
         "provider_import_reconciliation": provider_import,
         "provider_refresh_readiness": provider_refresh,
+        "submitted_strategy_gate": submitted_strategy_gate.to_dict(),
         "history": {
             "strategy_ids": strategy_ids,
             "backtest_request_ids": recommendation.history_refs[
