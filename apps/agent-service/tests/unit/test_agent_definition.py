@@ -23,6 +23,7 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "list_provider_source_templates" in tool_names
     assert "list_provider_source_onboarding" in tool_names
     assert "list_provider_import_previews" in tool_names
+    assert "list_provider_import_reconciliation" in tool_names
     assert "get_market_data_snapshot" in tool_names
     assert "list_market_data_snapshots" in tool_names
     assert "get_universe_members" in tool_names

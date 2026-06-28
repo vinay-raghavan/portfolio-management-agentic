@@ -20,6 +20,7 @@ from portfolio_mcp.tools import (
     get_universe_members,
     list_data_providers,
     list_provider_import_previews,
+    list_provider_import_reconciliation,
     list_provider_source_templates,
     list_provider_source_onboarding,
     list_provider_import_jobs,
@@ -273,6 +274,72 @@ def test_provider_import_previews_dry_run_without_writing_or_path_leaks(
     combined = f"{result}".lower()
     assert str(tmp_path).lower() not in combined
     assert "private-market-export" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "secret" not in combined
+
+
+def test_provider_import_reconciliation_reports_store_alignment_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    metadata_db = tmp_path / "provider-config.db"
+    market_db = tmp_path / "market-data.db"
+    private_path = tmp_path / "private-market-reconciliation.json"
+    private_path.write_text(
+        json.dumps(
+            {
+                "snapshots": [
+                    {
+                        "symbol": "SAMPLE_EQTY",
+                        "source": str(private_path),
+                        "as_of": "2026-06-22",
+                        "bars": [
+                            {
+                                "date": "2026-06-22",
+                                "open": 100.0,
+                                "high": 104.0,
+                                "low": 99.0,
+                                "close": 103.0,
+                                "volume": 123000,
+                            }
+                        ],
+                        "metrics": {
+                            "atr_pct": 2.5,
+                            "api_token": "should_not_persist",
+                        },
+                        "notes": ["private-market-reconciliation token leak candidate"],
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(metadata_db))
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", str(market_db))
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", str(private_path))
+
+    refresh_provider_import_profile("configured_market_data")
+    result = list_provider_import_reconciliation()
+    reconciliations = {
+        item["provider_id"]: item for item in result["reconciliations"]
+    }
+    market = reconciliations["configured_market_data"]
+
+    assert result["status"] == "success"
+    assert result["policy"]["tier"] == "read_only"
+    assert result["summary"]["total"] == 6
+    assert result["summary"]["in_sync"] == 1
+    assert market["reconciliation_status"] == "in_sync"
+    assert market["preview"]["normalized_count"] == 1
+    assert market["latest_job"]["imported_count"] == 1
+    assert market["store"]["target_store"] == "market_data_snapshots"
+    assert market["store"]["stored_count"] == 1
+    assert market["safe_actions"][0]["tool"] == "list_provider_import_previews"
+
+    combined = f"{result}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-reconciliation" not in combined
     assert "api_key" not in combined
     assert "token" not in combined
     assert "secret" not in combined

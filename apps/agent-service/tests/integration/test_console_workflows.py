@@ -308,6 +308,72 @@ def test_console_workflows_expose_provider_import_previews_without_path_leaks(
     assert "secret" not in combined
 
 
+def test_console_workflows_expose_provider_import_reconciliation_without_path_leaks(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    market_path = tmp_path / "private-market-reconciliation.json"
+    market_path.write_text(
+        """
+        {
+          "snapshots": [
+            {
+              "symbol": "SAMPLE_EQTY",
+              "as_of": "2026-06-22",
+              "bars": [
+                {
+                  "date": "2026-06-22",
+                  "open": 100,
+                  "high": 104,
+                  "low": 99,
+                  "close": 103,
+                  "volume": 123000
+                }
+              ],
+              "metrics": {"rsi14": 59.4, "api_token": "should_not_persist"},
+              "notes": ["private-market-reconciliation token leak candidate"]
+            }
+          ]
+        }
+        """
+    )
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(tmp_path / "provider-config.db"))
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", str(tmp_path / "market-data.db"))
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MARKET_DATA_JSON_PATH", str(market_path))
+    client = TestClient(app)
+
+    refresh_response = client.post(
+        "/console/workflows/provider-profiles/configured_market_data/refresh",
+    )
+    assert refresh_response.status_code == 200
+
+    response = client.get("/console/workflows", params={"preset": "momentum"})
+
+    assert response.status_code == 200
+    reconciliation = response.json()["settings"]["provider_import_reconciliation"]
+    by_provider = {
+        item["provider_id"]: item
+        for item in reconciliation["reconciliations"]
+    }
+    market = by_provider["configured_market_data"]
+
+    assert reconciliation["status"] == "success"
+    assert reconciliation["policy"]["tier"] == "read_only"
+    assert reconciliation["summary"]["in_sync"] == 1
+    assert market["reconciliation_status"] == "in_sync"
+    assert market["preview"]["normalized_count"] == 1
+    assert market["latest_job"]["imported_count"] == 1
+    assert market["store"]["stored_count"] == 1
+
+    combined = f"{reconciliation}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-reconciliation" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "secret" not in combined
+
+
 def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
     client = TestClient(app)
 

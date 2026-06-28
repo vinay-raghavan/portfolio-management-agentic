@@ -158,6 +158,15 @@ class MarketDataStore:
         snapshots.sort(key=lambda snapshot: (snapshot.as_of, snapshot.provider_id, snapshot.symbol))
         return snapshots[: max(0, limit)]
 
+    def count_market_snapshots(self, provider_id: str | None = None) -> int:
+        normalized_provider_id = provider_id.strip() if provider_id else None
+        return sum(
+            1
+            for (stored_provider, _, _) in self._snapshots
+            if normalized_provider_id is None
+            or stored_provider == normalized_provider_id
+        )
+
     def record_screener_run(self, screener_run: ScreenerRunResult) -> ScreenerRunResult:
         self._screener_runs[screener_run.run_id] = screener_run
         return screener_run
@@ -273,6 +282,16 @@ class SQLiteMarketDataStore(MarketDataStore):
             for row in rows
         ]
 
+    def count_market_snapshots(self, provider_id: str | None = None) -> int:
+        query = "select count(*) as row_count from market_data_snapshots"
+        params: list[str] = []
+        if provider_id:
+            query += " where provider_id = ?"
+            params.append(provider_id.strip())
+        with self._connect() as connection:
+            row = connection.execute(query, params).fetchone()
+        return int(row["row_count"] if row is not None else 0)
+
     def record_screener_run(self, screener_run: ScreenerRunResult) -> ScreenerRunResult:
         with self._connect() as connection:
             connection.execute(
@@ -383,6 +402,34 @@ def build_market_data_store(
     if db_path:
         return SQLiteMarketDataStore(db_path)
     return MarketDataStore()
+
+
+def count_stored_market_snapshots(
+    env: Mapping[str, str] | None = None,
+    provider_id: str | None = None,
+) -> int:
+    config = env if env is not None else os.environ
+    db_path = config.get(MARKET_DATA_DB_ENV, "").strip()
+    if not db_path:
+        return _MARKET_DATA_STORE.count_market_snapshots(provider_id)
+
+    path = Path(db_path)
+    if not path.is_file():
+        return 0
+
+    query = "select count(*) as row_count from market_data_snapshots"
+    params: list[str] = []
+    if provider_id:
+        query += " where provider_id = ?"
+        params.append(provider_id.strip())
+
+    try:
+        with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as connection:
+            connection.row_factory = sqlite3.Row
+            row = connection.execute(query, params).fetchone()
+    except sqlite3.OperationalError:
+        return 0
+    return int(row["row_count"] if row is not None else 0)
 
 
 _MARKET_DATA_STORE = build_market_data_store()

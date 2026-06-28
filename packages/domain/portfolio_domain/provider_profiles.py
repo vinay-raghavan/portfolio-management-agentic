@@ -22,7 +22,10 @@ from .models import (
     VolatilitySnapshot,
 )
 from .market_data_store import build_market_data_store
+from .market_data_store import count_stored_market_snapshots
 from .provider_data_store import build_provider_data_store
+from .provider_data_store import count_stored_factor_snapshots
+from .provider_data_store import count_stored_universe_members
 from .providers import (
     CONFIGURED_JSON_SOURCE,
     list_configured_fundamentals_snapshots,
@@ -917,6 +920,162 @@ def list_provider_import_previews(
     return [
         _preview_from_validation(validation, env=env)
         for validation in validate_configured_provider_imports(env=env)
+    ]
+
+
+def _stored_count_for_preview(
+    preview: Mapping[str, Any],
+    env: Mapping[str, str] | None,
+) -> int:
+    provider_id = str(preview["provider_id"])
+    kind = str(preview["kind"])
+    target_store = str(preview["target_store"])
+    if target_store == "market_data_snapshots":
+        return count_stored_market_snapshots(env=env, provider_id=provider_id)
+    if target_store == "provider_universe_members":
+        return count_stored_universe_members(env=env, provider_id=provider_id)
+    if target_store == "provider_factor_snapshots":
+        return count_stored_factor_snapshots(
+            kind,
+            env=env,
+            provider_id=provider_id,
+        )
+    return 0
+
+
+def _latest_job_payload(job: ProviderImportJob | None) -> dict[str, Any]:
+    if job is None:
+        return {
+            "job_id": "",
+            "status": "none",
+            "validation_status": "none",
+            "imported_count": 0,
+            "skipped_count": 0,
+            "target_store": "none",
+            "completed_at": "",
+        }
+    return {
+        "job_id": job.job_id,
+        "status": job.status,
+        "validation_status": job.validation_status,
+        "imported_count": job.imported_count,
+        "skipped_count": job.skipped_count,
+        "target_store": job.target_store,
+        "completed_at": job.completed_at,
+    }
+
+
+def _reconciliation_status(
+    preview: Mapping[str, Any],
+    latest_job: ProviderImportJob | None,
+    stored_count: int,
+) -> str:
+    preview_status = str(preview["status"])
+    preview_count = int(preview["normalized_count"] or 0)
+    if preview_status == "skipped":
+        return "not_configured"
+    if preview_status == "needs_attention":
+        return "needs_attention"
+    if latest_job is None:
+        return "pending_refresh"
+    if latest_job.status != "completed":
+        return "needs_attention"
+    if latest_job.imported_count != stored_count:
+        return "store_mismatch"
+    if preview_count != stored_count:
+        return "source_changed"
+    return "in_sync"
+
+
+def _reconciliation_warnings(
+    status: str,
+    preview: Mapping[str, Any],
+    latest_job: ProviderImportJob | None,
+) -> list[str]:
+    if status == "pending_refresh":
+        return ["Configured source has not been refreshed into structured storage."]
+    if status == "source_changed":
+        return [
+            "Configured source count differs from stored rows; run refresh before relying on configured screeners."
+        ]
+    if status == "store_mismatch":
+        return [
+            "Latest import job count differs from stored rows; inspect refresh history and rerun refresh."
+        ]
+    if status == "needs_attention":
+        if latest_job is not None and latest_job.status != "completed":
+            return ["Latest import job did not complete successfully."]
+        return [str(item) for item in preview.get("warnings", [])]
+    return []
+
+
+def _reconciliation_next_step(status: str) -> str:
+    return {
+        "in_sync": "ready_for_configured_screening",
+        "pending_refresh": "refresh_provider_profile",
+        "source_changed": "run_provider_refresh",
+        "store_mismatch": "rerun_provider_refresh",
+        "needs_attention": "review_validation_or_job",
+        "not_configured": "configure_provider_env",
+    }.get(status, "review_provider_state")
+
+
+def _reconciliation_from_preview(
+    preview: Mapping[str, Any],
+    latest_job: ProviderImportJob | None,
+    env: Mapping[str, str] | None,
+) -> dict[str, Any]:
+    stored_count = _stored_count_for_preview(preview, env=env)
+    status = _reconciliation_status(preview, latest_job, stored_count)
+    preview_count = int(preview["normalized_count"] or 0)
+    latest_imported = latest_job.imported_count if latest_job is not None else 0
+    return {
+        "reconciliation_id": f"provider-import-reconciliation-{_slug(str(preview['provider_id']))}",
+        "provider_id": preview["provider_id"],
+        "kind": preview["kind"],
+        "display_name": preview["display_name"],
+        "configured": preview["configured"],
+        "provider_mode": preview["provider_mode"],
+        "source_label": preview["source_label"],
+        "reconciliation_status": status,
+        "preview": {
+            "status": preview["status"],
+            "validation_status": preview["validation_status"],
+            "target_store": preview["target_store"],
+            "normalized_count": preview_count,
+            "would_write": preview["would_write"],
+            "sample_identifiers": preview["sample_identifiers"],
+        },
+        "latest_job": _latest_job_payload(latest_job),
+        "store": {
+            "target_store": preview["target_store"],
+            "stored_count": stored_count,
+        },
+        "deltas": {
+            "preview_minus_store": preview_count - stored_count,
+            "latest_job_minus_store": latest_imported - stored_count,
+        },
+        "warnings": _reconciliation_warnings(status, preview, latest_job),
+        "next_step": _reconciliation_next_step(status),
+        "notes": [
+            "Reconciliation compares dry-run preview counts, latest sanitized job counts, and structured store counts.",
+            "It returns counts only, not database paths, raw provider payloads, or credential values.",
+        ],
+    }
+
+
+def list_provider_import_reconciliation(
+    env: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    previews = list_provider_import_previews(env=env)
+    latest_jobs = _latest_jobs_by_provider(list_provider_import_jobs(env=env, limit=1000))
+    return [
+        _reconciliation_from_preview(
+            preview,
+            latest_jobs.get(str(preview["provider_id"])),
+            env=env,
+        )
+        for preview in previews
     ]
 
 

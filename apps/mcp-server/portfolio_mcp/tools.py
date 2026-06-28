@@ -27,6 +27,7 @@ from portfolio_domain import (
     get_provider_profile_storage_status,
     list_provider_refresh_readiness as list_domain_provider_refresh_readiness,
     list_provider_import_previews as list_domain_provider_import_previews,
+    list_provider_import_reconciliation as list_domain_provider_import_reconciliation,
     list_configured_provider_source_templates,
     list_fixture_approval_queue,
     list_fixture_audit_events,
@@ -66,6 +67,7 @@ EXPOSED_TOOL_NAMES = {
     "list_provider_source_templates",
     "list_provider_source_onboarding",
     "list_provider_import_previews",
+    "list_provider_import_reconciliation",
     "list_provider_import_jobs",
     "get_provider_refresh_readiness",
     "refresh_provider_import_profile",
@@ -542,6 +544,83 @@ def list_provider_import_previews() -> dict[str, Any]:
         },
         "previews": enriched_previews,
         "next_step": "review_dry_run_before_refresh",
+    }
+
+
+def _safe_reconciliation_actions(item: dict[str, Any]) -> list[dict[str, Any]]:
+    status = str(item.get("reconciliation_status") or "")
+    refresh_enabled = status in {
+        "pending_refresh",
+        "source_changed",
+        "store_mismatch",
+    }
+    return [
+        {
+            "label": "Review dry-run preview",
+            "tool": "list_provider_import_previews",
+            "tier": _policy_payload("list_provider_import_previews")["tier"],
+            "enabled": True,
+        },
+        {
+            "label": "Refresh provider profile",
+            "tool": "refresh_provider_import_profile",
+            "tier": _policy_payload("refresh_provider_import_profile")["tier"],
+            "enabled": refresh_enabled,
+        },
+        {
+            "label": "Review import jobs",
+            "tool": "list_provider_import_jobs",
+            "tier": _policy_payload("list_provider_import_jobs")["tier"],
+            "enabled": True,
+        },
+    ]
+
+
+def list_provider_import_reconciliation() -> dict[str, Any]:
+    """Return preview, latest-job, and store-count reconciliation."""
+    tool_name = "list_provider_import_reconciliation"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    reconciliations = list_domain_provider_import_reconciliation()
+    enriched = [
+        {
+            **item,
+            "safe_actions": _safe_reconciliation_actions(item),
+        }
+        for item in reconciliations
+    ]
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "summary": {
+            "total": len(enriched),
+            "in_sync": sum(
+                1 for item in enriched if item["reconciliation_status"] == "in_sync"
+            ),
+            "pending_refresh": sum(
+                1
+                for item in enriched
+                if item["reconciliation_status"] == "pending_refresh"
+            ),
+            "source_changed": sum(
+                1
+                for item in enriched
+                if item["reconciliation_status"] == "source_changed"
+            ),
+            "store_mismatch": sum(
+                1
+                for item in enriched
+                if item["reconciliation_status"] == "store_mismatch"
+            ),
+            "needs_attention": sum(
+                1
+                for item in enriched
+                if item["reconciliation_status"] == "needs_attention"
+            ),
+        },
+        "reconciliations": enriched,
+        "next_step": "review_reconciliation_before_configured_screening",
     }
 
 
