@@ -10,15 +10,15 @@ This is a standalone repository boundary. Implementation should use documented A
 - Platform-neutral policy, domain, model-provider, and agent-platform contracts started.
 - MCP-style safe portfolio tools started in `apps/mcp-server` with streamable HTTP runtime support.
 - Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
-- Product data foundation adds fixture/configured universes, configured fundamentals, sentiment, volatility, macro/regime context, deterministic screener runs, provider refresh readiness evidence, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
+- Product data foundation adds fixture/configured universes, configured fundamentals, sentiment, volatility, macro/regime context, deterministic screener runs, provider refresh readiness and import-reconciliation evidence, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
 - Provider adapter contracts expose fixture defaults, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, provider catalog, health, import validation, market snapshot, and universe-member tools.
-- Recommendation explanations join screener/factor evidence, provider refresh readiness, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
+- Recommendation explanations join screener/factor evidence, provider refresh readiness, import-reconciliation gates, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
 - Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
-- Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with guided configured-source onboarding, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, provider profiles, refresh readiness, full-refresh controls, per-provider backoff state, and import-job feedback.
+- Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with guided configured-source onboarding, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, import-gate visibility on decision pages, provider profiles, refresh readiness, full-refresh controls, per-provider backoff state, and import-job feedback.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data, provider-context, and screener-run persistence is available through `MARKET_DATA_DB_PATH`; provider profile and import-job metadata persistence is available through `PROVIDER_CONFIG_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
 - No copied portfolio data.
@@ -67,8 +67,8 @@ Primary constraints:
 
 Next implementation milestones:
 
-1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
-2. Add configured-provider import dry-run previews that show normalized counts, sample identifiers, target stores, and warnings before refresh jobs write local caches.
+1. Wire recommendation readiness gates into paper-order proposal preflight and audit payloads.
+2. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
 
 ## Verification
 
@@ -164,7 +164,10 @@ metrics such as `market_regime_score`, `breadth_score`,
 `liquidity_condition_score`.
 Configured screeners remain read-only and paper-only; they rank candidates
 from configured market, fundamental, sentiment, volatility, macro metrics, and
-provider refresh readiness, and do not create trades.
+provider refresh readiness, and do not create trades. Import reconciliation is
+also included in screener scoring, candidate gates, recommendation risk gates,
+and allowed next actions; source-changed, store-mismatch, or needs-attention
+states block paper-order next actions until refresh/reconciliation is reviewed.
 
 Use `list_provider_source_onboarding`, `list_provider_import_previews`,
 `list_provider_import_reconciliation`, `validate_data_provider_imports`, or the

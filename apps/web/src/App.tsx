@@ -101,6 +101,16 @@ const fallbackOverview: JsonRecord = {
   screener: {
     status: 'success',
     screener_run: {
+      run_summary: {
+        provider_import_reconciliation: {
+          in_sync: 0,
+          pending_refresh: 0,
+          source_changed: 0,
+          store_mismatch: 0,
+          needs_attention: 0,
+          provider_statuses: {},
+        },
+      },
       candidates: [
         { symbol: 'TATAMOTORS', setup: 'breakout-continuation', score: 0.82, decision: 'review' },
         { symbol: 'SBIN', setup: 'pullback-to-support', score: 0.74, decision: 'watch' },
@@ -115,6 +125,9 @@ const fallbackOverview: JsonRecord = {
       setup: 'breakout-continuation',
       stance: 'paper_draft_candidate',
       confidence: 0.72,
+      risk_gates: [
+        { name: 'provider_import_reconciliation', status: 'pass', reason: 'Fixture mode has no active import reconciliation issues.' },
+      ],
       next_allowed_actions: ['draft_paper_strategy', 'create_backtest_request'],
     },
   },
@@ -729,6 +742,17 @@ function firstCandidate(payload: JsonRecord) {
   return pickCandidates(payload)[0] ?? { symbol: 'TATAMOTORS', setup: 'breakout-continuation' };
 }
 
+function pickScreenerRun(payload: JsonRecord, fallback: JsonRecord = {}) {
+  return (
+    payload.screener?.run?.screener_run ??
+    payload.screener?.run?.result ??
+    payload.screener?.screener_run ??
+    payload.screener?.result ??
+    fallback.screener?.screener_run ??
+    {}
+  );
+}
+
 function StatusPill({
   tone,
   children,
@@ -775,6 +799,53 @@ function PanelHeading({
         <h2>{title}</h2>
       </div>
       {icon}
+    </div>
+  );
+}
+
+function ImportGateSummary({
+  summary,
+  gate,
+  compact = false,
+}: {
+  summary: JsonRecord;
+  gate?: JsonRecord;
+  compact?: boolean;
+}) {
+  const sourceChanged = Number(summary.source_changed ?? 0);
+  const storeMismatch = Number(summary.store_mismatch ?? 0);
+  const needsAttention = Number(summary.needs_attention ?? 0);
+  const pendingRefresh = Number(summary.pending_refresh ?? 0);
+  const blocked = sourceChanged + storeMismatch + needsAttention;
+  const tone = blocked > 0 ? 'danger' : pendingRefresh > 0 ? 'warn' : 'good';
+  return (
+    <div className={`import-gate ${compact ? 'compact' : ''}`}>
+      <div className="import-gate-title">
+        {tone === 'good' ? (
+          <CheckCircle2 size={16} aria-hidden="true" />
+        ) : (
+          <AlertTriangle size={16} aria-hidden="true" />
+        )}
+        <div>
+          <span>Import gate</span>
+          <strong>{gate?.status ? humanize(String(gate.status)) : 'review'}</strong>
+        </div>
+      </div>
+      <div className="import-gate-stats">
+        <div>
+          <span>In sync</span>
+          <strong>{summary.in_sync ?? 0}</strong>
+        </div>
+        <div>
+          <span>Source changed</span>
+          <strong>{sourceChanged}</strong>
+        </div>
+        <div>
+          <span>Store mismatch</span>
+          <strong>{storeMismatch}</strong>
+        </div>
+      </div>
+      <StatusPill tone={tone}>{blocked > 0 ? 'Paper gate blocked' : 'Paper gate ready'}</StatusPill>
     </div>
   );
 }
@@ -870,6 +941,18 @@ function App() {
     workflows.strategy_backtest?.recommendation?.recommendation ??
     overview.recommendation?.recommendation ??
     {};
+  const screenerRun = pickScreenerRun(workflows, overview);
+  const importGateSummary = screenerRun.run_summary?.provider_import_reconciliation ?? {
+    in_sync: 0,
+    pending_refresh: 0,
+    source_changed: 0,
+    store_mismatch: 0,
+    needs_attention: 0,
+    provider_statuses: {},
+  };
+  const recommendationImportGate = (recommendation.risk_gates ?? []).find(
+    (gate: JsonRecord) => gate.name === 'provider_import_reconciliation',
+  );
   const candidates = useMemo(() => pickCandidates(workflows), [workflows]);
   const selectedCandidate = firstCandidate(workflows);
   const workflow = overview.workflow_actions?.[activeWorkflow] ?? overview.workflow_actions?.[0];
@@ -1199,6 +1282,7 @@ function App() {
                 title="Screener candidates"
                 icon={<Search size={19} aria-hidden="true" />}
               />
+              <ImportGateSummary summary={importGateSummary} gate={recommendationImportGate} />
               <CandidateTable candidates={candidates} />
             </section>
 
@@ -1216,6 +1300,7 @@ function App() {
                   risk, ledger, and citation context joined upstream.
                 </p>
               </div>
+              <ImportGateSummary summary={importGateSummary} gate={recommendationImportGate} compact />
               <div className="allowed-actions">
                 {(recommendation.next_allowed_actions ?? ['draft_paper_strategy', 'create_backtest_request']).map(
                   (action: string) => (
@@ -1287,6 +1372,7 @@ function App() {
                 ))}
               </div>
               <CandidateTable candidates={candidates} />
+              <ImportGateSummary summary={importGateSummary} gate={recommendationImportGate} />
             </section>
 
             <section className="panel">

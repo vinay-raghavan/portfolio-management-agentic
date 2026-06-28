@@ -134,6 +134,7 @@ def _risk_gates(
     has_strategy_history: bool,
     has_backtest_history: bool,
     has_open_position: bool,
+    provider_import_reconciliation_gate: GateResult,
 ) -> list[GateResult]:
     risk_review = get_demo_risk_review()
     return [
@@ -172,6 +173,7 @@ def _risk_gates(
             if has_open_position
             else "No existing paper position found for this symbol.",
         ),
+        provider_import_reconciliation_gate,
     ]
 
 
@@ -221,6 +223,57 @@ def _next_allowed_actions(
     return actions
 
 
+def _provider_import_reconciliation_gate(
+    missing_data: list[str],
+    factor_summary: dict[str, dict[str, Any]],
+) -> GateResult:
+    markers = [
+        item
+        for item in missing_data
+        if "_import_" in item and "configured_" in item
+    ]
+    if any(
+        marker.endswith("_import_source_changed")
+        or marker.endswith("_import_store_mismatch")
+        or marker.endswith("_import_needs_attention")
+        for marker in markers
+    ):
+        return GateResult(
+            "provider_import_reconciliation",
+            "fail",
+            "Configured provider import reconciliation is not safe for paper-order readiness.",
+        )
+    if any(marker.endswith("_import_pending_refresh") for marker in markers):
+        return GateResult(
+            "provider_import_reconciliation",
+            "review",
+            "Configured provider imports need refresh before paper-order readiness.",
+        )
+    if "provider_import_reconciliation" in factor_summary:
+        return GateResult(
+            "provider_import_reconciliation",
+            "pass",
+            "Configured provider imports are reconciled with structured storage.",
+        )
+    return GateResult(
+        "provider_import_reconciliation",
+        "pass",
+        "No configured provider import reconciliation issues are active.",
+    )
+
+
+def _actions_after_provider_import_gate(
+    actions: list[str],
+    provider_import_gate: GateResult,
+) -> list[str]:
+    if provider_import_gate.status == "pass":
+        return actions
+    blocked_actions = {"create_paper_order_proposal"}
+    if provider_import_gate.status == "fail":
+        blocked_actions.update({"create_backtest_request", "draft_paper_strategy"})
+    return [action for action in actions if action not in blocked_actions]
+
+
 def build_recommendation_explanation(
     symbol: str,
     setup: str,
@@ -242,10 +295,15 @@ def build_recommendation_explanation(
     has_strategy_history = bool(strategy_matches)
     has_backtest_history = bool(backtest_matches)
     has_open_position = bool(ledger_context["positions"])
+    provider_import_gate = _provider_import_reconciliation_gate(
+        list(factor_stack.missing_data),
+        factor_summary,
+    )
     risk_gates = _risk_gates(
         has_strategy_history=has_strategy_history,
         has_backtest_history=has_backtest_history,
         has_open_position=has_open_position,
+        provider_import_reconciliation_gate=provider_import_gate,
     )
     stance = _stance(
         has_strategy_history=has_strategy_history,
@@ -290,6 +348,10 @@ def build_recommendation_explanation(
         confidence = round(max(0.0, confidence - 0.15), 2)
     if has_open_position:
         confidence = round(max(0.0, confidence - 0.05), 2)
+    if provider_import_gate.status == "fail":
+        confidence = round(max(0.0, confidence - 0.25), 2)
+    elif provider_import_gate.status == "review":
+        confidence = round(max(0.0, confidence - 0.10), 2)
 
     return RecommendationExplanation(
         symbol=normalized_symbol,
@@ -318,10 +380,13 @@ def build_recommendation_explanation(
         backtest_summary=backtest_summary,
         ledger_context=ledger_context,
         citations=factor_stack.citations,
-        next_allowed_actions=_next_allowed_actions(
-            stance=stance,
-            has_strategy_history=has_strategy_history,
-            has_backtest_history=has_backtest_history,
+        next_allowed_actions=_actions_after_provider_import_gate(
+            _next_allowed_actions(
+                stance=stance,
+                has_strategy_history=has_strategy_history,
+                has_backtest_history=has_backtest_history,
+            ),
+            provider_import_gate,
         ),
         notes=[
             "Recommendation explanation is read-only analysis.",

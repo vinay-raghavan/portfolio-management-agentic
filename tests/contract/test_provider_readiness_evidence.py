@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 
 from portfolio_mcp.tools import (
+    create_backtest_request,
+    draft_paper_strategy,
     get_recommendation_explanation,
     run_provider_refresh_schedule,
     run_screener,
@@ -142,6 +144,127 @@ def test_provider_refresh_readiness_is_disclosed_in_screener_and_recommendation(
     assert "private-market-readiness" not in combined
     assert "private-universe-readiness" not in combined
     assert "private-sentiment-readiness" not in combined
+    assert "api_key" not in combined
+    assert "api_token" not in combined
+    assert "should_not_persist" not in combined
+    assert "token leak candidate" not in combined
+
+
+def test_provider_import_reconciliation_gates_configured_paper_readiness(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    private_root = _configured_readiness_env(monkeypatch, tmp_path)
+    run_provider_refresh_schedule()
+
+    market_path = tmp_path / "private-market-readiness.json"
+    market_payload = json.loads(market_path.read_text())
+    market_payload["snapshots"].append(
+        {
+            "symbol": "NEWDATA",
+            "source": str(market_path),
+            "as_of": "2026-06-22",
+            "bars": [
+                {
+                    "date": "2026-06-18",
+                    "open": 200.0,
+                    "high": 204.0,
+                    "low": 198.0,
+                    "close": 202.0,
+                    "volume": 200000,
+                },
+                {
+                    "date": "2026-06-19",
+                    "open": 203.0,
+                    "high": 206.0,
+                    "low": 201.0,
+                    "close": 205.0,
+                    "volume": 230000,
+                },
+                {
+                    "date": "2026-06-22",
+                    "open": 206.0,
+                    "high": 210.0,
+                    "low": 204.0,
+                    "close": 209.0,
+                    "volume": 260000,
+                },
+            ],
+            "metrics": {
+                "atr_pct": 2.9,
+                "median_turnover_cr": 5.1,
+                "roc20_pct": 8.1,
+                "rsi14": 61.0,
+                "api_token": "should_not_persist",
+            },
+            "notes": ["private-market-readiness token leak candidate"],
+        }
+    )
+    market_path.write_text(json.dumps(market_payload))
+
+    draft_paper_strategy(
+        "DEMODATA",
+        "Configured strategy should remain gated while imports are out of sync.",
+    )
+    create_backtest_request(
+        "DEMODATA",
+        "breakout-continuation",
+        "2026-01-02",
+        "2026-06-22",
+    )
+
+    screener = run_screener("configured_growth", "momentum", 5)
+    candidate = screener["screener_run"]["candidates"][0]
+    recommendation = get_recommendation_explanation(
+        "DEMODATA",
+        "breakout-continuation",
+    )["recommendation"]
+    blocked_without_history = get_recommendation_explanation(
+        "NEWDATA",
+        "breakout-continuation",
+    )["recommendation"]
+
+    reconciliation_summary = screener["screener_run"]["run_summary"][
+        "provider_import_reconciliation"
+    ]
+    assert reconciliation_summary["source_changed"] == 1
+    assert (
+        reconciliation_summary["provider_statuses"]["configured_market_data"]
+        == "source_changed"
+    )
+    assert "configured_market_data_import_source_changed" in candidate["missing_data"]
+    assert "provider_import_reconciliation" in {
+        item["name"] for item in candidate["score_components"]
+    }
+    assert any(
+        gate["name"] == "provider_import_reconciliation"
+        and gate["status"] == "review"
+        for gate in candidate["gates"]
+    )
+    assert "draft_paper_strategy" not in candidate["next_allowed_actions"]
+
+    assert recommendation["stance"] == "blocked"
+    assert "provider_import_reconciliation" in recommendation["factor_summary"]
+    assert (
+        "configured_market_data_import_source_changed"
+        in recommendation["missing_data"]
+    )
+    assert any(
+        gate["name"] == "provider_import_reconciliation"
+        and gate["status"] == "fail"
+        for gate in recommendation["risk_gates"]
+    )
+    assert "create_paper_order_proposal" not in recommendation["next_allowed_actions"]
+    assert blocked_without_history["stance"] == "blocked"
+    assert "draft_paper_strategy" not in blocked_without_history["next_allowed_actions"]
+    assert (
+        "create_backtest_request"
+        not in blocked_without_history["next_allowed_actions"]
+    )
+
+    combined = f"{screener} {recommendation} {blocked_without_history}".lower()
+    assert str(private_root).lower() not in combined
+    assert "private-market-readiness" not in combined
     assert "api_key" not in combined
     assert "api_token" not in combined
     assert "should_not_persist" not in combined

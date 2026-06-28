@@ -41,6 +41,8 @@ def test_web_console_has_product_surfaces_and_no_live_trade_copy() -> None:
         "Run full refresh",
         "Refresh readiness",
         "Backoff state",
+        "Import gate",
+        "Paper gate blocked",
         "Next attempt",
         "Last validation",
         "Needs attention",

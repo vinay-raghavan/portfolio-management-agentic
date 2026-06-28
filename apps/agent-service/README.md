@@ -54,9 +54,9 @@ The agent exposes only policy-classified tools:
 - Screener and strategy drafting: synthetic momentum screener, fixture-backed deterministic screener, persisted paper strategy drafts, strategy history retrieval, and pending paper proposal.
 - Provider checks: read-only provider catalog, provider health, configured import validation, guided source onboarding, configured import dry-run previews, import reconciliation, sanitized source templates, sanitized provider profiles and import-job history, provider refresh readiness, scheduled configured-provider refresh cycles, configured market/context imports, fixture market snapshots, and fixture universe members.
 - Market-data storage: fixture/provider snapshots, provider context records, and screener runs are cached in the same JSON shape returned by tools when `MARKET_DATA_DB_PATH` is configured.
-- Pattern, factor, and recommendation evidence: universe listing, pattern search, pattern playbook retrieval, strategy evidence citations, factor-stack explanations, and read-only recommendation explanations that join provider refresh readiness, history, risk, and ledger context.
+- Pattern, factor, and recommendation evidence: universe listing, pattern search, pattern playbook retrieval, strategy evidence citations, factor-stack explanations, and read-only recommendation explanations that join provider refresh readiness, import-reconciliation gates, history, risk, and ledger context.
 - Backtest, ledger, and report review: persisted simulated backtest requests, backtest history retrieval, deterministic results, paper order proposals, approval-gated simulated fills, paper positions, paper accounting, approval queue, redacted audit events, and read-only paper-trading reports.
-- Web console workflows: `/console/overview` summarizes safe state, while `/console/workflows` and its paper-only POST endpoints expose focused screeners, strategy/backtest review, paper order proposals, human approval, simulated fills, reports, and provider settings with guided configured-source onboarding, configured-source setup, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, provider profiles, full refresh orchestration, per-provider backoff state, and import-job feedback.
+- Web console workflows: `/console/overview` summarizes safe state, while `/console/workflows` and its paper-only POST endpoints expose focused screeners, strategy/backtest review, paper order proposals, human approval, simulated fills, reports, and provider settings with guided configured-source onboarding, configured-source setup, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, import-gate visibility on decision pages, provider profiles, full refresh orchestration, per-provider backoff state, and import-job feedback.
 
 Forbidden live-order and broker-token functions are not exposed to the agent.
 
@@ -77,7 +77,10 @@ configured providers. Dry-run import previews report normalized counts, target
 stores, sample identifiers, warnings, and would-write status before those
 refresh writes run. Import reconciliation compares preview counts, latest
 refresh-job counts, and stored row counts so operators can confirm configured
-stores are in sync before running configured screeners.
+stores are in sync before running configured screeners. Screeners and
+recommendations consume reconciliation state as a confidence component and
+paper-readiness gate; source-changed, store-mismatch, or needs-attention states
+remove paper-order next actions until refresh/reconciliation is reviewed.
 
 ## Commands
 
