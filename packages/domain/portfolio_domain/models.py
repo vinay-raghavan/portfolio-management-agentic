@@ -702,6 +702,7 @@ class PaperOrder:
     fill_ids: list[str]
     approval_request_id: str
     created_at: str
+    readiness_preflight: dict[str, Any]
     notes: list[str]
 
     def to_dict(self) -> dict[str, Any]:

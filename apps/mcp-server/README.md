@@ -2,7 +2,7 @@
 
 Policy-enforced MCP tools for portfolio analysis and paper-trading workflows.
 
-The server exposes only policy-classified tools. Current provider, screener, recommendation, reporting, strategy, backtest, and paper-ledger tools can cache read-only market snapshots, provider context records, and screener runs, track sanitized provider profiles and import-refresh jobs, import configured market/universe/factor records into structured storage, explain paper-only recommendations from evidence, provider refresh readiness, import-reconciliation gates, and history, generate read-only paper-trading reports with redacted audit exports, persist paper strategy drafts, list strategy history, draft backtest requests, list backtest history, return simulated results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, list paper positions and fills, show accounting summaries, show approval requests, and return redacted audit events. Forbidden live-trading and broker-token helpers remain unregistered compatibility traps for tests.
+The server exposes only policy-classified tools. Current provider, screener, recommendation, reporting, strategy, backtest, and paper-ledger tools can cache read-only market snapshots, provider context records, and screener runs, track sanitized provider profiles and import-refresh jobs, import configured market/universe/factor records into structured storage, explain paper-only recommendations from evidence, provider refresh readiness, import-reconciliation gates, and history, generate read-only paper-trading reports with redacted audit exports, persist paper strategy drafts, list strategy history, draft backtest requests, list backtest history, return simulated results, create paper order proposals only after readiness preflight passes, approve paper simulations, create approval-gated simulated fills, list paper positions and fills, show accounting summaries, show approval requests, and return redacted audit events. Forbidden live-trading and broker-token helpers remain unregistered compatibility traps for tests.
 
 Set `PAPER_LEDGER_DB_PATH` to enable SQLite-backed strategy, backtest, and paper-ledger persistence. Docker or Podman Compose uses `/data/paper-ledger.db` on a named volume.
 Set `MARKET_DATA_DB_PATH` to enable SQLite-backed market snapshot, provider context, and screener-run persistence. Docker or Podman Compose uses `/data/market-data.db` on the same named volume.
@@ -34,6 +34,10 @@ execution. Configured refreshes can import normalized market, universe,
 fundamentals, sentiment, volatility, and macro records into structured local
 storage. Scheduled refresh orchestration reports ready, stale, retry-due, and
 backoff state. Refresh jobs do not store resolved paths or raw provider payloads.
+`create_paper_order_proposal` builds the same readiness evidence into a
+`paper-order-readiness-preflight/v1` snapshot before draft creation. Blocked
+preflights return no paper order; ready preflights are stored on the order and
+redacted audit event for human approval review.
 
 ## Local Runtime
 

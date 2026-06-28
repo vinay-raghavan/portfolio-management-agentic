@@ -139,7 +139,10 @@ from .product_data import (
     run_fixture_screener,
     search_pattern_cards,
 )
-from .recommendations import build_recommendation_explanation
+from .recommendations import (
+    build_paper_order_readiness_preflight,
+    build_recommendation_explanation,
+)
 from .reports import build_paper_trading_report
 
 __all__ = [
@@ -215,6 +218,7 @@ __all__ = [
     "count_stored_market_snapshots",
     "count_stored_universe_members",
     "build_provider_profile_store",
+    "build_paper_order_readiness_preflight",
     "build_recommendation_explanation",
     "build_strategy_evidence_pack",
     "create_demo_pre_market_briefing",

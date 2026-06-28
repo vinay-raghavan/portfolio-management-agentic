@@ -10,6 +10,9 @@ from .models import (
     RecommendationExplanation,
 )
 from .paper_ledger import (
+    FIXTURE_TIMESTAMP,
+    SUPPORTED_ORDER_SIDES,
+    SUPPORTED_ORDER_TYPES,
     get_fixture_backtest_result,
     get_fixture_paper_portfolio_accounting,
     list_fixture_backtest_requests,
@@ -272,6 +275,214 @@ def _actions_after_provider_import_gate(
     if provider_import_gate.status == "fail":
         blocked_actions.update({"create_backtest_request", "draft_paper_strategy"})
     return [action for action in actions if action not in blocked_actions]
+
+
+def _latest_setup_for_symbol(symbol: str) -> str:
+    normalized_symbol = _normalize_symbol(symbol)
+    matches = [
+        request
+        for request in list_fixture_backtest_requests()
+        if request.symbol == normalized_symbol
+    ]
+    if matches:
+        latest = sorted(
+            matches,
+            key=lambda request: (
+                request.end_date,
+                request.start_date,
+                request.request_id,
+            ),
+        )[-1]
+        return latest.setup
+    return build_factor_stack_explanation(normalized_symbol).setup
+
+
+def _gate_by_name(risk_gates: list[GateResult], name: str) -> GateResult | None:
+    for gate in risk_gates:
+        if gate.name == name:
+            return gate
+    return None
+
+
+def _provider_refresh_preflight(
+    recommendation: RecommendationExplanation,
+) -> dict[str, Any]:
+    markers = [
+        item
+        for item in recommendation.missing_data
+        if "_refresh_" in item and item.startswith("configured_")
+    ]
+    if markers:
+        return {
+            "status": "fail",
+            "markers": sorted(markers),
+            "reason": "Configured provider refresh readiness is not complete.",
+        }
+    if "provider_readiness" in recommendation.factor_summary:
+        return {
+            "status": "pass",
+            "markers": [],
+            "reason": "Configured provider refresh readiness is present and usable.",
+        }
+    return {
+        "status": "pass",
+        "markers": [],
+        "reason": "No configured provider refresh readiness issues are active.",
+    }
+
+
+def _provider_import_preflight(
+    recommendation: RecommendationExplanation,
+) -> dict[str, Any]:
+    gate = _gate_by_name(recommendation.risk_gates, "provider_import_reconciliation")
+    markers = [
+        item
+        for item in recommendation.missing_data
+        if "_import_" in item and item.startswith("configured_")
+    ]
+    if gate is None:
+        return {
+            "status": "pass",
+            "markers": sorted(markers),
+            "reason": "No configured provider import reconciliation issues are active.",
+        }
+    status = "pass" if gate.status == "pass" else "fail"
+    return {
+        "status": status,
+        "gate_status": gate.status,
+        "markers": sorted(markers),
+        "reason": gate.reason,
+    }
+
+
+def _blocking_reasons(
+    recommendation: RecommendationExplanation,
+    provider_import: dict[str, Any],
+    provider_refresh: dict[str, Any],
+    extra_gates: list[GateResult] | None = None,
+) -> list[str]:
+    reasons: list[str] = []
+    for gate in [*recommendation.risk_gates, *(extra_gates or [])]:
+        if gate.status == "fail":
+            reasons.append(f"{gate.name}: {gate.reason}")
+    if provider_import["status"] != "pass":
+        reasons.append(str(provider_import["reason"]))
+    if provider_refresh["status"] != "pass":
+        reasons.append(str(provider_refresh["reason"]))
+    if "create_paper_order_proposal" not in recommendation.next_allowed_actions:
+        reasons.append(
+            "Recommendation does not currently allow a paper order proposal."
+        )
+    return sorted(set(reasons))
+
+
+def build_paper_order_readiness_preflight(
+    *,
+    strategy_id: str,
+    symbol: str,
+    side: str,
+    quantity: int,
+    order_type: str = "market",
+    requested_price: float | None = None,
+    setup: str = "",
+) -> dict[str, Any]:
+    normalized_symbol = _normalize_symbol(symbol)
+    normalized_side = side.strip().lower()
+    normalized_order_type = order_type.strip().lower()
+    if normalized_side not in SUPPORTED_ORDER_SIDES:
+        raise ValueError("Paper order side must be buy or sell.")
+    if normalized_order_type not in SUPPORTED_ORDER_TYPES:
+        raise ValueError("Paper order type must be market or limit.")
+    if quantity <= 0:
+        raise ValueError("Paper order quantity must be greater than zero.")
+    if requested_price is not None and requested_price <= 0:
+        raise ValueError("Requested price must be greater than zero when provided.")
+
+    normalized_strategy = strategy_id.strip()
+    if not normalized_strategy:
+        raise ValueError("Strategy id is required.")
+    selected_setup = (
+        _normalize_setup(setup)
+        if setup.strip()
+        else _latest_setup_for_symbol(normalized_symbol)
+    )
+    recommendation = build_recommendation_explanation(
+        normalized_symbol,
+        selected_setup,
+    )
+    strategy_ids = list(recommendation.history_refs["strategy_ids"])
+    submitted_strategy_gate = GateResult(
+        "submitted_strategy",
+        "pass" if normalized_strategy in strategy_ids else "fail",
+        "Submitted strategy draft exists for this symbol."
+        if normalized_strategy in strategy_ids
+        else "Submitted strategy draft was not found for this symbol.",
+    )
+    provider_import = _provider_import_preflight(recommendation)
+    provider_refresh = _provider_refresh_preflight(recommendation)
+    blocking_reasons = _blocking_reasons(
+        recommendation,
+        provider_import,
+        provider_refresh,
+        [submitted_strategy_gate],
+    )
+    status = "blocked" if blocking_reasons else "ready_for_approval"
+    risk_review = get_demo_risk_review()
+    return {
+        "schema_version": "paper-order-readiness-preflight/v1",
+        "preflight_id": (
+            "paper-order-preflight-"
+            f"{normalized_symbol.lower()}-{recommendation.setup}"
+        ),
+        "status": status,
+        "mode": "paper_only",
+        "evaluated_at": FIXTURE_TIMESTAMP,
+        "strategy_id": normalized_strategy,
+        "symbol": normalized_symbol,
+        "setup": recommendation.setup,
+        "order_intent": {
+            "side": normalized_side,
+            "quantity": quantity,
+            "order_type": normalized_order_type,
+            "requested_price": requested_price,
+        },
+        "recommendation": {
+            "stance": recommendation.stance,
+            "confidence": recommendation.confidence,
+            "next_allowed_actions": recommendation.next_allowed_actions,
+            "missing_data": recommendation.missing_data,
+        },
+        "provider_import_reconciliation": provider_import,
+        "provider_refresh_readiness": provider_refresh,
+        "history": {
+            "strategy_ids": strategy_ids,
+            "backtest_request_ids": recommendation.history_refs[
+                "backtest_request_ids"
+            ],
+            "paper_order_ids": recommendation.history_refs["paper_order_ids"],
+            "paper_position_symbols": recommendation.history_refs[
+                "paper_position_symbols"
+            ],
+        },
+        "risk_gates": [
+            gate.to_dict()
+            for gate in [*recommendation.risk_gates, submitted_strategy_gate]
+        ],
+        "paper_only_policy": {
+            "live_trading": risk_review.safety_switches.get("live_trading"),
+            "broker_token_access": risk_review.safety_switches.get(
+                "broker_token_access"
+            ),
+            "simulated_fills": "approval_required",
+        },
+        "required_approval": "human",
+        "blocking_reasons": blocking_reasons,
+        "notes": [
+            "Preflight is a deterministic paper-order readiness snapshot.",
+            "It does not authorize live trading or simulated fills.",
+            "Human approval is still required before any simulated fill.",
+        ],
+    }
 
 
 def build_recommendation_explanation(

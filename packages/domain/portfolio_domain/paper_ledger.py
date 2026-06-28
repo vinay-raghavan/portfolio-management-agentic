@@ -188,6 +188,7 @@ def _build_order_proposal_artifacts(
     quantity: int,
     order_type: str,
     requested_price: float | None,
+    readiness_preflight: dict[str, Any],
 ) -> tuple[PaperOrder, ApprovalRequest, AuditEvent]:
     normalized_symbol = _normalize_symbol(symbol)
     normalized_side = side.strip().lower()
@@ -204,6 +205,7 @@ def _build_order_proposal_artifacts(
     normalized_strategy = strategy_id.strip()
     if not normalized_strategy:
         raise ValueError("Strategy id is required.")
+    normalized_preflight = _validate_ready_preflight(readiness_preflight)
 
     order_id = "-".join(
         (
@@ -230,8 +232,10 @@ def _build_order_proposal_artifacts(
         fill_ids=[],
         approval_request_id=approval_id,
         created_at=FIXTURE_TIMESTAMP,
+        readiness_preflight=normalized_preflight,
         notes=[
             "Draft paper order only; no fill has been simulated.",
+            "Recommendation readiness preflight passed before this proposal was created.",
             "Human approval is required before any future simulated execution.",
             "Live broker order placement is forbidden.",
         ],
@@ -248,6 +252,7 @@ def _build_order_proposal_artifacts(
         required_approval="human",
         requested_at=FIXTURE_TIMESTAMP,
         risk_notes=[
+            "Review the attached recommendation readiness preflight before approval.",
             "Confirm paper sizing, drawdown budget, and concentration before simulation.",
             "Approval cannot authorize live trading.",
         ],
@@ -267,9 +272,25 @@ def _build_order_proposal_artifacts(
             "order_type": normalized_order_type,
             "mode": "paper",
             "live_trading": "forbidden",
+            "readiness_preflight": normalized_preflight,
         },
     )
     return order, approval, event
+
+
+def _validate_ready_preflight(readiness_preflight: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(readiness_preflight, dict) or not readiness_preflight:
+        raise ValueError("Paper order readiness preflight is required.")
+    if (
+        readiness_preflight.get("schema_version")
+        != "paper-order-readiness-preflight/v1"
+    ):
+        raise ValueError("Paper order readiness preflight schema is unsupported.")
+    if readiness_preflight.get("status") != "ready_for_approval":
+        raise ValueError("Paper order readiness preflight is not ready for approval.")
+    if readiness_preflight.get("required_approval") != "human":
+        raise ValueError("Paper order readiness preflight must require human approval.")
+    return dict(readiness_preflight)
 
 
 def _approval_event(
@@ -507,6 +528,8 @@ class PaperLedgerStore:
         quantity: int,
         order_type: str = "market",
         requested_price: float | None = None,
+        *,
+        readiness_preflight: dict[str, Any],
     ) -> tuple[PaperOrder, ApprovalRequest, AuditEvent]:
         order, approval, event = _build_order_proposal_artifacts(
             strategy_id,
@@ -515,6 +538,7 @@ class PaperLedgerStore:
             quantity,
             order_type,
             requested_price,
+            readiness_preflight,
         )
         existing_order = self._orders.get(order.order_id)
         existing_approval = self._approvals.get(approval.approval_id)
@@ -781,6 +805,8 @@ class SQLitePaperLedgerStore:
         quantity: int,
         order_type: str = "market",
         requested_price: float | None = None,
+        *,
+        readiness_preflight: dict[str, Any],
     ) -> tuple[PaperOrder, ApprovalRequest, AuditEvent]:
         order, approval, event = _build_order_proposal_artifacts(
             strategy_id,
@@ -789,6 +815,7 @@ class SQLitePaperLedgerStore:
             quantity,
             order_type,
             requested_price,
+            readiness_preflight,
         )
         with self._connect() as connection:
             existing_order = self._get_order(connection, order.order_id)
@@ -817,8 +844,9 @@ class SQLitePaperLedgerStore:
                     fill_ids_json,
                     approval_request_id,
                     created_at,
+                    readiness_preflight_json,
                     notes_json
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict(order_id) do nothing
                 """,
                 (
@@ -835,6 +863,7 @@ class SQLitePaperLedgerStore:
                     _to_json(order.fill_ids),
                     order.approval_request_id,
                     order.created_at,
+                    _to_json(order.readiness_preflight),
                     _to_json(order.notes),
                 ),
             )
@@ -1178,6 +1207,7 @@ class SQLitePaperLedgerStore:
                     fill_ids_json text not null default '[]',
                     approval_request_id text not null,
                     created_at text not null,
+                    readiness_preflight_json text not null default '{}',
                     notes_json text not null default '[]'
                 );
 
@@ -1228,6 +1258,17 @@ class SQLitePaperLedgerStore:
                 );
                 """
             )
+            order_columns = {
+                row["name"]
+                for row in connection.execute("pragma table_info(paper_orders)")
+            }
+            if "readiness_preflight_json" not in order_columns:
+                connection.execute(
+                    """
+                    alter table paper_orders
+                    add column readiness_preflight_json text not null default '{}'
+                    """
+                )
             for sort_order, position in enumerate(_fixture_positions(), start=1):
                 connection.execute(
                     """
@@ -1409,6 +1450,19 @@ def _row_to_backtest_request(row: sqlite3.Row) -> BacktestRequest:
 
 
 def _row_to_order(row: sqlite3.Row) -> PaperOrder:
+    readiness_preflight: dict[str, Any] = {}
+    if "readiness_preflight_json" in row.keys():
+        readiness_preflight = dict(_from_json(row["readiness_preflight_json"]))
+    if not readiness_preflight:
+        readiness_preflight = {
+            "schema_version": "paper-order-readiness-preflight/v1",
+            "status": "legacy_unknown",
+            "mode": "paper_only",
+            "required_approval": "human",
+            "notes": [
+                "Order was created before readiness preflight persistence existed."
+            ],
+        }
     return PaperOrder(
         order_id=row["order_id"],
         strategy_id=row["strategy_id"],
@@ -1423,6 +1477,7 @@ def _row_to_order(row: sqlite3.Row) -> PaperOrder:
         fill_ids=list(_from_json(row["fill_ids_json"])),
         approval_request_id=row["approval_request_id"],
         created_at=row["created_at"],
+        readiness_preflight=readiness_preflight,
         notes=list(_from_json(row["notes_json"])),
     )
 
@@ -1581,6 +1636,8 @@ def create_fixture_paper_order_proposal(
     quantity: int,
     order_type: str = "market",
     requested_price: float | None = None,
+    *,
+    readiness_preflight: dict[str, Any],
 ) -> tuple[PaperOrder, ApprovalRequest, AuditEvent]:
     return _PAPER_LEDGER_STORE.create_order_proposal(
         strategy_id,
@@ -1589,6 +1646,7 @@ def create_fixture_paper_order_proposal(
         quantity,
         order_type,
         requested_price,
+        readiness_preflight=readiness_preflight,
     )
 
 

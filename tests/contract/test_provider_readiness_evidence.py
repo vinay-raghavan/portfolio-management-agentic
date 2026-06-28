@@ -5,6 +5,7 @@ from pathlib import Path
 
 from portfolio_mcp.tools import (
     create_backtest_request,
+    create_paper_order_proposal,
     draft_paper_strategy,
     get_recommendation_explanation,
     run_provider_refresh_schedule,
@@ -261,8 +262,23 @@ def test_provider_import_reconciliation_gates_configured_paper_readiness(
         "create_backtest_request"
         not in blocked_without_history["next_allowed_actions"]
     )
+    blocked_order = create_paper_order_proposal(
+        strategy_id="paper-demodata-source-changed",
+        symbol="DEMODATA",
+        side="buy",
+        quantity=2,
+        order_type="market",
+    )
+    assert blocked_order["status"] == "blocked"
+    assert blocked_order["readiness_preflight"]["status"] == "blocked"
+    assert blocked_order["readiness_preflight"]["provider_import_reconciliation"][
+        "status"
+    ] == "fail"
+    assert "paper_order" not in blocked_order
 
-    combined = f"{screener} {recommendation} {blocked_without_history}".lower()
+    combined = (
+        f"{screener} {recommendation} {blocked_without_history} {blocked_order}"
+    ).lower()
     assert str(private_root).lower() not in combined
     assert "private-market-readiness" not in combined
     assert "api_key" not in combined
