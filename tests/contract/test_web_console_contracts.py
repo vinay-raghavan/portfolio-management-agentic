@@ -121,6 +121,19 @@ def test_web_console_exposes_provider_import_dry_run_previews() -> None:
     assert "would_write" in source
 
 
+def test_web_console_exposes_provider_import_reconciliation() -> None:
+    source = (WEB_ROOT / "src" / "App.tsx").read_text()
+
+    assert "ProviderImportReconciliation" in source
+    assert "Import reconciliation" in source
+    assert "Stored rows" in source
+    assert "Latest job count" in source
+    assert "Preview count" in source
+    assert "provider_import_reconciliation" in source
+    assert "reconciliation_status" in source
+    assert "stored_count" in source
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 

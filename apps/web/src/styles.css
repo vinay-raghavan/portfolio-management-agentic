@@ -910,7 +910,8 @@ p {
 
 .template-summary,
 .onboarding-summary,
-.preview-summary {
+.preview-summary,
+.reconciliation-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
@@ -938,7 +939,8 @@ p {
 
 .template-summary div,
 .onboarding-summary div,
-.preview-summary div {
+.preview-summary div,
+.reconciliation-summary div {
   display: grid;
   gap: 4px;
   min-height: 58px;
@@ -963,7 +965,10 @@ p {
 .onboarding-row li,
 .preview-summary span,
 .preview-row span,
-.preview-row small {
+.preview-row small,
+.reconciliation-summary span,
+.reconciliation-row span,
+.reconciliation-row small {
   color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.35;
@@ -973,14 +978,16 @@ p {
 .source-summary strong,
 .template-summary strong,
 .onboarding-summary strong,
-.preview-summary strong {
+.preview-summary strong,
+.reconciliation-summary strong {
   font-size: 18px;
 }
 
 .source-list,
 .template-list,
 .onboarding-list,
-.preview-list {
+.preview-list,
+.reconciliation-list {
   display: grid;
 }
 
@@ -1141,7 +1148,21 @@ p {
   border-top: 1px solid var(--border);
 }
 
+.reconciliation-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.5fr) minmax(260px, 0.8fr) minmax(320px, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-height: 94px;
+  padding: 13px 0;
+  border-top: 1px solid var(--border);
+}
+
 .preview-row:first-child {
+  border-top: 0;
+}
+
+.reconciliation-row:first-child {
   border-top: 0;
 }
 
@@ -1149,7 +1170,12 @@ p {
 .preview-fields,
 .preview-fields div,
 .preview-context,
-.preview-context div {
+.preview-context div,
+.reconciliation-main,
+.reconciliation-fields,
+.reconciliation-fields div,
+.reconciliation-context,
+.reconciliation-context div {
   display: grid;
   gap: 6px;
   min-width: 0;
@@ -1159,21 +1185,29 @@ p {
 .preview-fields strong,
 .preview-row span,
 .preview-row small,
-.preview-row code {
+.preview-row code,
+.reconciliation-main strong,
+.reconciliation-fields strong,
+.reconciliation-row span,
+.reconciliation-row small {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .preview-main strong,
-.preview-fields strong {
+.preview-fields strong,
+.reconciliation-main strong,
+.reconciliation-fields strong {
   font-size: 13px;
 }
 
-.preview-fields {
+.preview-fields,
+.reconciliation-fields {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.preview-context {
+.preview-context,
+.reconciliation-context {
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.05fr) minmax(0, 1fr);
 }
 
@@ -1313,7 +1347,10 @@ p {
   .onboarding-guidance,
   .preview-row,
   .preview-fields,
-  .preview-context {
+  .preview-context,
+  .reconciliation-row,
+  .reconciliation-fields,
+  .reconciliation-context {
     grid-template-columns: 1fr;
   }
 
@@ -1377,6 +1414,7 @@ p {
   .template-summary,
   .onboarding-summary,
   .preview-summary,
+  .reconciliation-summary,
   .ledger-stats,
   .workflow-summary {
     grid-template-columns: 1fr;

@@ -33,6 +33,7 @@ from .tools import (
     get_universe_members,
     list_data_providers,
     list_provider_import_previews,
+    list_provider_import_reconciliation,
     list_provider_import_jobs,
     list_provider_profiles,
     list_provider_source_onboarding,
@@ -95,6 +96,7 @@ def build_server():
     server.tool()(list_provider_source_templates)
     server.tool()(list_provider_source_onboarding)
     server.tool()(list_provider_import_previews)
+    server.tool()(list_provider_import_reconciliation)
     server.tool()(list_provider_import_jobs)
     server.tool()(get_provider_refresh_readiness)
     server.tool()(refresh_provider_import_profile)

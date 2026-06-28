@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from portfolio_domain.provider_profiles import (
     PROVIDER_CONFIG_DB_ENV,
     list_provider_configuration_profiles,
+    list_provider_import_reconciliation,
     list_provider_import_jobs,
     refresh_provider_import_profile_metadata,
 )
@@ -152,6 +154,96 @@ def test_provider_refresh_execution_imports_market_snapshots_to_structured_store
     assert stored.provider_id == "configured_market_data"
 
     combined = f"{job.to_dict()} {stored.to_dict()}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-snapshots" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+
+
+def test_provider_import_reconciliation_compares_preview_job_and_cache_counts_safely(
+    tmp_path,
+) -> None:
+    json_path = _write_market_snapshot(tmp_path)
+    market_db = tmp_path / "market-data.db"
+    env = {
+        PROVIDER_CONFIG_DB_ENV: str(tmp_path / "provider-config.db"),
+        "MARKET_DATA_DB_PATH": str(market_db),
+        "PORTFOLIO_MARKET_DATA_PROVIDER": "json_file",
+        "PORTFOLIO_MARKET_DATA_JSON_PATH": json_path,
+    }
+
+    before = list_provider_import_reconciliation(env=env)
+    before_market = {
+        item["provider_id"]: item for item in before
+    }["configured_market_data"]
+
+    assert before_market["reconciliation_status"] == "pending_refresh"
+    assert before_market["preview"]["normalized_count"] == 1
+    assert before_market["latest_job"]["status"] == "none"
+    assert before_market["store"]["stored_count"] == 0
+
+    job = refresh_provider_import_profile_metadata(
+        "configured_market_data",
+        env=env,
+        trigger="reconciliation_test",
+    )
+    synced = list_provider_import_reconciliation(env=env)
+    synced_market = {
+        item["provider_id"]: item for item in synced
+    }["configured_market_data"]
+
+    assert job.status == "completed"
+    assert synced_market["reconciliation_status"] == "in_sync"
+    assert synced_market["preview"]["normalized_count"] == 1
+    assert synced_market["latest_job"]["job_id"] == job.job_id
+    assert synced_market["latest_job"]["imported_count"] == 1
+    assert synced_market["store"]["target_store"] == "market_data_snapshots"
+    assert synced_market["store"]["stored_count"] == 1
+    assert synced_market["deltas"] == {
+        "preview_minus_store": 0,
+        "latest_job_minus_store": 0,
+    }
+
+    source_payload = json.loads(Path(json_path).read_text())
+    source_payload["snapshots"].append(
+        {
+            "symbol": "NEWDATA",
+            "source": str(json_path),
+            "as_of": "2026-06-22",
+            "bars": [
+                {
+                    "date": "2026-06-22",
+                    "open": 200.0,
+                    "high": 204.0,
+                    "low": 198.0,
+                    "close": 202.0,
+                    "volume": 200000,
+                }
+            ],
+            "metrics": {
+                "atr_pct": 2.9,
+                "api_token": "should_not_persist",
+            },
+            "notes": ["private-market-snapshots token leak candidate"],
+        }
+    )
+    Path(json_path).write_text(json.dumps(source_payload))
+
+    changed = list_provider_import_reconciliation(env=env)
+    changed_market = {
+        item["provider_id"]: item for item in changed
+    }["configured_market_data"]
+
+    assert changed_market["reconciliation_status"] == "source_changed"
+    assert changed_market["preview"]["normalized_count"] == 2
+    assert changed_market["latest_job"]["imported_count"] == 1
+    assert changed_market["store"]["stored_count"] == 1
+    assert changed_market["deltas"] == {
+        "preview_minus_store": 1,
+        "latest_job_minus_store": 0,
+    }
+
+    combined = f"{before} {synced} {changed}".lower()
     assert str(tmp_path).lower() not in combined
     assert "private-market-snapshots" not in combined
     assert "api_key" not in combined

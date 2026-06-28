@@ -57,6 +57,7 @@ from .models import (
 from .market_data_store import (
     SQLiteMarketDataStore,
     build_market_data_store,
+    count_stored_market_snapshots,
     get_market_data_storage_status,
     get_market_data_store,
     list_stored_market_snapshots,
@@ -68,6 +69,8 @@ from .provider_data_store import (
     ProviderDataStore,
     SQLiteProviderDataStore,
     build_provider_data_store,
+    count_stored_factor_snapshots,
+    count_stored_universe_members,
 )
 from .paper_ledger import (
     SQLitePaperLedgerStore,
@@ -98,6 +101,7 @@ from .provider_profiles import (
     list_provider_refresh_readiness,
     list_provider_configuration_profiles,
     list_provider_import_previews,
+    list_provider_import_reconciliation,
     list_provider_import_jobs,
     refresh_provider_import_profile_metadata,
     run_provider_refresh_schedule,
@@ -207,6 +211,9 @@ __all__ = [
     "build_paper_ledger_store",
     "build_paper_trading_report",
     "build_provider_data_store",
+    "count_stored_factor_snapshots",
+    "count_stored_market_snapshots",
+    "count_stored_universe_members",
     "build_provider_profile_store",
     "build_recommendation_explanation",
     "build_strategy_evidence_pack",
@@ -247,6 +254,7 @@ __all__ = [
     "list_fixture_strategy_drafts",
     "list_provider_configuration_profiles",
     "list_provider_import_previews",
+    "list_provider_import_reconciliation",
     "list_provider_import_jobs",
     "list_fixture_universes",
     "list_stored_market_snapshots",

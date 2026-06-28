@@ -107,6 +107,15 @@ class ProviderDataStore:
             matches, key=lambda members: (members.as_of, members.provider_id)
         )[-1]
 
+    def count_universe_members(self, provider_id: str | None = None) -> int:
+        normalized_provider_id = provider_id.strip() if provider_id else None
+        return sum(
+            1
+            for (stored_provider, _, _) in self._universes
+            if normalized_provider_id is None
+            or stored_provider == normalized_provider_id
+        )
+
     def record_fundamentals_snapshot(
         self,
         snapshot: FundamentalsSnapshot,
@@ -206,6 +215,23 @@ class ProviderDataStore:
             matches, key=lambda snapshot: (snapshot.as_of, snapshot.provider_id)
         )[-1]
 
+    def count_factor_snapshots(
+        self,
+        kind: str,
+        provider_id: str | None = None,
+    ) -> int:
+        _validate_factor_kind(kind)
+        normalized_provider_id = provider_id.strip() if provider_id else None
+        return sum(
+            1
+            for (stored_kind, stored_provider, _, _) in self._factor_snapshots
+            if stored_kind == kind
+            and (
+                normalized_provider_id is None
+                or stored_provider == normalized_provider_id
+            )
+        )
+
 
 class SQLiteProviderDataStore(ProviderDataStore):
     """SQLite-backed provider context store using JSON payload columns."""
@@ -272,6 +298,16 @@ class SQLiteProviderDataStore(ProviderDataStore):
             raise ValueError(f"Unknown stored universe members: {universe_id}")
         return _universe_members_from_dict(_from_json(row["payload_json"]))
 
+    def count_universe_members(self, provider_id: str | None = None) -> int:
+        query = "select count(*) as row_count from provider_universe_members"
+        params: list[str] = []
+        if provider_id:
+            query += " where provider_id = ?"
+            params.append(provider_id.strip())
+        with self._connect() as connection:
+            row = connection.execute(query, params).fetchone()
+        return int(row["row_count"] if row is not None else 0)
+
     def _record_factor_snapshot(
         self,
         kind: str,
@@ -330,6 +366,24 @@ class SQLiteProviderDataStore(ProviderDataStore):
             raise ValueError(f"Unknown stored {kind} snapshot: {symbol}")
         return _factor_snapshot_from_dict(kind, _from_json(row["payload_json"]))
 
+    def count_factor_snapshots(
+        self,
+        kind: str,
+        provider_id: str | None = None,
+    ) -> int:
+        _validate_factor_kind(kind)
+        query = """
+            select count(*) as row_count from provider_factor_snapshots
+            where kind = ?
+        """
+        params: list[str] = [kind]
+        if provider_id:
+            query += " and provider_id = ?"
+            params.append(provider_id.strip())
+        with self._connect() as connection:
+            row = connection.execute(query, params).fetchone()
+        return int(row["row_count"] if row is not None else 0)
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
         connection.row_factory = sqlite3.Row
@@ -379,3 +433,52 @@ def build_provider_data_store(
     if db_path:
         return SQLiteProviderDataStore(db_path)
     return ProviderDataStore()
+
+
+def _read_only_count(
+    env: Mapping[str, str] | None,
+    table: str,
+    filters: Mapping[str, str],
+) -> int:
+    config = env if env is not None else os.environ
+    db_path = config.get(MARKET_DATA_DB_ENV, "").strip()
+    if not db_path:
+        return 0
+
+    path = Path(db_path)
+    if not path.is_file():
+        return 0
+
+    query = f"select count(*) as row_count from {table}"
+    params: list[str] = []
+    if filters:
+        query += " where " + " and ".join(f"{key} = ?" for key in filters)
+        params.extend(filters.values())
+
+    try:
+        with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as connection:
+            connection.row_factory = sqlite3.Row
+            row = connection.execute(query, params).fetchone()
+    except sqlite3.OperationalError:
+        return 0
+    return int(row["row_count"] if row is not None else 0)
+
+
+def count_stored_universe_members(
+    env: Mapping[str, str] | None = None,
+    provider_id: str | None = None,
+) -> int:
+    filters = {"provider_id": provider_id.strip()} if provider_id else {}
+    return _read_only_count(env, "provider_universe_members", filters)
+
+
+def count_stored_factor_snapshots(
+    kind: str,
+    env: Mapping[str, str] | None = None,
+    provider_id: str | None = None,
+) -> int:
+    _validate_factor_kind(kind)
+    filters = {"kind": kind}
+    if provider_id:
+        filters["provider_id"] = provider_id.strip()
+    return _read_only_count(env, "provider_factor_snapshots", filters)

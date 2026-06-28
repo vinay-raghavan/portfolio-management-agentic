@@ -448,6 +448,58 @@ const fallbackProviderImportPreviews: JsonRecord[] = fallbackProviderProfiles.ma
   ],
 }));
 
+const fallbackProviderImportReconciliation: JsonRecord[] = fallbackProviderImportPreviews.map((preview) => ({
+  reconciliation_id: `provider-import-reconciliation-${String(preview.provider_id).replace(/_/g, '-')}`,
+  provider_id: preview.provider_id,
+  kind: preview.kind,
+  display_name: preview.display_name,
+  configured: preview.configured,
+  provider_mode: preview.provider_mode,
+  source_label: preview.source_label,
+  reconciliation_status: 'not_configured',
+  preview: {
+    status: preview.status,
+    validation_status: preview.validation_status,
+    target_store: preview.target_store,
+    normalized_count: preview.normalized_count,
+    would_write: preview.would_write,
+    sample_identifiers: preview.sample_identifiers,
+  },
+  latest_job: {
+    job_id: '',
+    status: 'none',
+    validation_status: 'none',
+    imported_count: 0,
+    skipped_count: 0,
+    target_store: 'none',
+    completed_at: '',
+  },
+  store: {
+    target_store: preview.target_store,
+    stored_count: 0,
+  },
+  deltas: {
+    preview_minus_store: 0,
+    latest_job_minus_store: 0,
+  },
+  warnings: [],
+  next_step: 'configure_provider_env',
+  safe_actions: [
+    {
+      label: 'Review dry-run preview',
+      tool: 'list_provider_import_previews',
+      tier: 'read_only',
+      enabled: true,
+    },
+    {
+      label: 'Refresh provider profile',
+      tool: 'refresh_provider_import_profile',
+      tier: 'draft_only',
+      enabled: false,
+    },
+  ],
+}));
+
 const fallbackWorkflows: JsonRecord = {
   mode: 'paper_only',
   safety: fallbackOverview.safety,
@@ -604,6 +656,12 @@ const fallbackWorkflows: JsonRecord = {
       summary: { total: 6, configured: 0, would_write: 0, normalized_count: 0, needs_attention: 0 },
       previews: fallbackProviderImportPreviews,
       next_step: 'review_dry_run_before_refresh',
+    },
+    provider_import_reconciliation: {
+      status: 'success',
+      summary: { total: 6, in_sync: 0, pending_refresh: 0, source_changed: 0, store_mismatch: 0, needs_attention: 0 },
+      reconciliations: fallbackProviderImportReconciliation,
+      next_step: 'review_reconciliation_before_configured_screening',
     },
     provider_import_jobs: {
       status: 'success',
@@ -840,6 +898,9 @@ function App() {
   const providerImportPreviews =
     workflows.settings?.provider_import_previews ??
     fallbackWorkflows.settings.provider_import_previews;
+  const providerImportReconciliation =
+    workflows.settings?.provider_import_reconciliation ??
+    fallbackWorkflows.settings.provider_import_reconciliation;
   const providerImportJobs =
     workflows.settings?.provider_import_jobs?.import_jobs ??
     fallbackWorkflows.settings.provider_import_jobs.import_jobs;
@@ -1503,6 +1564,15 @@ function App() {
               <ProviderImportPreviews previews={providerImportPreviews} />
             </section>
 
+            <section className="panel wide-panel reconciliation-panel">
+              <PanelHeading
+                label="Import reconciliation"
+                title="Configured store alignment"
+                icon={<CheckCircle2 size={19} aria-hidden="true" />}
+              />
+              <ProviderImportReconciliation reconciliation={providerImportReconciliation} />
+            </section>
+
             <section className="panel wide-panel source-panel">
               <PanelHeading
                 label="Source setup"
@@ -1998,6 +2068,101 @@ function ProviderImportPreviews({ previews }: { previews: JsonRecord }) {
                   {(preview.safe_actions ?? []).slice(0, 2).map((action: JsonRecord) => (
                     <StatusPill
                       key={`${preview.provider_id}-${action.tool}`}
+                      tone={action.enabled ? 'info' : 'neutral'}
+                    >
+                      {`${action.label ?? humanize(action.tool ?? 'action')} / ${action.tier ?? 'read_only'}`}
+                    </StatusPill>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function reconciliationTone(status: string): 'good' | 'warn' | 'danger' | 'info' | 'neutral' {
+  if (status === 'in_sync') {
+    return 'good';
+  }
+  if (status === 'pending_refresh' || status === 'source_changed') {
+    return 'warn';
+  }
+  if (status === 'store_mismatch' || status === 'needs_attention') {
+    return 'danger';
+  }
+  if (status === 'not_configured') {
+    return 'neutral';
+  }
+  return 'info';
+}
+
+function ProviderImportReconciliation({ reconciliation }: { reconciliation: JsonRecord }) {
+  const rows = reconciliation.reconciliations ?? [];
+  const summary = reconciliation.summary ?? {};
+  if (!rows.length) {
+    return <div className="empty-state">No import reconciliation available</div>;
+  }
+  return (
+    <div className="reconciliation-stack">
+      <div className="reconciliation-summary" aria-label="Configured import reconciliation summary">
+        <div>
+          <span>In sync</span>
+          <strong>{summary.in_sync ?? 0}</strong>
+        </div>
+        <div>
+          <span>Pending refresh</span>
+          <strong>{summary.pending_refresh ?? 0}</strong>
+        </div>
+        <div>
+          <span>Source changed</span>
+          <strong>{summary.source_changed ?? 0}</strong>
+        </div>
+      </div>
+      <div className="reconciliation-list">
+        {rows.slice(0, 6).map((item: JsonRecord) => (
+          <div className="reconciliation-row" key={item.reconciliation_id ?? item.provider_id}>
+            <div className="reconciliation-main">
+              <strong>{item.display_name ?? item.provider_id}</strong>
+              <span>{item.source_label ?? item.kind}</span>
+              <StatusPill tone={reconciliationTone(item.reconciliation_status ?? 'unknown')}>
+                {humanize(item.reconciliation_status ?? 'unknown')}
+              </StatusPill>
+            </div>
+            <div className="reconciliation-fields">
+              <div>
+                <span>Preview count</span>
+                <strong>{item.preview?.normalized_count ?? 0}</strong>
+              </div>
+              <div>
+                <span>Latest job count</span>
+                <strong>{item.latest_job?.imported_count ?? 0}</strong>
+              </div>
+              <div>
+                <span>Stored rows</span>
+                <strong>{item.store?.stored_count ?? 0}</strong>
+              </div>
+            </div>
+            <div className="reconciliation-context">
+              <div>
+                <span>Target store</span>
+                <strong>{humanize(item.store?.target_store ?? 'none')}</strong>
+              </div>
+              <div>
+                <span>Deltas</span>
+                <small>
+                  Preview {item.deltas?.preview_minus_store ?? 0} / Job{' '}
+                  {item.deltas?.latest_job_minus_store ?? 0}
+                </small>
+              </div>
+              <div>
+                <span>Safe action</span>
+                <div className="action-chip-list">
+                  {(item.safe_actions ?? []).slice(0, 2).map((action: JsonRecord) => (
+                    <StatusPill
+                      key={`${item.provider_id}-${action.tool}`}
                       tone={action.enabled ? 'info' : 'neutral'}
                     >
                       {`${action.label ?? humanize(action.tool ?? 'action')} / ${action.tier ?? 'read_only'}`}
