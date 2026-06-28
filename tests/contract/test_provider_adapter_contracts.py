@@ -704,15 +704,19 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
         "macro",
         "liquidity",
         "pattern",
+        "provider_import_reconciliation",
     }
     assert "configured_fundamentals" not in run["candidates"][0]["missing_data"]
     assert "configured_sentiment" not in run["candidates"][0]["missing_data"]
     assert "configured_volatility" not in run["candidates"][0]["missing_data"]
     assert "configured_macro" not in run["candidates"][0]["missing_data"]
-    assert run["candidates"][0]["next_allowed_actions"] == [
-        "explain_evidence",
-        "draft_paper_strategy",
+    assert run["run_summary"]["provider_import_reconciliation"][
+        "pending_refresh"
+    ] == 6
+    assert "configured_market_data_import_pending_refresh" in run["candidates"][0][
+        "missing_data"
     ]
+    assert run["candidates"][0]["next_allowed_actions"] == ["explain_evidence"]
     assert explanation["status"] == "success"
     assert explanation["factor_stack"]["symbol"] == "DEMODATA"
     assert explanation["factor_stack"]["sections"]["technical"]["evidence"]
@@ -734,6 +738,10 @@ def test_configured_json_universe_and_market_data_run_ranked_screener(
     assert "configured_sentiment" not in explanation["factor_stack"]["missing_data"]
     assert "configured_volatility" not in explanation["factor_stack"]["missing_data"]
     assert "configured_macro" not in explanation["factor_stack"]["missing_data"]
+    assert (
+        "configured_market_data_import_pending_refresh"
+        in explanation["factor_stack"]["missing_data"]
+    )
 
     combined = f"{universe} {result} {explanation}".lower()
     assert str(market_path).lower() not in combined

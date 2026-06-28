@@ -564,6 +564,62 @@ p {
   line-height: 1.42;
 }
 
+.import-gate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.import-gate.compact {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 10px;
+}
+
+.import-gate-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.import-gate-title svg {
+  flex: 0 0 auto;
+  color: var(--warning);
+}
+
+.import-gate-title div,
+.import-gate-stats div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.import-gate-title span,
+.import-gate-stats span {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.import-gate-title strong,
+.import-gate-stats strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.import-gate-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .allowed-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1350,7 +1406,8 @@ p {
   .preview-context,
   .reconciliation-row,
   .reconciliation-fields,
-  .reconciliation-context {
+  .reconciliation-context,
+  .import-gate {
     grid-template-columns: 1fr;
   }
 
@@ -1415,6 +1472,7 @@ p {
   .onboarding-summary,
   .preview-summary,
   .reconciliation-summary,
+  .import-gate-stats,
   .ledger-stats,
   .workflow-summary {
     grid-template-columns: 1fr;

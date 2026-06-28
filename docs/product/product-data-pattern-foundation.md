@@ -83,7 +83,7 @@ Use a layered approach:
 
 ## Implementation Status
 
-Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot, provider context, and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured source schema/template guidance, guided configured-source onboarding, configured import validation with provider-settings UI feedback, configured import dry-run previews with normalized counts and target stores, configured import reconciliation with latest-job and stored-row counts, sanitized provider profiles and import-refresh job history, scheduled refresh readiness with retry/backoff and stale-data detection, provider readiness evidence in configured screener and recommendation explanations, web-console full refresh controls with per-provider backoff state, web-console configured-source setup management with required env keys, active adapter modes, setup-gap feedback, schema/template guidance, guided onboarding, dry-run preview panels, and import reconciliation panels, configured market and provider-context refresh execution into structured SQLite tables, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot, provider context, and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured source schema/template guidance, guided configured-source onboarding, configured import validation with provider-settings UI feedback, configured import dry-run previews with normalized counts and target stores, configured import reconciliation with latest-job and stored-row counts, sanitized provider profiles and import-refresh job history, scheduled refresh readiness with retry/backoff and stale-data detection, provider readiness and import-reconciliation evidence in configured screener and recommendation explanations, web-console full refresh controls with per-provider backoff state, web-console configured-source setup management with required env keys, active adapter modes, setup-gap feedback, schema/template guidance, guided onboarding, dry-run preview panels, import reconciliation panels, and screener/recommendation import-gate visibility, configured market and provider-context refresh execution into structured SQLite tables, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, approval-gated simulated fills, paper accounting, and deterministic tests.
 
 The implementation sequence for this foundation was:
 
@@ -112,6 +112,7 @@ The implementation sequence for this foundation was:
 23. Add guided configured-source onboarding that links each template to live validation status, setup gaps, refresh readiness, and the safe refresh path in one operator workflow.
 24. Add configured-provider import dry-run previews that parse configured sources, report normalized counts, sample identifiers, target stores, warnings, and would-write status, and avoid initializing profile, market, or provider-context stores before refresh.
 25. Add configured-provider import reconciliation that compares dry-run preview counts, the latest sanitized refresh job, and structured cache rows, then reports pending-refresh, in-sync, source-changed, store-mismatch, needs-attention, or not-configured states.
+26. Wire configured-provider import reconciliation into screener scoring, candidate gates, factor-stack explanations, recommendation risk gates, confidence downgrades, next allowed actions, and web-console import-gate visibility.
 
 ## Acceptance Criteria
 
@@ -125,6 +126,7 @@ The implementation sequence for this foundation was:
 - Provider settings expose guided configured-source onboarding that links templates, validation, setup gaps, refresh readiness, and policy-classified safe next actions without returning resolved local paths, file names, raw provider payloads, or provider secrets.
 - Provider settings expose configured-provider import dry-run previews with normalized counts, sample identifiers, target stores, warnings, and would-write status without initializing storage, writing cache rows, or returning resolved local paths, file names, raw provider payloads, or provider secrets.
 - Provider settings expose configured-provider import reconciliation with preview counts, latest refresh-job counts, stored row counts, deltas, and safe next actions without returning resolved local paths, database paths, file names, raw provider payloads, or provider secrets.
+- Configured screeners and recommendation explanations include provider import-reconciliation status; source-changed, store-mismatch, or needs-attention states downgrade configured-data confidence and block paper-order next actions until refresh/reconciliation is reviewed.
 - Configured provider refreshes import normalized market snapshots into `market_data_snapshots`, universe membership into `provider_universe_members`, and fundamentals/sentiment/volatility/macro snapshots into `provider_factor_snapshots`, while recording sanitized progress, import counts, retry attempts, retry/backoff state, stale-data readiness, and audit metadata.
 - Public citations are present for pattern and factor definitions.
 - Missing data is visible in outputs and lowers confidence where appropriate.
@@ -134,7 +136,7 @@ The implementation sequence for this foundation was:
 
 ## Remaining Implementation Plan
 
-Next, wire configured-provider import reconciliation into configured screener and recommendation readiness so source-changed or store-mismatch data is disclosed, downgraded, or blocked before paper decisions.
+Next, wire recommendation readiness gates into paper-order proposal preflight and audit payloads so draft orders record the exact data-readiness, reconciliation, risk, and approval evidence used at proposal time.
 
 ## BDD Scenarios
 
@@ -167,6 +169,6 @@ And the retrieved pattern remains advisory context only.
 
 Read `.agents-cli-spec.md`, this document, `references/reference-map.md`, `docs/decisions/0005-rag-pattern-memory-boundary.md`, and `docs/architecture/tool-catalog.md`.
 
-Next test to write: a contract showing configured screeners and recommendation explanations include import reconciliation status and downgrade or block configured-data confidence when a source has changed or a store-count mismatch is present.
+Next test to write: a contract showing paper-order proposals require and persist a recommendation-readiness preflight, including provider import reconciliation, provider refresh readiness, strategy/backtest history, paper-only policy, and approval requirements.
 
 Do not copy source-system code. Recreate the behavior as typed domain contracts and deterministic services with tests.

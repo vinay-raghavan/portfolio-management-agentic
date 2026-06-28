@@ -18,6 +18,7 @@ from .models import (
     UniverseDefinition,
     VolatilitySnapshot,
 )
+from .provider_profiles import list_provider_import_reconciliation
 from .provider_profiles import list_provider_refresh_readiness
 from .providers import DataProviderRegistry, get_data_provider_registry
 
@@ -73,12 +74,19 @@ FRED_API = PatternCitation(
 )
 
 PROVIDER_READINESS_CITATION = "provider-refresh-readiness"
+PROVIDER_IMPORT_RECONCILIATION_CITATION = "provider-import-reconciliation"
 _READINESS_NEEDS_ATTENTION = {
     "backoff",
     "needs_attention",
     "pending_refresh",
     "retry_due",
     "stale",
+}
+_RECONCILIATION_NEEDS_ATTENTION = {
+    "needs_attention",
+    "pending_refresh",
+    "source_changed",
+    "store_mismatch",
 }
 
 UNIVERSES = [
@@ -435,6 +443,15 @@ def _active_provider_refresh_readiness() -> list[dict[str, Any]]:
     ]
 
 
+def _active_provider_import_reconciliation() -> list[dict[str, Any]]:
+    reconciliation = list_provider_import_reconciliation()
+    return [
+        item
+        for item in reconciliation
+        if item.get("configured") or item.get("latest_job", {}).get("status") != "none"
+    ]
+
+
 def _provider_refresh_readiness_summary(
     readiness: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -535,6 +552,156 @@ def _provider_readiness_component(
     )
 
 
+def _provider_import_reconciliation_summary(
+    reconciliation: list[dict[str, Any]],
+) -> dict[str, Any]:
+    statuses = {
+        str(item["provider_id"]): str(item["reconciliation_status"])
+        for item in reconciliation
+    }
+    needs_attention = [
+        provider_id
+        for provider_id, status in statuses.items()
+        if status in _RECONCILIATION_NEEDS_ATTENTION
+    ]
+    return {
+        "configured_count": len(reconciliation),
+        "in_sync": sum(1 for status in statuses.values() if status == "in_sync"),
+        "pending_refresh": sum(
+            1 for status in statuses.values() if status == "pending_refresh"
+        ),
+        "source_changed": sum(
+            1 for status in statuses.values() if status == "source_changed"
+        ),
+        "store_mismatch": sum(
+            1 for status in statuses.values() if status == "store_mismatch"
+        ),
+        "needs_attention": sum(
+            1 for status in statuses.values() if status == "needs_attention"
+        ),
+        "provider_statuses": statuses,
+        "needs_attention_provider_ids": needs_attention,
+    }
+
+
+def _provider_import_reconciliation_notes(
+    reconciliation: list[dict[str, Any]],
+) -> tuple[list[str], list[str], list[str]]:
+    evidence: list[str] = []
+    counterevidence: list[str] = []
+    missing_data: list[str] = []
+    for item in reconciliation:
+        provider_id = str(item["provider_id"])
+        status = str(item["reconciliation_status"])
+        if status == "in_sync":
+            evidence.append(
+                f"{provider_id} import reconciliation is in sync with structured storage."
+            )
+            continue
+        if status == "not_configured":
+            continue
+        marker = f"{provider_id}_import_{status}"
+        missing_data.append(marker)
+        if status == "pending_refresh":
+            counterevidence.append(
+                f"{provider_id} configured source has not been refreshed into structured storage."
+            )
+        elif status == "source_changed":
+            counterevidence.append(
+                f"{provider_id} configured source changed after the latest refresh; refresh before paper decisions."
+            )
+        elif status == "store_mismatch":
+            counterevidence.append(
+                f"{provider_id} latest import count differs from stored rows; rerun refresh before paper decisions."
+            )
+        elif status == "needs_attention":
+            counterevidence.append(
+                f"{provider_id} import reconciliation needs attention before configured evidence is trusted."
+            )
+    return evidence, counterevidence, missing_data
+
+
+def _provider_import_reconciliation_score(
+    reconciliation: list[dict[str, Any]],
+) -> float:
+    if not reconciliation:
+        return 1.0
+    statuses = {str(item["reconciliation_status"]) for item in reconciliation}
+    if statuses == {"in_sync"}:
+        return 1.0
+    if "store_mismatch" in statuses or "needs_attention" in statuses:
+        return 0.20
+    if "source_changed" in statuses:
+        return 0.30
+    if "pending_refresh" in statuses:
+        return 0.35
+    return 0.60
+
+
+def _provider_import_reconciliation_component(
+    reconciliation: list[dict[str, Any]],
+) -> tuple[ScoreComponent | None, list[str]]:
+    if not reconciliation:
+        return None, []
+    evidence, counterevidence, missing_data = _provider_import_reconciliation_notes(
+        reconciliation,
+    )
+    return (
+        ScoreComponent(
+            "provider_import_reconciliation",
+            _provider_import_reconciliation_score(reconciliation),
+            0.05,
+            evidence,
+            counterevidence,
+            [PROVIDER_IMPORT_RECONCILIATION_CITATION],
+        ),
+        missing_data,
+    )
+
+
+def _provider_import_reconciliation_gate(
+    reconciliation: list[dict[str, Any]],
+) -> GateResult | None:
+    if not reconciliation:
+        return None
+    statuses = {
+        str(item["reconciliation_status"])
+        for item in reconciliation
+        if str(item["reconciliation_status"]) != "not_configured"
+    }
+    if not statuses:
+        return None
+    if statuses == {"in_sync"}:
+        return GateResult(
+            "provider_import_reconciliation",
+            "pass",
+            "Configured provider imports are reconciled with structured storage.",
+        )
+    return GateResult(
+        "provider_import_reconciliation",
+        "review",
+        "Configured provider imports need reconciliation review before paper decisions.",
+    )
+
+
+def _paper_actions_after_reconciliation(
+    actions: list[str],
+    reconciliation: list[dict[str, Any]],
+) -> list[str]:
+    statuses = {
+        str(item["reconciliation_status"])
+        for item in reconciliation
+        if str(item["reconciliation_status"]) != "not_configured"
+    }
+    if not statuses or statuses == {"in_sync"}:
+        return actions
+    return [
+        action
+        for action in actions
+        if action not in {"draft_paper_strategy", "create_paper_order_proposal"}
+    ]
+
+
 def _candidate_with_provider_readiness(
     candidate: RankedScreenerCandidate,
     readiness: list[dict[str, Any]],
@@ -556,6 +723,39 @@ def _candidate_with_provider_readiness(
         missing_data=sorted({*candidate.missing_data, *missing_data}),
         citations=_citations_for_components(components),
         next_allowed_actions=candidate.next_allowed_actions,
+    )
+
+
+def _candidate_with_provider_import_reconciliation(
+    candidate: RankedScreenerCandidate,
+    reconciliation: list[dict[str, Any]],
+) -> RankedScreenerCandidate:
+    component, missing_data = _provider_import_reconciliation_component(
+        reconciliation,
+    )
+    if component is None:
+        return candidate
+    gate = _provider_import_reconciliation_gate(reconciliation)
+    components = [*candidate.score_components, component]
+    gates = [*candidate.gates]
+    if gate is not None:
+        gates.append(gate)
+    return RankedScreenerCandidate(
+        rank=candidate.rank,
+        symbol=candidate.symbol,
+        setup=candidate.setup,
+        score=_weighted_score(components),
+        passed_screeners=candidate.passed_screeners,
+        gates=gates,
+        score_components=components,
+        evidence=[*candidate.evidence, *component.evidence],
+        counterevidence=[*candidate.counterevidence, *component.counterevidence],
+        missing_data=sorted({*candidate.missing_data, *missing_data}),
+        citations=_citations_for_components(components),
+        next_allowed_actions=_paper_actions_after_reconciliation(
+            candidate.next_allowed_actions,
+            reconciliation,
+        ),
     )
 
 
@@ -996,6 +1196,7 @@ def run_fixture_screener(
     rejected_symbols: list[str] = []
     candidates: list[RankedScreenerCandidate] = []
     provider_readiness = _active_provider_refresh_readiness()
+    provider_reconciliation = _active_provider_import_reconciliation()
     providers_used = registry.providers_used()
     run_source = (
         "configured_json_file"
@@ -1032,8 +1233,12 @@ def run_fixture_screener(
             )
         )
         candidate = _candidate_with_provider_readiness(candidate, provider_readiness)
+        candidate = _candidate_with_provider_import_reconciliation(
+            candidate,
+            provider_reconciliation,
+        )
         gates = candidate.gates
-        if any(gate.status != "pass" for gate in gates):
+        if any(gate.status == "fail" for gate in gates):
             rejected_symbols.append(symbol)
             continue
         if not candidate.passed_screeners:
@@ -1081,6 +1286,9 @@ def run_fixture_screener(
             "providers_used": providers_used,
             "provider_refresh_readiness": _provider_refresh_readiness_summary(
                 provider_readiness,
+            ),
+            "provider_import_reconciliation": _provider_import_reconciliation_summary(
+                provider_reconciliation,
             ),
         },
         candidates=ranked,
@@ -1151,10 +1359,14 @@ def _patterns_for_setup(setup: str) -> list[PatternCard]:
 def _candidate_for_symbol(symbol: str) -> RankedScreenerCandidate:
     normalized = symbol.upper().strip()
     provider_readiness = _active_provider_refresh_readiness()
+    provider_reconciliation = _active_provider_import_reconciliation()
     if normalized in _COMPONENTS:
-        return _candidate_with_provider_readiness(
-            _candidate(normalized, 1),
-            provider_readiness,
+        return _candidate_with_provider_import_reconciliation(
+            _candidate_with_provider_readiness(
+                _candidate(normalized, 1),
+                provider_readiness,
+            ),
+            provider_reconciliation,
         )
     registry = get_data_provider_registry()
     try:
@@ -1163,16 +1375,19 @@ def _candidate_for_symbol(symbol: str) -> RankedScreenerCandidate:
         if "Unknown fixture symbol" in str(exc):
             raise ValueError(str(exc)) from exc
         raise ValueError(f"Unknown symbol: {symbol}") from exc
-    return _candidate_with_provider_readiness(
-        _configured_candidate(
-            snapshot,
-            1,
-            _fundamentals_for_symbol(registry, normalized),
-            _sentiment_for_symbol(registry, normalized),
-            _volatility_for_symbol(registry, normalized),
-            _macro_for_symbol(registry, normalized),
+    return _candidate_with_provider_import_reconciliation(
+        _candidate_with_provider_readiness(
+            _configured_candidate(
+                snapshot,
+                1,
+                _fundamentals_for_symbol(registry, normalized),
+                _sentiment_for_symbol(registry, normalized),
+                _volatility_for_symbol(registry, normalized),
+                _macro_for_symbol(registry, normalized),
+            ),
+            provider_readiness,
         ),
-        provider_readiness,
+        provider_reconciliation,
     )
 
 
