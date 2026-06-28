@@ -8,6 +8,30 @@ from portfolio_domain.paper_ledger import (
 )
 
 
+def _ready_preflight(symbol: str = "TATAMOTORS") -> dict:
+    return {
+        "schema_version": "paper-order-readiness-preflight/v1",
+        "status": "ready_for_approval",
+        "mode": "paper_only",
+        "evaluated_at": "2026-06-22T09:15:00+05:30",
+        "strategy_id": f"strategy-{symbol.lower()}",
+        "symbol": symbol,
+        "setup": "breakout-continuation",
+        "recommendation": {"stance": "paper_draft_candidate"},
+        "provider_import_reconciliation": {"status": "pass"},
+        "provider_refresh_readiness": {"status": "pass"},
+        "history": {"strategy_ids": [], "backtest_request_ids": []},
+        "risk_gates": [],
+        "paper_only_policy": {
+            "live_trading": "disabled",
+            "broker_token_access": "forbidden",
+            "simulated_fills": "approval_required",
+        },
+        "required_approval": "human",
+        "blocking_reasons": [],
+    }
+
+
 def test_sqlite_paper_ledger_persists_orders_approvals_and_audit_events(
     tmp_path,
 ) -> None:
@@ -21,6 +45,7 @@ def test_sqlite_paper_ledger_persists_orders_approvals_and_audit_events(
         quantity=7,
         order_type="limit",
         requested_price=970.25,
+        readiness_preflight=_ready_preflight(),
     )
 
     reloaded = SQLitePaperLedgerStore(db_path)
@@ -35,6 +60,8 @@ def test_sqlite_paper_ledger_persists_orders_approvals_and_audit_events(
     assert persisted_order.filled_quantity == 0
     assert persisted_order.fill_ids == []
     assert persisted_order.requested_price == 970.25
+    assert persisted_order.readiness_preflight["status"] == "ready_for_approval"
+    assert persisted_order.readiness_preflight["required_approval"] == "human"
 
 
 def test_sqlite_paper_ledger_seeds_fixture_positions_once(tmp_path) -> None:

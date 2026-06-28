@@ -14,7 +14,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - Provider adapter contracts expose fixture defaults, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, provider catalog, health, import validation, market snapshot, and universe-member tools.
 - Recommendation explanations join screener/factor evidence, provider refresh readiness, import-reconciliation gates, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with redacted audit exports for paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
-- Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, create pending paper order proposals, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events.
+- Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require a ready recommendation preflight before paper order proposals enter approval, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events with the readiness snapshot.
 - Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values.
@@ -67,7 +67,7 @@ Primary constraints:
 
 Next implementation milestones:
 
-1. Wire recommendation readiness gates into paper-order proposal preflight and audit payloads.
+1. Surface paper-order readiness preflight details in the web console approval workflow and paper-trading reports.
 2. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, capture the first model-backed baseline, and tune agent instructions or tool descriptions from failed cases.
 
 ## Verification

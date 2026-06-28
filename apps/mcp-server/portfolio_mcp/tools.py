@@ -6,6 +6,7 @@ from portfolio_domain import (
     approve_fixture_paper_order_simulation,
     build_factor_stack_explanation,
     build_paper_trading_report,
+    build_paper_order_readiness_preflight,
     build_recommendation_explanation,
     build_strategy_evidence_pack,
     create_demo_pre_market_briefing,
@@ -1165,6 +1166,28 @@ def create_paper_order_proposal(
     if not decision.allowed:
         return _blocked(tool_name)
     try:
+        readiness_preflight = build_paper_order_readiness_preflight(
+            strategy_id=strategy_id,
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            order_type=order_type,
+            requested_price=requested_price,
+        )
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    if readiness_preflight["status"] != "ready_for_approval":
+        return {
+            "status": "blocked",
+            "policy": decision.to_dict(),
+            "readiness_preflight": readiness_preflight,
+            "next_step": "resolve_recommendation_readiness_before_order",
+        }
+    try:
         order, approval, audit_event = create_fixture_paper_order_proposal(
             strategy_id,
             symbol,
@@ -1172,6 +1195,7 @@ def create_paper_order_proposal(
             quantity,
             order_type,
             requested_price,
+            readiness_preflight=readiness_preflight,
         )
     except ValueError as exc:
         return {
@@ -1182,6 +1206,7 @@ def create_paper_order_proposal(
     return {
         "status": "pending_approval",
         "policy": decision.to_dict(),
+        "readiness_preflight": readiness_preflight,
         "paper_order": order.to_dict(),
         "approval_request": approval.to_dict(),
         "audit_event": audit_event.to_dict(),

@@ -10,7 +10,8 @@ This slice establishes the safe contract between research, simulation, and the f
 - Return deterministic simulated backtest metrics and closed simulated trades.
 - Explain paper-only recommendations by joining factor evidence, strategy history, backtest history, risk gates, ledger context, and citations.
 - Generate read-only paper-trading review reports with redacted audit export rows.
-- Create a paper order proposal that remains `pending_approval`.
+- Create a paper order proposal that first passes recommendation readiness preflight and then remains `pending_approval`.
+- Block paper order proposals before draft creation when strategy history, backtest history, provider refresh readiness, import reconciliation, or recommendation gates are not ready.
 - Approve a paper order for simulated execution through an approval-required tool.
 - Simulate a paper fill only after approval.
 - List paper order proposals, simulated fills, and accounting summaries.
@@ -24,12 +25,13 @@ This slice establishes the safe contract between research, simulation, and the f
 
 - Backtest output is simulated and not predictive.
 - Paper order proposals do not create fills by themselves.
+- Paper order proposals require a ready `paper-order-readiness-preflight/v1` snapshot before they can enter the approval queue.
 - Human approval is required before simulated execution.
 - Simulated fills update only the paper ledger and paper positions.
 - Approval cannot authorize live trading.
 - Broker trading-token access and live order placement remain forbidden.
 - Fixture stores use offline-safe data and do not require provider credentials.
-- Persisted rows contain paper-only strategy drafts, backtest requests, proposals, approvals, fixture positions, and redacted audit payloads; no broker credentials or live account identifiers are stored.
+- Persisted rows contain paper-only strategy drafts, backtest requests, proposals, readiness preflight snapshots, approvals, fixture positions, and redacted audit payloads; no broker credentials or live account identifiers are stored.
 - Report generation is read-only and returns structured data for the caller to render or store outside the tool boundary.
 
 ## Runtime Storage
@@ -45,6 +47,7 @@ files are ignored by Git.
 
 ## Next Product Step
 
-Run the credential-gated model eval loop, capture the first baseline result set,
-and tune agent instructions or tool descriptions from failed cases. The next
-product build after that is the first thin web console.
+Surface stored readiness preflight details in web-console approval cards and
+paper-trading reports, then run the credential-gated model eval loop, capture
+the first baseline result set, and tune agent instructions or tool descriptions
+from failed cases.

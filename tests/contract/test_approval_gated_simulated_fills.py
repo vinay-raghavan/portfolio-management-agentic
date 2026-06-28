@@ -5,7 +5,9 @@ import pytest
 from portfolio_domain.paper_ledger import SQLitePaperLedgerStore
 from portfolio_mcp.tools import (
     approve_paper_order_simulation,
+    create_backtest_request,
     create_paper_order_proposal,
+    draft_paper_strategy,
     get_audit_events,
     get_paper_portfolio_accounting,
     list_paper_fills,
@@ -15,6 +17,30 @@ from portfolio_mcp.tools import (
 )
 
 
+def _ready_preflight(symbol: str = "TATAMOTORS") -> dict:
+    return {
+        "schema_version": "paper-order-readiness-preflight/v1",
+        "status": "ready_for_approval",
+        "mode": "paper_only",
+        "evaluated_at": "2026-06-22T09:15:00+05:30",
+        "strategy_id": f"strategy-{symbol.lower()}",
+        "symbol": symbol,
+        "setup": "breakout-continuation",
+        "recommendation": {"stance": "paper_draft_candidate"},
+        "provider_import_reconciliation": {"status": "pass"},
+        "provider_refresh_readiness": {"status": "pass"},
+        "history": {"strategy_ids": [], "backtest_request_ids": []},
+        "risk_gates": [],
+        "paper_only_policy": {
+            "live_trading": "disabled",
+            "broker_token_access": "forbidden",
+            "simulated_fills": "approval_required",
+        },
+        "required_approval": "human",
+        "blocking_reasons": [],
+    }
+
+
 def test_sqlite_store_rejects_simulated_fill_before_approval(tmp_path) -> None:
     store = SQLitePaperLedgerStore(tmp_path / "paper-ledger.db")
     order, _, _ = store.create_order_proposal(
@@ -22,6 +48,7 @@ def test_sqlite_store_rejects_simulated_fill_before_approval(tmp_path) -> None:
         symbol="TATAMOTORS",
         side="buy",
         quantity=4,
+        readiness_preflight=_ready_preflight(),
     )
 
     with pytest.raises(ValueError, match="approval"):
@@ -38,6 +65,7 @@ def test_sqlite_store_approval_fill_and_accounting_survive_reload(tmp_path) -> N
         quantity=7,
         order_type="limit",
         requested_price=970.25,
+        readiness_preflight=_ready_preflight(),
     )
 
     approved_order, approval, _ = store.approve_order_simulation(
@@ -74,8 +102,18 @@ def test_sqlite_store_approval_fill_and_accounting_survive_reload(tmp_path) -> N
 
 
 def test_mcp_paper_fill_workflow_is_approval_gated_and_audited() -> None:
+    strategy = draft_paper_strategy(
+        "TATAMOTORS",
+        "Approval gated workflow fixture with ready paper order preflight.",
+    )
+    create_backtest_request(
+        "TATAMOTORS",
+        "breakout-continuation",
+        "2026-01-02",
+        "2026-06-22",
+    )
     proposal = create_paper_order_proposal(
-        strategy_id="strategy-mcp-fill-workflow",
+        strategy_id=strategy["strategy"]["strategy_id"],
         symbol="TATAMOTORS",
         side="buy",
         quantity=2,
