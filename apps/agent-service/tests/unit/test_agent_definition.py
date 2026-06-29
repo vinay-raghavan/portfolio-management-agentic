@@ -1,4 +1,4 @@
-from app.agent import root_agent
+from app.agent import WORKFLOW_ROUTING_GUIDE, root_agent
 
 
 def test_agent_imports_without_google_credentials() -> None:
@@ -54,3 +54,67 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "get_strategy_draft" in tool_names
     assert "place_live_order" not in tool_names
     assert "get_broker_trading_token" not in tool_names
+
+
+def test_agent_instruction_has_eval_aligned_workflow_routes() -> None:
+    instruction = root_agent.instruction
+
+    required_routes = {
+        "Pre-market briefing": (
+            "create_pre_market_briefing",
+            "get_portfolio_summary",
+            "get_watchlist_snapshot",
+            "get_signal_summary",
+            "get_research_digest",
+            "get_risk_review",
+        ),
+        "Provider readiness": (
+            "list_data_providers",
+            "get_data_provider_health",
+            "validate_data_provider_imports",
+            "list_provider_import_reconciliation",
+            "get_provider_refresh_readiness",
+        ),
+        "Candidate explanation": (
+            "run_screener",
+            "explain_candidate_evidence",
+            "search_pattern_library",
+            "cite_strategy_evidence",
+            "explain_factor_stack",
+        ),
+        "Recommendation to paper order": (
+            "get_recommendation_explanation",
+            "create_backtest_request",
+            "get_backtest_result",
+            "create_paper_order_proposal",
+            "get_approval_queue",
+            "get_audit_events",
+        ),
+        "Approval-gated simulated fill": (
+            "approve_paper_order_simulation",
+            "simulate_approved_paper_fill",
+            "get_paper_portfolio_accounting",
+        ),
+        "Paper-trading report": (
+            "generate_paper_trading_report",
+            "get_audit_events",
+        ),
+    }
+
+    for route_name, route_tools in required_routes.items():
+        assert route_name in WORKFLOW_ROUTING_GUIDE
+        assert route_name in instruction
+        for tool_name in route_tools:
+            assert tool_name in WORKFLOW_ROUTING_GUIDE
+            assert tool_name in instruction
+
+
+def test_agent_instruction_refuses_forbidden_actions_without_tool_calls() -> None:
+    instruction = root_agent.instruction.lower()
+
+    assert "refuse without calling a tool" in instruction
+    assert "live order" in instruction
+    assert "live strategy" in instruction
+    assert "broker trading token" in instruction
+    assert "credential" in instruction
+    assert "no live-trading fallback" in instruction
