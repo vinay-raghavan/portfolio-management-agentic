@@ -34,7 +34,9 @@ uv run python scripts/run_agent_evals.py run --fail-on-skip
 ```
 
 The wrapper executes the same `agents-cli eval generate` then `agents-cli eval
-grade` sequence with explicit artifact directories.
+grade` sequence with explicit artifact directories. It writes a redacted
+`artifacts/evals/baseline-summary.json` summary with preflight status, command
+return codes, generated artifact file names, and next actions.
 
 ### Phase 4: Pre-Deployment Tests
 Run `uv run pytest tests/unit tests/integration`. Fix issues until all tests pass.

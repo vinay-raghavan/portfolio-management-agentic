@@ -83,7 +83,7 @@ Use a layered approach:
 
 ## Implementation Status
 
-Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot, provider context, and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured source schema/template guidance, guided configured-source onboarding, configured import validation with provider-settings UI feedback, configured import dry-run previews with normalized counts and target stores, configured import reconciliation with latest-job and stored-row counts, sanitized provider profiles and import-refresh job history, scheduled refresh readiness with retry/backoff and stale-data detection, provider readiness and import-reconciliation evidence in configured screener and recommendation explanations, web-console full refresh controls with per-provider backoff state, web-console configured-source setup management with required env keys, active adapter modes, setup-gap feedback, schema/template guidance, guided onboarding, dry-run preview panels, import reconciliation panels, screener/recommendation import-gate visibility, paper-order readiness preflight visibility in approval cards and reports, configured market and provider-context refresh execution into structured SQLite tables, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, recommendation-readiness preflight enforcement before paper order proposals, readiness snapshots in order/audit payloads, approval-gated simulated fills, paper accounting, and deterministic tests.
+Current status: the fixture-backed implementation covers product-data contracts, provider adapter contracts, deterministic screener output, SQLite-backed market snapshot, provider context, and screener-run persistence, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, configured source schema/template guidance, guided configured-source onboarding, configured import validation with provider-settings UI feedback, configured import dry-run previews with normalized counts and target stores, configured import reconciliation with latest-job and stored-row counts, sanitized provider profiles and import-refresh job history, scheduled refresh readiness with retry/backoff and stale-data detection, provider readiness and import-reconciliation evidence in configured screener and recommendation explanations, web-console full refresh controls with per-provider backoff state, web-console configured-source setup management with required env keys, active adapter modes, setup-gap feedback, schema/template guidance, guided onboarding, dry-run preview panels, import reconciliation panels, screener/recommendation import-gate visibility, paper-order readiness preflight visibility in approval cards and reports, configured market and provider-context refresh execution into structured SQLite tables, configured multi-factor screener candidates, file-backed pattern cards, read-only MCP tools, simulated backtest contracts, paper-ledger contracts, SQLite-backed paper-ledger persistence, recommendation-readiness preflight enforcement before paper order proposals, readiness snapshots in order/audit payloads, approval-gated simulated fills, paper accounting, credential-gated eval baseline summary capture, and deterministic tests.
 
 The implementation sequence for this foundation was:
 
@@ -115,6 +115,7 @@ The implementation sequence for this foundation was:
 26. Wire configured-provider import reconciliation into screener scoring, candidate gates, factor-stack explanations, recommendation risk gates, confidence downgrades, next allowed actions, and web-console import-gate visibility.
 27. Require paper-order proposal readiness preflight from recommendation evidence, provider refresh readiness, import reconciliation, strategy/backtest history, risk gates, and paper-only approval policy; persist the preflight on orders and redacted audit payloads.
 28. Surface stored readiness preflight status, provider reconciliation, provider refresh, submitted-strategy gate, blocking reasons, and paper-only approval policy in web-console approval cards, order rows, action feedback, and paper-trading reports.
+29. Add credential-gated eval baseline summary capture that records preflight status, command return codes, trace and grade artifact file names, and next actions without storing credential values.
 
 ## Acceptance Criteria
 
@@ -135,11 +136,12 @@ The implementation sequence for this foundation was:
 - RAG tools are read-only and cannot create, authorize, or execute paper or live trades.
 - Paper order proposals require a ready recommendation preflight before entering approval; blocked preflights return no draft order and disclose missing evidence without live-trading or credential affordances.
 - Paper approval and report surfaces show the stored readiness preflight evidence operators need before human approval.
+- Model-backed eval runs write redacted baseline summaries and leave generated traces/results under ignored artifacts.
 - No tracked file contains local absolute paths, private source imports, broker tokens, real account data, or live-trading affordances.
 
 ## Remaining Implementation Plan
 
-Next, run the credential-gated model eval baseline and use failures to tune agent instructions, tool descriptions, and trajectory checks for paper-trading, provider-readiness, and forbidden-action workflows.
+Next, run the credential-gated model eval baseline, review the baseline summary and grade artifacts, and use failures to tune agent instructions, tool descriptions, and trajectory checks for paper-trading, provider-readiness, and forbidden-action workflows.
 
 ## BDD Scenarios
 
