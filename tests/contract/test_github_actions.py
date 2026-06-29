@@ -48,3 +48,20 @@ def test_cd_workflow_is_release_gated_and_publishes_only_images() -> None:
     assert "portfolio-management-agentic-web" in cd
     assert "fyers" not in cd.lower()
     assert "broker-token" in cd
+
+
+def test_eval_baseline_workflow_is_manual_and_uploads_safe_artifacts() -> None:
+    workflow = (WORKFLOWS / "eval-baseline.yml").read_text()
+
+    assert "workflow_dispatch:" in workflow
+    assert "permissions:\n  contents: read" in workflow
+    assert "uv tool install google-agents-cli" in workflow
+    assert "scripts/run_agent_evals.py preflight --json" in workflow
+    assert "scripts/run_agent_evals.py run" in workflow
+    assert "scripts/run_agent_evals.py triage --json" in workflow
+    assert "actions/upload-artifact" in workflow
+    assert "GOOGLE_API_KEY" in workflow
+    assert "ANTHROPIC_API_KEY" in workflow
+    assert "OPENAI_API_KEY" in workflow
+    assert "broker" not in workflow.lower()
+    assert "fyers" not in workflow.lower()

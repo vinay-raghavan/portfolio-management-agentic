@@ -34,8 +34,15 @@ When credentials are configured, run the default generate-and-grade loop:
 uv run python scripts/run_agent_evals.py run --fail-on-skip
 ```
 
-The wrapper is only a guard and command launcher. The official ADK eval path
-remains `agents-cli eval generate` followed by `agents-cli eval grade`.
+Then classify any grade failures without another model call:
+
+```bash
+uv run python scripts/run_agent_evals.py triage --json
+```
+
+The wrapper is a guard, command launcher, summary writer, and deterministic
+triage helper. The official ADK eval path remains `agents-cli eval generate`
+followed by `agents-cli eval grade`.
 
 ### Default Dataset
 ```bash
@@ -131,5 +138,6 @@ Once you have a baseline, the eval surface has a few more commands worth knowing
 - `agents-cli eval compare BASE CAND` — diff two grade-results files (regression check).
 - `agents-cli eval analyze RESULTS` — cluster failure modes from a grade-results file.
 - `agents-cli eval optimize` — auto-tune your agent's prompts using eval data.
+- `uv run python scripts/run_agent_evals.py triage --json` — classify local grade failures into follow-up categories before writing regressions.
 
 See the [Evaluation Guide](https://google.github.io/agents-cli/guide/evaluation/) for the full surface and metric reference.
