@@ -104,7 +104,10 @@ uv run python scripts/run_agent_evals.py run --fail-on-skip
 ```
 
 The wrapper still uses the official ADK path: `agents-cli eval generate`
-followed by `agents-cli eval grade`.
+followed by `agents-cli eval grade`. It also writes
+`artifacts/evals/baseline-summary.json` inside this app directory with
+preflight status, command return codes, artifact file names, and next actions
+without credential values.
 
 ## 🛠️ Project Management
 

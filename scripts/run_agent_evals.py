@@ -7,8 +7,9 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
+from typing import Callable, Mapping
 
 
 GOOGLE_EVAL_CREDENTIAL_KEYS = (
@@ -32,6 +33,21 @@ class EvalRunConfig:
     eval_config: Path = Path("tests/eval/eval_config.yaml")
     traces_dir: Path = Path("artifacts/evals/traces")
     results_dir: Path = Path("artifacts/evals/grade-results")
+    summary_output: Path = Path("artifacts/evals/baseline-summary.json")
+
+
+@dataclass(frozen=True)
+class EvalCommandResult:
+    name: str
+    command: list[str]
+    return_code: int
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "command": self.command,
+            "return_code": self.return_code,
+        }
 
 
 @dataclass(frozen=True)
@@ -43,6 +59,7 @@ class EvalPreflightReport:
     eval_config: str
     traces_dir: str
     results_dir: str
+    summary_output: str
     commands: dict[str, list[str]]
     missing_environment: list[str]
     missing_binaries: list[str]
@@ -59,12 +76,45 @@ class EvalPreflightReport:
             "eval_config": self.eval_config,
             "traces_dir": self.traces_dir,
             "results_dir": self.results_dir,
+            "summary_output": self.summary_output,
             "commands": self.commands,
             "missing_environment": self.missing_environment,
             "missing_binaries": self.missing_binaries,
             "missing_files": self.missing_files,
             "present_environment_keys": self.present_environment_keys,
             "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True)
+class EvalRunSummary:
+    status: str
+    mode: str
+    provider: str
+    generated_at: str
+    preflight: EvalPreflightReport
+    command_results: list[EvalCommandResult]
+    artifacts: dict[str, object]
+    commands: dict[str, list[str]]
+    notes: list[str]
+    next_actions: list[str]
+    schema_version: str = "portfolio-agent-eval-baseline/v1"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "status": self.status,
+            "mode": self.mode,
+            "provider": self.provider,
+            "generated_at": self.generated_at,
+            "preflight": self.preflight.to_dict(),
+            "command_results": [
+                result.to_dict() for result in self.command_results
+            ],
+            "artifacts": self.artifacts,
+            "commands": self.commands,
+            "notes": self.notes,
+            "next_actions": self.next_actions,
         }
 
 
@@ -82,6 +132,21 @@ def _path_string(path: Path) -> str:
 
 def _under_app(app_dir: Path, path: Path) -> Path:
     return path if path.is_absolute() else app_dir / path
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _artifact_files(app_dir: Path, path: Path) -> list[str]:
+    resolved = _under_app(app_dir, path)
+    if not resolved.exists():
+        return []
+    return sorted(
+        _path_string(file.relative_to(resolved))
+        for file in resolved.rglob("*")
+        if file.is_file()
+    )
 
 
 def build_eval_commands(config: EvalRunConfig) -> dict[str, list[str]]:
@@ -107,6 +172,19 @@ def build_eval_commands(config: EvalRunConfig) -> dict[str, list[str]]:
             _path_string(config.results_dir),
         ],
     }
+
+
+def build_compare_command(
+    baseline_result: str | Path = "<baseline_results_json>",
+    candidate_result: str | Path = "<candidate_results_json>",
+) -> list[str]:
+    return [
+        "agents-cli",
+        "eval",
+        "compare",
+        _path_string(Path(baseline_result)),
+        _path_string(Path(candidate_result)),
+    ]
 
 
 def _missing_files(config: EvalRunConfig) -> list[str]:
@@ -175,6 +253,7 @@ def build_preflight(
         eval_config=_path_string(config.eval_config),
         traces_dir=_path_string(config.traces_dir),
         results_dir=_path_string(config.results_dir),
+        summary_output=_path_string(config.summary_output),
         commands=commands,
         missing_environment=missing_environment,
         missing_binaries=missing_binaries,
@@ -182,6 +261,86 @@ def build_preflight(
         present_environment_keys=sorted(set(present_environment_keys)),
         notes=notes,
     )
+
+
+def build_run_summary(
+    *,
+    mode: str,
+    config: EvalRunConfig,
+    preflight: EvalPreflightReport,
+    status: str,
+    command_results: list[EvalCommandResult],
+    generated_at: str | None = None,
+) -> EvalRunSummary:
+    failed_results = [
+        result for result in command_results if result.return_code != 0
+    ]
+    notes = [
+        "Summary stores environment key names only; credential values are never recorded.",
+        "Trace and grade result file names are listed relative to their artifact directories.",
+        "The official ADK eval path remains agents-cli eval generate followed by agents-cli eval grade.",
+    ]
+    if failed_results:
+        notes.append(
+            f"First failed command: {failed_results[0].name} exited with {failed_results[0].return_code}."
+        )
+
+    if status == "skipped":
+        next_actions = [
+            "Configure the missing model or judge credentials shown by preflight.",
+            "Rerun uv run python scripts/run_agent_evals.py run --fail-on-skip.",
+        ]
+    elif status == "failed":
+        next_actions = [
+            "Inspect the listed trace and grade result artifacts.",
+            "Tune agent instructions, tool descriptions, or eval cases from the failing trajectory.",
+            "Rerun the eval and compare against this baseline summary.",
+        ]
+    elif status == "completed":
+        next_actions = [
+            "Review the generated grade result JSON or HTML file.",
+            "Use agents-cli eval compare with this baseline and a future candidate result.",
+            "Promote concrete failures into deterministic tests or eval regressions.",
+        ]
+    elif status == "dry_run":
+        next_actions = [
+            "Remove --dry-run in a credentialed environment to generate traces and grade results.",
+        ]
+    else:
+        next_actions = [
+            "Use the preflight output to decide whether credentials, files, or agents-cli are missing.",
+        ]
+
+    return EvalRunSummary(
+        status=status,
+        mode=mode,
+        provider=preflight.provider,
+        generated_at=_utc_timestamp() if generated_at is None else generated_at,
+        preflight=preflight,
+        command_results=command_results,
+        artifacts={
+            "traces_dir": _path_string(config.traces_dir),
+            "results_dir": _path_string(config.results_dir),
+            "summary_output": _path_string(config.summary_output),
+            "trace_files": _artifact_files(config.app_dir, config.traces_dir),
+            "grade_result_files": _artifact_files(config.app_dir, config.results_dir),
+        },
+        commands={
+            **preflight.commands,
+            "compare_template": build_compare_command(),
+        },
+        notes=notes,
+        next_actions=next_actions,
+    )
+
+
+def write_run_summary(summary: EvalRunSummary, output: Path) -> Path:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(summary.to_dict(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return output
 
 
 def _print_report(report: EvalPreflightReport, as_json: bool) -> None:
@@ -204,18 +363,40 @@ def _print_report(report: EvalPreflightReport, as_json: bool) -> None:
     print(" ".join(report.commands["grade"]))
 
 
-def _run(command: list[str], cwd: Path) -> None:
-    subprocess.run(command, cwd=cwd, check=True)
+CommandRunner = Callable[[list[str], Path], int]
 
 
-def run_eval_mode(mode: str, config: EvalRunConfig) -> None:
+def _run(command: list[str], cwd: Path) -> int:
+    return subprocess.run(command, cwd=cwd, check=False).returncode
+
+
+def run_eval_mode(
+    mode: str,
+    config: EvalRunConfig,
+    runner: CommandRunner | None = None,
+) -> list[EvalCommandResult]:
+    runner = _run if runner is None else runner
     commands = build_eval_commands(config)
     _under_app(config.app_dir, config.traces_dir).mkdir(parents=True, exist_ok=True)
     _under_app(config.app_dir, config.results_dir).mkdir(parents=True, exist_ok=True)
+    results: list[EvalCommandResult] = []
     if mode in {"generate", "run"}:
-        _run(commands["generate"], cwd=config.app_dir)
+        result = EvalCommandResult(
+            "generate",
+            commands["generate"],
+            runner(commands["generate"], config.app_dir),
+        )
+        results.append(result)
+        if result.return_code != 0:
+            return results
     if mode in {"grade", "run"}:
-        _run(commands["grade"], cwd=config.app_dir)
+        result = EvalCommandResult(
+            "grade",
+            commands["grade"],
+            runner(commands["grade"], config.app_dir),
+        )
+        results.append(result)
+    return results
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -251,6 +432,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         type=Path,
         default=Path("artifacts/evals/grade-results"),
     )
+    parser.add_argument(
+        "--summary-output",
+        type=Path,
+        default=Path("artifacts/evals/baseline-summary.json"),
+        help="Write a redacted eval run summary relative to the app directory by default.",
+    )
     parser.add_argument("--json", action="store_true", help="Print preflight as JSON.")
     parser.add_argument(
         "--dry-run",
@@ -274,17 +461,43 @@ def main(argv: list[str] | None = None) -> int:
         eval_config=args.eval_config,
         traces_dir=args.traces_dir,
         results_dir=args.results_dir,
+        summary_output=args.summary_output,
     )
     report = build_preflight(config)
     _print_report(report, as_json=args.json)
 
+    command_results: list[EvalCommandResult] = []
     if report.status != "ready":
-        return 2 if args.fail_on_skip else 0
-    if args.mode == "preflight" or args.dry_run:
-        return 0
+        status = "skipped"
+        return_code = 2 if args.fail_on_skip else 0
+    elif args.mode == "preflight":
+        status = "ready"
+        return_code = 0
+    elif args.dry_run:
+        status = "dry_run"
+        return_code = 0
+    else:
+        command_results = run_eval_mode(args.mode, config)
+        failed_result = next(
+            (result for result in command_results if result.return_code != 0),
+            None,
+        )
+        status = "failed" if failed_result else "completed"
+        return_code = 0 if failed_result is None else failed_result.return_code
 
-    run_eval_mode(args.mode, config)
-    return 0
+    summary = build_run_summary(
+        mode=args.mode,
+        config=config,
+        preflight=report,
+        status=status,
+        command_results=command_results,
+    )
+    summary_path = write_run_summary(
+        summary,
+        _under_app(config.app_dir, config.summary_output),
+    )
+    print(f"Eval summary: {_path_string(summary_path)}", file=sys.stderr)
+    return return_code
 
 
 if __name__ == "__main__":
