@@ -1,14 +1,6 @@
 # Capstone Notes
 
-Kaggle submission docs will live here.
-
-Initial topics:
-
-- Writeup outline.
-- Video script.
-- Feature-to-requirement mapping.
-- Evidence checklist.
-- Demo scenario list.
+Kaggle submission docs and repo-safe evidence live here.
 
 ## Product North Star
 
@@ -62,3 +54,34 @@ The final submission should show that the same workflows can run with fixtures f
 - Audit log or trace showing policy boundaries and refusal of live-trading requests.
 - Model-backed eval baseline showing positive workflow quality and negative safety refusal behavior when credentials are configured, backed by the redacted baseline summary, deterministic triage report, and grade artifacts.
 - Web console screenshots showing focused screener, strategy/backtest, paper approval, report, and provider-settings pages from safe workflows.
+
+## Evidence Manifest
+
+Build the repo-safe capstone evidence manifest from the repository root:
+
+```bash
+uv run python scripts/build_capstone_evidence.py
+```
+
+The default output is ignored by Git:
+
+```text
+artifacts/capstone/evidence-manifest.json
+```
+
+Use JSON mode when another tool needs to read it directly:
+
+```bash
+uv run python scripts/build_capstone_evidence.py --json
+```
+
+The manifest records:
+
+- Paper-only product scope and safety boundaries.
+- Deterministic verification commands.
+- Docker or Podman Compose service evidence.
+- Implemented workflow evidence for briefing, provider readiness, screeners, recommendations, approval-gated simulated fills, reports, and live-trading refusal.
+- Credentialed eval status from the redacted baseline summary and triage report when present.
+- Remaining gaps, including the credentialed model eval baseline when model credentials are absent.
+
+The manifest must not contain local absolute paths, provider payloads, broker tokens, credential values, or real account data.
