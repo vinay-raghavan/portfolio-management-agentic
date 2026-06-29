@@ -419,6 +419,20 @@ def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
     order_payload = order_response.json()
     assert order_payload["action"]["status"] == "pending_approval"
     assert order_payload["action"]["policy"]["tier"] == "draft_only"
+    assert order_payload["action"]["readiness_preflight"]["status"] == (
+        "ready_for_approval"
+    )
+    assert order_payload["action"]["paper_order"]["readiness_preflight"][
+        "submitted_strategy_gate"
+    ]["status"] == "pass"
+    readiness = order_payload["state"]["reports"]["report"]["report"]["sections"][
+        "paper_order_readiness"
+    ]
+    assert readiness["latest_preflight"]["status"] == "ready_for_approval"
+    assert readiness["latest_preflight"]["submitted_strategy_gate"]["status"] == "pass"
+    assert readiness["latest_preflight"]["paper_only_policy"]["live_trading"] == (
+        "disabled"
+    )
     order_id = order_payload["action"]["paper_order"]["order_id"]
 
     approval_response = client.post(

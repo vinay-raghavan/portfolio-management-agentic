@@ -9,7 +9,7 @@ This slice establishes the safe contract between research, simulation, and the f
 - Persist and retrieve paper backtest request history.
 - Return deterministic simulated backtest metrics and closed simulated trades.
 - Explain paper-only recommendations by joining factor evidence, strategy history, backtest history, risk gates, ledger context, and citations.
-- Generate read-only paper-trading review reports with redacted audit export rows.
+- Generate read-only paper-trading review reports with readiness preflight sections and redacted audit export rows.
 - Create a paper order proposal that first passes recommendation readiness preflight and then remains `pending_approval`.
 - Block paper order proposals before draft creation when strategy history, backtest history, provider refresh readiness, import reconciliation, or recommendation gates are not ready.
 - Approve a paper order for simulated execution through an approval-required tool.
@@ -19,6 +19,7 @@ This slice establishes the safe contract between research, simulation, and the f
 - Show pending human approvals.
 - Show redacted audit events for paper-ledger actions.
 - Export audit rows as JSON-ready, redacted report data without writing files.
+- Surface stored readiness preflight status, provider reconciliation, provider refresh, submitted strategy, blocking reasons, paper-only policy, and human approval requirement in report data and the web console.
 - Persist strategy drafts, backtest requests, paper orders, paper positions, approval requests, simulated fills, and audit events in SQLite when `PAPER_LEDGER_DB_PATH` is configured.
 
 ## Safety Boundary
@@ -47,7 +48,5 @@ files are ignored by Git.
 
 ## Next Product Step
 
-Surface stored readiness preflight details in web-console approval cards and
-paper-trading reports, then run the credential-gated model eval loop, capture
-the first baseline result set, and tune agent instructions or tool descriptions
-from failed cases.
+Run the credential-gated model eval loop, capture the first baseline result set,
+and tune agent instructions or tool descriptions from failed cases.

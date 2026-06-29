@@ -76,6 +76,71 @@ def _audit_export(scope_slug: str) -> PaperAuditExport:
     )
 
 
+def _gate_by_name(preflight: dict[str, Any], name: str) -> dict[str, Any]:
+    for gate in preflight.get("risk_gates", []):
+        if gate.get("name") == name:
+            return dict(gate)
+    return {"name": name, "status": "unknown", "reason": "Gate was not recorded."}
+
+
+def _readiness_projection(order: dict[str, Any]) -> dict[str, Any] | None:
+    preflight = order.get("readiness_preflight")
+    if not isinstance(preflight, dict) or not preflight:
+        return None
+    submitted_strategy_gate = preflight.get("submitted_strategy_gate")
+    if not isinstance(submitted_strategy_gate, dict):
+        submitted_strategy_gate = _gate_by_name(preflight, "submitted_strategy")
+    return {
+        "order_id": order.get("order_id"),
+        "strategy_id": order.get("strategy_id"),
+        "symbol": order.get("symbol"),
+        "status": preflight.get("status", "unknown"),
+        "required_approval": preflight.get("required_approval", "human"),
+        "setup": preflight.get("setup"),
+        "provider_import_reconciliation": preflight.get(
+            "provider_import_reconciliation",
+            {},
+        ),
+        "provider_refresh_readiness": preflight.get(
+            "provider_refresh_readiness",
+            {},
+        ),
+        "submitted_strategy_gate": submitted_strategy_gate,
+        "paper_only_policy": preflight.get("paper_only_policy", {}),
+        "blocking_reasons": list(preflight.get("blocking_reasons", [])),
+    }
+
+
+def _paper_order_readiness(orders: list[dict[str, Any]]) -> dict[str, Any]:
+    preflights = [
+        projection
+        for order in orders
+        if (projection := _readiness_projection(order)) is not None
+    ]
+    latest_preflight = None
+    for item in reversed(preflights):
+        if item["submitted_strategy_gate"].get("status") != "unknown":
+            latest_preflight = item
+            break
+    if latest_preflight is None and preflights:
+        latest_preflight = preflights[-1]
+    return {
+        "schema_version": "paper-order-readiness-report/v1",
+        "preflight_count": len(preflights),
+        "ready_for_approval_count": sum(
+            1 for item in preflights if item["status"] == "ready_for_approval"
+        ),
+        "blocked_count": sum(1 for item in preflights if item["status"] == "blocked"),
+        "latest_preflight": latest_preflight,
+        "preflights": preflights,
+        "notes": [
+            "Readiness preflight is captured before paper order approval.",
+            "Blocked preflights do not create paper orders.",
+            "Human approval remains required before simulated fills.",
+        ],
+    }
+
+
 def build_paper_trading_report(
     symbol: str = "",
     setup: str = "",
@@ -108,11 +173,19 @@ def build_paper_trading_report(
         else "portfolio"
     )
     audit_export = _audit_export(scope_slug)
+    paper_order_readiness = _paper_order_readiness(orders)
     summary = {
         "position_count": len(positions),
         "order_count": len(orders),
         "fill_count": len(fills),
         "pending_approval_count": len(pending_approvals),
+        "readiness_preflight_count": paper_order_readiness["preflight_count"],
+        "ready_readiness_preflight_count": paper_order_readiness[
+            "ready_for_approval_count"
+        ],
+        "blocked_readiness_preflight_count": paper_order_readiness[
+            "blocked_count"
+        ],
         "audit_event_count": audit_export.row_count,
         "open_positions": accounting["open_positions"],
         "pending_orders": accounting["pending_orders"],
@@ -128,6 +201,7 @@ def build_paper_trading_report(
         "orders": orders,
         "fills": fills,
         "pending_approvals": pending_approvals,
+        "paper_order_readiness": paper_order_readiness,
         "risk_review": risk_review,
     }
     next_allowed_actions = [
