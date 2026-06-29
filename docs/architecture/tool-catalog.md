@@ -2,6 +2,8 @@
 
 This catalog documents the first MCP-style tool slice. The MCP server must expose only tools that are explicitly classified by `packages/policy`.
 
+Tool function docstrings are model-facing descriptions in ADK. Each exposed tool should name its policy tier, and high-risk workflow tools should also describe the safe sequence they support. This prevents future tool additions from weakening provider-readiness checks, recommendation preflights, approval-gated simulated fills, or live-trading refusals before evals can observe the behavior.
+
 ## Exposed Tools
 
 | Tool | Tier | Purpose |

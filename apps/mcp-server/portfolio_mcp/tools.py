@@ -120,7 +120,7 @@ def _blocked(tool_name: str, details: dict[str, Any] | None = None) -> dict[str,
 
 
 def get_portfolio_summary() -> dict[str, Any]:
-    """Return a synthetic portfolio summary for paper-trading analysis."""
+    """Read-only portfolio summary for paper-trading analysis."""
     tool_name = "get_portfolio_summary"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -133,7 +133,7 @@ def get_portfolio_summary() -> dict[str, Any]:
 
 
 def get_watchlist_snapshot() -> dict[str, Any]:
-    """Return synthetic pre-market watchlist context."""
+    """Read-only pre-market watchlist context."""
     tool_name = "get_watchlist_snapshot"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -146,7 +146,7 @@ def get_watchlist_snapshot() -> dict[str, Any]:
 
 
 def get_signal_summary() -> dict[str, Any]:
-    """Return synthetic market setup and signal context."""
+    """Read-only market setup and signal context."""
     tool_name = "get_signal_summary"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -159,7 +159,7 @@ def get_signal_summary() -> dict[str, Any]:
 
 
 def get_research_digest() -> dict[str, Any]:
-    """Return synthetic research and pattern notes for pre-market review."""
+    """Read-only research and pattern notes for pre-market review."""
     tool_name = "get_research_digest"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -172,7 +172,7 @@ def get_research_digest() -> dict[str, Any]:
 
 
 def create_pre_market_briefing() -> dict[str, Any]:
-    """Compose a read-only synthetic pre-market briefing."""
+    """Read-only pre-market briefing from portfolio, watchlist, signal, research, and risk evidence."""
     tool_name = "create_pre_market_briefing"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -185,7 +185,7 @@ def create_pre_market_briefing() -> dict[str, Any]:
 
 
 def run_momentum_screener(limit: int) -> dict[str, Any]:
-    """Run a synthetic momentum screener over demo symbols."""
+    """Read-only momentum screener over demo symbols; does not draft or place orders."""
     tool_name = "run_momentum_screener"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -200,7 +200,7 @@ def run_momentum_screener(limit: int) -> dict[str, Any]:
 
 
 def list_data_providers() -> dict[str, Any]:
-    """Return read-only provider catalog and configuration state."""
+    """Read-only provider-readiness catalog to call before claiming configured data is available."""
     tool_name = "list_data_providers"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -214,7 +214,7 @@ def list_data_providers() -> dict[str, Any]:
 
 
 def get_data_provider_health() -> dict[str, Any]:
-    """Return provider health without exposing credential values."""
+    """Read-only provider-readiness health check without exposing credential values."""
     tool_name = "get_data_provider_health"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -228,7 +228,7 @@ def get_data_provider_health() -> dict[str, Any]:
 
 
 def validate_data_provider_imports() -> dict[str, Any]:
-    """Validate configured local provider JSON imports without exposing paths."""
+    """Read-only provider-readiness import validation without exposing local paths."""
     tool_name = "validate_data_provider_imports"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -258,7 +258,7 @@ def validate_data_provider_imports() -> dict[str, Any]:
 
 
 def list_provider_profiles() -> dict[str, Any]:
-    """Return current configured provider profiles without resolved paths."""
+    """Read-only configured provider profiles without resolved paths."""
     tool_name = "list_provider_profiles"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -283,7 +283,7 @@ def list_provider_profiles() -> dict[str, Any]:
 
 
 def list_provider_source_templates() -> dict[str, Any]:
-    """Return sanitized JSON templates for configured local provider sources."""
+    """Read-only sanitized JSON templates for configured local provider sources."""
     tool_name = "list_provider_source_templates"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -403,7 +403,7 @@ def _safe_onboarding_actions(setup_state: str) -> list[dict[str, Any]]:
 
 
 def list_provider_source_onboarding() -> dict[str, Any]:
-    """Return guided configured-source setup, validation, and refresh readiness."""
+    """Read-only provider-readiness onboarding for setup, validation, and refresh readiness."""
     tool_name = "list_provider_source_onboarding"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -516,7 +516,7 @@ def _safe_preview_actions(preview: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def list_provider_import_previews() -> dict[str, Any]:
-    """Return configured-provider import dry-run previews without writing stores."""
+    """Read-only provider-readiness dry-run import previews before refresh without writing stores."""
     tool_name = "list_provider_import_previews"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -578,7 +578,7 @@ def _safe_reconciliation_actions(item: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def list_provider_import_reconciliation() -> dict[str, Any]:
-    """Return preview, latest-job, and store-count reconciliation."""
+    """Read-only provider-readiness reconciliation before configured screeners or paper-order readiness."""
     tool_name = "list_provider_import_reconciliation"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -626,7 +626,7 @@ def list_provider_import_reconciliation() -> dict[str, Any]:
 
 
 def list_provider_import_jobs(limit: int = 20) -> dict[str, Any]:
-    """Return provider import-refresh job summaries without payloads or paths."""
+    """Read-only provider import-refresh job summaries without payloads or paths."""
     tool_name = "list_provider_import_jobs"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -652,7 +652,7 @@ def list_provider_import_jobs(limit: int = 20) -> dict[str, Any]:
 def get_provider_refresh_readiness(
     stale_after_seconds: int = 86_400,
 ) -> dict[str, Any]:
-    """Return provider refresh readiness, stale state, and retry backoff."""
+    """Read-only provider refresh readiness, stale state, and retry backoff."""
     tool_name = "get_provider_refresh_readiness"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -685,7 +685,7 @@ def get_provider_refresh_readiness(
 
 
 def refresh_provider_import_profile(provider_id: str) -> dict[str, Any]:
-    """Validate one configured provider and persist sanitized refresh status."""
+    """Draft-only provider refresh that validates one configured provider and persists sanitized status."""
     tool_name = "refresh_provider_import_profile"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -711,7 +711,7 @@ def refresh_provider_import_profile(provider_id: str) -> dict[str, Any]:
 def run_provider_refresh_schedule(
     stale_after_seconds: int = 86_400,
 ) -> dict[str, Any]:
-    """Run a bounded scheduled refresh cycle for configured providers."""
+    """Draft-only bounded scheduled refresh cycle for configured providers."""
     tool_name = "run_provider_refresh_schedule"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -732,7 +732,7 @@ def run_provider_refresh_schedule(
 
 
 def get_market_data_snapshot(symbol: str) -> dict[str, Any]:
-    """Return and cache a fixture-backed market data snapshot for one symbol."""
+    """Read-only market data snapshot for one symbol, with safe local cache persistence."""
     tool_name = "get_market_data_snapshot"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -755,7 +755,7 @@ def get_market_data_snapshot(symbol: str) -> dict[str, Any]:
 
 
 def list_market_data_snapshots(symbol: str = "", limit: int = 20) -> dict[str, Any]:
-    """Return cached market data snapshots without exposing storage paths."""
+    """Read-only cached market data snapshots without exposing storage paths."""
     tool_name = "list_market_data_snapshots"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -770,7 +770,7 @@ def list_market_data_snapshots(symbol: str = "", limit: int = 20) -> dict[str, A
 
 
 def get_universe_members(universe_id: str) -> dict[str, Any]:
-    """Return fixture-backed universe members through the provider boundary."""
+    """Read-only universe members through the provider boundary."""
     tool_name = "get_universe_members"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -791,7 +791,7 @@ def get_universe_members(universe_id: str) -> dict[str, Any]:
 
 
 def list_universes() -> dict[str, Any]:
-    """Return fixture-backed universes with source metadata."""
+    """Read-only universes with source metadata."""
     tool_name = "list_universes"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -808,7 +808,7 @@ def run_screener(
     preset: str = "momentum",
     limit: int = 10,
 ) -> dict[str, Any]:
-    """Run and cache a deterministic read-only screener over fixture data."""
+    """Read-only candidate-discovery screener with hard gates; does not draft or place orders."""
     tool_name = "run_screener"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -835,7 +835,7 @@ def list_screener_runs(
     preset: str = "",
     limit: int = 20,
 ) -> dict[str, Any]:
-    """Return cached screener runs without exposing storage paths."""
+    """Read-only cached screener runs without exposing storage paths."""
     tool_name = "list_screener_runs"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -857,7 +857,7 @@ def explain_candidate_evidence(
     symbol: str,
     setup: str = "",
 ) -> dict[str, Any]:
-    """Explain deterministic fixture evidence for a screener candidate."""
+    """Read-only candidate-explanation after a screener candidate; does not create strategies or orders."""
     tool_name = "explain_candidate_evidence"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -882,7 +882,7 @@ def search_pattern_library(
     tags: str = "",
     limit: int = 5,
 ) -> dict[str, Any]:
-    """Search public-safe pattern cards and playbooks."""
+    """Read-only search over public-safe pattern cards and playbooks."""
     tool_name = "search_pattern_library"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -899,7 +899,7 @@ def search_pattern_library(
 
 
 def get_pattern_playbook(pattern_id: str) -> dict[str, Any]:
-    """Retrieve one versioned public-safe pattern card."""
+    """Read-only retrieval of one versioned public-safe pattern card."""
     tool_name = "get_pattern_playbook"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -920,7 +920,7 @@ def get_pattern_playbook(pattern_id: str) -> dict[str, Any]:
 
 
 def cite_strategy_evidence(symbol: str, setup: str) -> dict[str, Any]:
-    """Return citation-backed evidence for a paper-strategy explanation."""
+    """Read-only citation-backed evidence for a paper-strategy explanation."""
     tool_name = "cite_strategy_evidence"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -941,7 +941,7 @@ def cite_strategy_evidence(symbol: str, setup: str) -> dict[str, Any]:
 
 
 def explain_factor_stack(symbol: str, setup: str = "") -> dict[str, Any]:
-    """Compose deterministic factors, citations, and paper-only next actions."""
+    """Read-only factor stack with deterministic factors, citations, and paper-only next actions."""
     tool_name = "explain_factor_stack"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -962,7 +962,7 @@ def explain_factor_stack(symbol: str, setup: str = "") -> dict[str, Any]:
 
 
 def get_recommendation_explanation(symbol: str, setup: str) -> dict[str, Any]:
-    """Explain a paper-only recommendation using evidence, history, and ledger state."""
+    """Read-only recommendation-to-paper-order explanation before any paper order proposal."""
     tool_name = "get_recommendation_explanation"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -986,7 +986,7 @@ def generate_paper_trading_report(
     symbol: str = "",
     setup: str = "",
 ) -> dict[str, Any]:
-    """Return a read-only paper-trading review report with redacted audit export."""
+    """Read-only paper-trading-report: read-only review with accounting, positions, and redacted audit export."""
     tool_name = "generate_paper_trading_report"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1012,7 +1012,7 @@ def create_backtest_request(
     start_date: str,
     end_date: str,
 ) -> dict[str, Any]:
-    """Draft an offline paper backtest request without running live systems."""
+    """Draft-only recommendation-to-paper-order backtest request before paper order proposals."""
     tool_name = "create_backtest_request"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1038,7 +1038,7 @@ def create_backtest_request(
 
 
 def list_backtest_requests() -> dict[str, Any]:
-    """Return persisted paper backtest request history."""
+    """Read-only persisted paper backtest request history."""
     tool_name = "list_backtest_requests"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1054,7 +1054,7 @@ def list_backtest_requests() -> dict[str, Any]:
 
 
 def get_backtest_request(request_id: str) -> dict[str, Any]:
-    """Return one persisted paper backtest request by id."""
+    """Read-only persisted paper backtest request by id."""
     tool_name = "get_backtest_request"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1075,7 +1075,7 @@ def get_backtest_request(request_id: str) -> dict[str, Any]:
 
 
 def get_backtest_result(request_id: str) -> dict[str, Any]:
-    """Return the deterministic simulated result for a draft backtest request."""
+    """Read-only deterministic simulated result for a draft backtest request."""
     tool_name = "get_backtest_result"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1096,7 +1096,7 @@ def get_backtest_result(request_id: str) -> dict[str, Any]:
 
 
 def list_paper_orders() -> dict[str, Any]:
-    """Return paper order proposals without executing or filling them."""
+    """Read-only paper order proposals without executing or filling them."""
     tool_name = "list_paper_orders"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1110,7 +1110,7 @@ def list_paper_orders() -> dict[str, Any]:
 
 
 def list_paper_positions() -> dict[str, Any]:
-    """Return fixture paper positions for analysis and exposure review."""
+    """Read-only paper positions for analysis and exposure review."""
     tool_name = "list_paper_positions"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1126,7 +1126,7 @@ def list_paper_positions() -> dict[str, Any]:
 
 
 def list_paper_fills() -> dict[str, Any]:
-    """Return simulated paper fills without touching any broker provider."""
+    """Read-only simulated paper fills without touching any broker provider."""
     tool_name = "list_paper_fills"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1140,7 +1140,7 @@ def list_paper_fills() -> dict[str, Any]:
 
 
 def get_paper_portfolio_accounting() -> dict[str, Any]:
-    """Return paper portfolio accounting after simulated fills."""
+    """Read-only paper portfolio accounting after simulated fills."""
     tool_name = "get_paper_portfolio_accounting"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1160,7 +1160,7 @@ def create_paper_order_proposal(
     order_type: str = "market",
     requested_price: float | None = None,
 ) -> dict[str, Any]:
-    """Create a pending paper order proposal without a fill or live order."""
+    """Draft-only recommendation-to-paper-order proposal; requires a ready recommendation preflight and does not fill."""
     tool_name = "create_paper_order_proposal"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1219,7 +1219,7 @@ def approve_paper_order_simulation(
     approved_by: str,
     approval_note: str = "",
 ) -> dict[str, Any]:
-    """Mark a paper order as approved for simulated fill processing only."""
+    """Approval-required approval-gated simulated fill step that must be called before simulate_approved_paper_fill."""
     tool_name = "approve_paper_order_simulation"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1250,7 +1250,7 @@ def simulate_approved_paper_fill(
     order_id: str,
     fill_price: float | None = None,
 ) -> dict[str, Any]:
-    """Create a simulated paper fill only after human approval."""
+    """Approval-required approval-gated simulated fill only after approve_paper_order_simulation, never live."""
     tool_name = "simulate_approved_paper_fill"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1277,7 +1277,7 @@ def simulate_approved_paper_fill(
 
 
 def get_approval_queue() -> dict[str, Any]:
-    """Return pending human approvals for paper-only actions."""
+    """Read-only pending human approvals for paper-only actions."""
     tool_name = "get_approval_queue"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1293,7 +1293,7 @@ def get_approval_queue() -> dict[str, Any]:
 
 
 def get_audit_events() -> dict[str, Any]:
-    """Return redacted paper-ledger audit events."""
+    """Read-only redacted paper-ledger audit events."""
     tool_name = "get_audit_events"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1307,7 +1307,7 @@ def get_audit_events() -> dict[str, Any]:
 
 
 def get_risk_review() -> dict[str, Any]:
-    """Return current demo risk state and paper-trading safety switches."""
+    """Read-only risk state and paper-trading safety switches."""
     tool_name = "get_risk_review"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1320,7 +1320,7 @@ def get_risk_review() -> dict[str, Any]:
 
 
 def draft_paper_strategy(symbol: str, rationale: str) -> dict[str, Any]:
-    """Draft a paper-trading strategy without executing any trade."""
+    """Draft-only paper-trading strategy without executing any trade."""
     tool_name = "draft_paper_strategy"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1341,7 +1341,7 @@ def draft_paper_strategy(symbol: str, rationale: str) -> dict[str, Any]:
 
 
 def list_strategy_drafts() -> dict[str, Any]:
-    """Return persisted paper strategy draft history."""
+    """Read-only persisted paper strategy draft history."""
     tool_name = "list_strategy_drafts"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1357,7 +1357,7 @@ def list_strategy_drafts() -> dict[str, Any]:
 
 
 def get_strategy_draft(strategy_id: str) -> dict[str, Any]:
-    """Return one persisted paper strategy draft by id."""
+    """Read-only persisted paper strategy draft by id."""
     tool_name = "get_strategy_draft"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1378,7 +1378,7 @@ def get_strategy_draft(strategy_id: str) -> dict[str, Any]:
 
 
 def create_paper_trade_proposal(strategy_id: str) -> dict[str, Any]:
-    """Create a pending paper-trade proposal that requires human approval."""
+    """Draft-only pending paper-trade proposal that requires human approval."""
     tool_name = "create_paper_trade_proposal"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
