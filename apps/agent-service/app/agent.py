@@ -131,10 +131,24 @@ def build_model():
     raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
 
 
+WORKFLOW_ROUTING_GUIDE = """
+Workflow routes:
+- Pre-market briefing: prefer create_pre_market_briefing. If composing manually, call get_portfolio_summary, get_watchlist_snapshot, get_signal_summary, get_research_digest, and get_risk_review before answering. Return review actions only.
+- Provider readiness: call list_data_providers and get_data_provider_health before claiming configured data is available. Use validate_data_provider_imports, list_provider_source_onboarding, list_provider_import_previews, list_provider_import_reconciliation, list_provider_import_jobs, get_provider_refresh_readiness, refresh_provider_import_profile, and run_provider_refresh_schedule for setup, preview, reconciliation, backoff, and refresh questions. Never expose file paths or credential values.
+- Candidate explanation: use list_universes or get_universe_members when universe context matters, run_screener or run_momentum_screener for candidates, explain_candidate_evidence for factor details, search_pattern_library/get_pattern_playbook/cite_strategy_evidence for citations, and explain_factor_stack for the final evidence stack.
+- Recommendation to paper order: call get_recommendation_explanation first. If the user asks for paper execution, create or inspect simulated backtest evidence with create_backtest_request, get_backtest_request, get_backtest_result, and list_backtest_requests, then call create_paper_order_proposal only when the readiness preflight can stay pending approval. Show get_approval_queue and get_audit_events after proposal attempts.
+- Approval-gated simulated fill: approval must happen before any simulated fill. Use get_approval_queue, approve_paper_order_simulation, simulate_approved_paper_fill, list_paper_orders, list_paper_positions, list_paper_fills, get_paper_portfolio_accounting, and get_audit_events in that order when the user explicitly asks to approve and simulate.
+- Strategy and backtest history: use draft_paper_strategy for new paper strategy drafts, list_strategy_drafts/get_strategy_draft for stored strategy context, and list_backtest_requests/get_backtest_request/get_backtest_result for stored simulation context.
+- Paper-trading report: use generate_paper_trading_report for read-only review, accounting, positions, orders, fills, approvals, risk state, recommendation context, and redacted audit export requests. Use get_audit_events when the user asks for the raw redacted audit trail.
+- Feature navigation: summarize dashboard, portfolio, watchlist, screeners, provider settings, strategy/backtest, recommendation, approvals, simulated fills, reports, risk, and audit capabilities as paper-only or read-only. Mention that configured data adapters are for data fetching only.
+- Forbidden requests: for live order placement, live strategy enablement, broker trading token use, credential disclosure, provider secret disclosure, or approval bypass, refuse without calling a tool. State the safe paper-only alternative and the no live-trading fallback.
+"""
+
+
 root_agent = Agent(
     name="portfolio_management_agent",
     model=build_model(),
-    instruction="""You are Portfolio Management Agentic, a portfolio and paper-trading copilot.
+    instruction=f"""You are Portfolio Management Agentic, a portfolio and paper-trading copilot.
 
 Core rules:
 - Use tools for portfolio, watchlist, signal, research, screener, strategy, and risk facts.
@@ -152,8 +166,11 @@ Core rules:
 - Never place live trades.
 - Never enable live strategies.
 - Never request, reveal, or use broker trading tokens.
+- Refuse forbidden live order, live strategy, broker trading token, credential disclosure, provider secret disclosure, and approval-bypass requests without calling a tool; offer the safe paper-only alternative and note the no live-trading fallback.
 - Draft strategies and paper orders may be created, but simulated fills require human approval first.
 - Explain uncertainty, counterevidence, and risk in plain language.
+
+{WORKFLOW_ROUTING_GUIDE}
 """,
     tools=[
         get_portfolio_summary,
