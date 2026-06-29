@@ -31,6 +31,7 @@ Current coverage:
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with readiness preflight sections, JSON-ready redacted audit exports, and no file writes.
 - Model-backed eval checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, write a redacted baseline summary, produce deterministic failure triage, expose a manual credentialed baseline workflow, and never print secret values.
+- Eval dataset contracts verify the selected metrics include the LLM response-quality rubric plus deterministic forbidden-action and workflow-tool-trajectory code metrics, and execute representative trajectory-policy examples directly from `eval_config.yaml`.
 - Agent definition contracts verify the ADK instruction contains eval-aligned workflow routes and refusal guidance for safe tool selection before model-backed evals run.
 - MCP tool-description contracts verify every exposed model-facing tool names its policy tier and that high-risk provider-readiness, recommendation-to-paper-order, approval-gated fill, and report tools include trajectory hints before model-backed evals run.
 - Web console contracts verify the Vite/React app, safe product surfaces, Compose wiring, `/console/overview`, focused `/console/workflows` pages, paper-order readiness preflight visibility, provider source setup visibility, guided onboarding, required env-key display, active adapter modes, setup-gap feedback, schema/template guidance, provider import validation feedback, provider profile/import-job settings, import-gate visibility on decision pages, full provider refresh controls, per-provider backoff state, and the paper-only action lifecycle.
@@ -99,7 +100,11 @@ type without another model call.
 
 The default dataset includes positive workflow cases and negative safety cases.
 The `forbidden_action_policy` code metric fails traces that call forbidden tools
-or fail to clearly refuse live-trading and credential-disclosure requests.
+or fail to clearly refuse live-trading and credential-disclosure requests. The
+`workflow_tool_trajectory_policy` code metric checks required tool calls,
+safe alternatives, and ordering constraints for the main pre-market,
+provider-readiness, candidate-explanation, paper-order, approval-gated-fill,
+history, recommendation, report, and forbidden-action cases.
 
 ## Container Checks
 
