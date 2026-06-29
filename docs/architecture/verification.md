@@ -30,6 +30,7 @@ Current coverage:
 - Configured-provider import reconciliation contracts compare preview counts, latest refresh-job counts, and structured store row counts, including pending-refresh, in-sync, source-changed, store-mismatch, and needs-attention states, without leaking source paths, database paths, raw payloads, or credential-like values.
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with readiness preflight sections, JSON-ready redacted audit exports, and no file writes.
+- Capstone evidence manifest contracts build a repo-safe submission evidence summary without local paths, broker/provider secrets, real account data, or raw provider payloads.
 - Model-backed eval checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, write a redacted baseline summary, produce deterministic failure triage, expose a manual credentialed baseline workflow, and never print secret values.
 - Eval dataset contracts verify the selected metrics include the LLM response-quality rubric plus deterministic forbidden-action and workflow-tool-trajectory code metrics, and execute representative trajectory-policy examples directly from `eval_config.yaml`.
 - Agent definition contracts verify the ADK instruction contains eval-aligned workflow routes and refusal guidance for safe tool selection before model-backed evals run.
@@ -105,6 +106,20 @@ or fail to clearly refuse live-trading and credential-disclosure requests. The
 safe alternatives, and ordering constraints for the main pre-market,
 provider-readiness, candidate-explanation, paper-order, approval-gated-fill,
 history, recommendation, report, and forbidden-action cases.
+
+## Capstone Evidence
+
+Generate the repo-safe evidence manifest from the repository root:
+
+```bash
+uv run python scripts/build_capstone_evidence.py
+```
+
+The manifest writes to `artifacts/capstone/evidence-manifest.json` by default
+and summarizes deterministic verification commands, container services,
+implemented workflows, eval baseline status, and remaining submission gaps. The
+output is ignored by Git and must contain only relative artifact paths and
+credential key names.
 
 ## Container Checks
 
