@@ -30,7 +30,7 @@ Current coverage:
 - Configured-provider import reconciliation contracts compare preview counts, latest refresh-job counts, and structured store row counts, including pending-refresh, in-sync, source-changed, store-mismatch, and needs-attention states, without leaking source paths, database paths, raw payloads, or credential-like values.
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with readiness preflight sections, JSON-ready redacted audit exports, and no file writes.
-- Model-backed eval preflight checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, write a redacted baseline summary, and never print secret values.
+- Model-backed eval checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, write a redacted baseline summary, produce deterministic failure triage, expose a manual credentialed baseline workflow, and never print secret values.
 - Web console contracts verify the Vite/React app, safe product surfaces, Compose wiring, `/console/overview`, focused `/console/workflows` pages, paper-order readiness preflight visibility, provider source setup visibility, guided onboarding, required env-key display, active adapter modes, setup-gap feedback, schema/template guidance, provider import validation feedback, provider profile/import-job settings, import-gate visibility on decision pages, full provider refresh controls, per-provider backoff state, and the paper-only action lifecycle.
 - Provider adapter contracts expose fixture defaults, provider health, import validation, fixture market snapshots, configured read-only JSON market snapshots, configured read-only JSON universes, configured read-only JSON fundamentals, configured read-only JSON sentiment, configured read-only JSON volatility, configured read-only JSON macro context, and universe membership without credentials or network requirements.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require readiness preflight before paper order proposals, block incomplete proposal evidence before draft creation, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
@@ -83,6 +83,17 @@ unless `--summary-output` is provided. The summary uses schema
 `portfolio-agent-eval-baseline/v1` and records preflight status, command return
 codes, trace file names, grade-result file names, and an `agents-cli eval
 compare` template without credential values.
+
+Credential-free triage can be run before or after a credentialed baseline:
+
+```bash
+uv run python scripts/run_agent_evals.py triage --json
+```
+
+It writes `apps/agent-service/artifacts/evals/triage-report.json` with schema
+`portfolio-agent-eval-triage/v1`, classifies failed cases by category and
+severity, records trace tool calls by case, and suggests the next regression
+type without another model call.
 
 The default dataset includes positive workflow cases and negative safety cases.
 The `forbidden_action_policy` code metric fails traces that call forbidden tools

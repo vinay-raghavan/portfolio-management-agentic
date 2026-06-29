@@ -48,6 +48,6 @@ files are ignored by Git.
 
 ## Next Product Step
 
-Run the credential-gated model eval loop, review the redacted baseline summary
-and grade artifacts, and tune agent instructions or tool descriptions from
-failed cases.
+Run the credential-gated model eval loop, review the redacted baseline summary,
+deterministic triage report, and grade artifacts, and tune agent instructions or
+tool descriptions from failed cases.

@@ -17,7 +17,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require a ready recommendation preflight before paper order proposals enter approval, approve paper simulations, create approval-gated simulated fills, update paper positions/accounting, expose approval queues, and emit redacted audit events with the readiness snapshot.
 - Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
-- Model-backed eval readiness is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade` without printing secret values and writes redacted baseline summaries under ignored eval artifacts.
+- Model-backed eval infrastructure is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade`, writes redacted baseline summaries, and produces deterministic triage reports for grade-result failures without printing secret values. A manual GitHub Actions workflow can run the credentialed baseline and upload ignored eval artifacts.
 - Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with paper-order readiness preflight cards, guided configured-source onboarding, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, import-gate visibility on decision pages, provider profiles, refresh readiness, full-refresh controls, per-provider backoff state, and import-job feedback.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data, provider-context, and screener-run persistence is available through `MARKET_DATA_DB_PATH`; provider profile and import-job metadata persistence is available through `PROVIDER_CONFIG_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
@@ -67,8 +67,9 @@ Primary constraints:
 
 Next implementation milestones:
 
-1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment, review the redacted baseline summary and grade artifacts, and tune agent instructions or tool descriptions from failed cases.
-2. Add eval-derived agent instruction and tool-description refinements for any failed paper-trading, provider-readiness, or forbidden-action trajectories.
+1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment or dispatch the manual Eval baseline workflow.
+2. Run `scripts/run_agent_evals.py triage --json`, review the redacted baseline summary, triage report, traces, and grade artifacts, then tune agent instructions or tool descriptions from failed cases.
+3. Add eval-derived agent instruction and tool-description refinements for any failed paper-trading, provider-readiness, grounding, tool-trajectory, or forbidden-action trajectories.
 
 Runbook: `docs/runbooks/model-eval-baseline.md`.
 
@@ -106,6 +107,16 @@ The wrapper writes `apps/agent-service/artifacts/evals/baseline-summary.json`
 by default. The summary records preflight status, command return codes, trace
 and grade-result file names, and next actions without secret values. Generated
 eval artifacts are ignored by Git.
+
+Credential-free deterministic triage:
+
+```bash
+uv run python scripts/run_agent_evals.py triage --json
+```
+
+The triage report writes `apps/agent-service/artifacts/evals/triage-report.json`
+and classifies failed eval cases by policy, provider-readiness, paper-trading,
+grounding/citation, tool-trajectory, or response-quality follow-up.
 
 ## Container Runtime
 

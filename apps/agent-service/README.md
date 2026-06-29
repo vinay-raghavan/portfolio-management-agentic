@@ -101,13 +101,17 @@ evals:
 ```bash
 uv run python scripts/run_agent_evals.py preflight --json
 uv run python scripts/run_agent_evals.py run --fail-on-skip
+uv run python scripts/run_agent_evals.py triage --json
 ```
 
 The wrapper still uses the official ADK path: `agents-cli eval generate`
 followed by `agents-cli eval grade`. It also writes
 `artifacts/evals/baseline-summary.json` inside this app directory with
 preflight status, command return codes, artifact file names, and next actions
-without credential values.
+without credential values. The triage command writes
+`artifacts/evals/triage-report.json` and classifies grade-result failures by
+policy, provider-readiness, paper-trading, grounding, tool-trajectory, or
+response-quality follow-up.
 
 ## 🛠️ Project Management
 

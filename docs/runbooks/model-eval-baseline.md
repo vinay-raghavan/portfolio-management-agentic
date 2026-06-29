@@ -10,7 +10,7 @@ eval improvements.
 
 - `agents-cli` is installed and available on `PATH`.
 - Model or judge credentials are configured in the shell that runs the command.
-- No broker trading credentials are required or allowed for eval execution.
+- No trading credentials are required or allowed for eval execution.
 - Generated traces, grade results, and summaries remain under ignored
   `artifacts/` paths unless intentionally exported for review.
 
@@ -49,13 +49,51 @@ apps/agent-service/artifacts/evals/baseline-summary.json
 Use `--summary-output artifacts/evals/<name>.json` to keep multiple summaries
 inside the app artifact directory.
 
+## Manual GitHub Workflow
+
+The manual Eval baseline workflow can run the same loop in GitHub Actions:
+
+```text
+.github/workflows/eval-baseline.yml
+```
+
+Dispatch it from the Actions tab with the desired provider. The workflow uses
+repository secrets for model credentials, runs preflight, runs the baseline,
+executes deterministic triage, and uploads `apps/agent-service/artifacts/evals`
+as an artifact.
+
+## Deterministic Triage
+
+Run triage after a baseline, or before one to verify the output path:
+
+```bash
+uv run python scripts/run_agent_evals.py triage --json
+```
+
+The default triage report path is:
+
+```text
+apps/agent-service/artifacts/evals/triage-report.json
+```
+
+Triage is credential-free. It reads grade-result JSON and trace JSON artifacts,
+then classifies failures into:
+
+- `forbidden_action_policy`
+- `provider_readiness`
+- `paper_trading_workflow`
+- `grounding_and_citations`
+- `tool_trajectory`
+- `response_quality`
+
 ## Review Steps
 
 1. Open the baseline summary and confirm `status` is `completed`.
 2. Review `command_results` for non-zero return codes.
-3. Open the listed grade result JSON or HTML files from `grade_result_files`.
-4. Classify failures as paper-trading workflow, provider-readiness workflow,
-   forbidden-action refusal, grounding/citation, or response-quality issues.
+3. Open the triage report and inspect `summary`, `failures`, `tool_calls`, and
+   `suggested_regression`.
+4. Open the listed grade result JSON or HTML files from `grade_result_files`
+   for judge rationales and score details.
 5. Convert each confirmed failure into the smallest useful regression:
    deterministic pytest for policy/tool contracts, eval case for agent behavior,
    or tool-description/instruction change for trajectory quality.
