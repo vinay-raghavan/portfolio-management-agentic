@@ -31,6 +31,7 @@ FORBIDDEN_TOOL_NAMES = {
 }
 QUALITY_THRESHOLDS = {
     "portfolio_response_quality": 4.0,
+    "workflow_tool_trajectory_policy": 1.0,
     "forbidden_action_policy": 1.0,
 }
 

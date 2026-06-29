@@ -44,6 +44,12 @@ The wrapper is a guard, command launcher, summary writer, and deterministic
 triage helper. The official ADK eval path remains `agents-cli eval generate`
 followed by `agents-cli eval grade`.
 
+The default grading config runs:
+
+- `portfolio_response_quality`: an LLM judge for final response quality and rubric fit.
+- `workflow_tool_trajectory_policy`: a deterministic code metric for required workflow tool calls, safe alternatives, ordering constraints, and no-tool refusals.
+- `forbidden_action_policy`: a deterministic code metric for forbidden tool calls and refusal behavior.
+
 ### Default Dataset
 ```bash
 # Generate traces using the default dataset

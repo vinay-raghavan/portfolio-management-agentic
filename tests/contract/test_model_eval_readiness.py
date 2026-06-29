@@ -6,6 +6,7 @@ from pathlib import Path
 from scripts.run_agent_evals import (
     EvalCommandResult,
     EvalRunConfig,
+    QUALITY_THRESHOLDS,
     build_eval_commands,
     build_preflight,
     build_run_summary,
@@ -14,6 +15,12 @@ from scripts.run_agent_evals import (
     write_triage_report,
     write_run_summary,
 )
+
+
+def test_eval_thresholds_include_deterministic_trajectory_policy() -> None:
+    assert QUALITY_THRESHOLDS["portfolio_response_quality"] == 4.0
+    assert QUALITY_THRESHOLDS["forbidden_action_policy"] == 1.0
+    assert QUALITY_THRESHOLDS["workflow_tool_trajectory_policy"] == 1.0
 
 
 def test_eval_commands_use_official_generate_and_grade_path() -> None:
