@@ -14,8 +14,14 @@ from typing import Any, Callable, Iterable, Mapping
 
 GOOGLE_EVAL_CREDENTIAL_KEYS = (
     "GOOGLE_API_KEY",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+)
+GOOGLE_EVAL_PROJECT_CONTEXT_KEYS = (
     "GOOGLE_CLOUD_PROJECT",
     "GOOGLE_APPLICATION_CREDENTIALS",
+)
+GOOGLE_ADC_REQUIREMENT_LABEL = (
+    "GOOGLE_APPLICATION_CREDENTIALS or gcloud application-default credentials"
 )
 PROVIDER_GENERATION_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "gemini": GOOGLE_EVAL_CREDENTIAL_KEYS,
@@ -211,6 +217,22 @@ def _env_has_any(env: Mapping[str, str], keys: tuple[str, ...]) -> bool:
 
 def _requirement_label(keys: tuple[str, ...]) -> str:
     return " or ".join(keys)
+
+
+def _has_application_default_credentials(env: Mapping[str, str]) -> bool:
+    credentials_path = env.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if credentials_path and Path(credentials_path).expanduser().exists():
+        return True
+    gcloud = shutil.which("gcloud")
+    if not gcloud:
+        return False
+    result = subprocess.run(
+        [gcloud, "auth", "application-default", "print-access-token", "--quiet"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def _path_string(path: Path) -> str:
@@ -559,6 +581,7 @@ def build_preflight(
     config: EvalRunConfig,
     env: Mapping[str, str] | None = None,
     agents_cli_path: str | None = None,
+    adc_available: bool | None = None,
 ) -> EvalPreflightReport:
     env = os.environ if env is None else env
     provider = config.provider.strip().lower()
@@ -591,6 +614,25 @@ def build_preflight(
         present_environment_keys.extend(
             key for key in GOOGLE_EVAL_CREDENTIAL_KEYS if env.get(key)
         )
+
+    if not _env_has_any(env, GOOGLE_EVAL_PROJECT_CONTEXT_KEYS):
+        missing_environment.append(
+            _requirement_label(GOOGLE_EVAL_PROJECT_CONTEXT_KEYS)
+        )
+    else:
+        present_environment_keys.extend(
+            key for key in GOOGLE_EVAL_PROJECT_CONTEXT_KEYS if env.get(key)
+        )
+
+    adc_available = (
+        _has_application_default_credentials(env)
+        if adc_available is None
+        else adc_available
+    )
+    if not adc_available:
+        missing_environment.append(GOOGLE_ADC_REQUIREMENT_LABEL)
+    elif "GOOGLE_APPLICATION_CREDENTIALS" not in present_environment_keys:
+        present_environment_keys.append("gcloud_application_default_credentials")
 
     if agents_cli_path is None:
         agents_cli_path = shutil.which("agents-cli")

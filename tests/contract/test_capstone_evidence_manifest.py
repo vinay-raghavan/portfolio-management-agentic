@@ -22,7 +22,9 @@ def test_capstone_evidence_manifest_is_repo_safe_and_actionable(tmp_path: Path) 
                 "preflight": {
                     "status": "skipped",
                     "missing_environment": [
-                        "GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS"
+                        "GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS",
+                        "GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS",
+                        "GOOGLE_APPLICATION_CREDENTIALS or gcloud application-default credentials",
                     ],
                     "present_environment_keys": [],
                 },
@@ -33,7 +35,7 @@ def test_capstone_evidence_manifest_is_repo_safe_and_actionable(tmp_path: Path) 
                 "submission_readiness": {
                     "status": "blocked",
                     "blocking_reasons": [
-                        "Missing credential environment: GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS"
+                        "Missing credential environment: GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_APPLICATION_CREDENTIALS or gcloud application-default credentials"
                     ],
                     "required_next_actions": [
                         "Configure the missing preflight requirements and rerun uv run python scripts/run_agent_evals.py run --fail-on-skip."
@@ -66,11 +68,13 @@ def test_capstone_evidence_manifest_is_repo_safe_and_actionable(tmp_path: Path) 
     assert payload["eval_baseline"]["status"] == "skipped"
     assert payload["eval_baseline"]["triage_status"] == "no_results"
     assert payload["eval_baseline"]["missing_environment"] == [
-        "GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS"
+        "GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_APPLICATION_CREDENTIALS or gcloud application-default credentials",
     ]
     assert payload["eval_baseline"]["submission_readiness"]["status"] == "blocked"
     assert payload["eval_baseline"]["submission_readiness"]["blocking_reasons"] == [
-        "Missing credential environment: GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS"
+        "Missing credential environment: GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_APPLICATION_CREDENTIALS or gcloud application-default credentials"
     ]
     assert payload["verification_commands"] == [
         "uv run pytest tests",

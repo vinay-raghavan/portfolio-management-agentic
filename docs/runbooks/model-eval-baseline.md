@@ -20,10 +20,17 @@ Local credential values can live in the ignored root `.env` file:
 
 ```bash
 GOOGLE_API_KEY=<your local token>
+GOOGLE_CLOUD_PROJECT=<your project id>
+# Optional if you use a service account key instead of gcloud ADC:
+GOOGLE_APPLICATION_CREDENTIALS=<path to local service-account.json>
 ```
 
 The eval runner loads `.env` by default before preflight and before launching
 `agents-cli`. Shell environment values take precedence over `.env` values.
+For `agents-cli` v0.5.0, `GOOGLE_API_KEY` alone is not enough: the Vertex eval
+path also needs project context and Application Default Credentials. Use either
+`gcloud auth application-default login` locally or set
+`GOOGLE_APPLICATION_CREDENTIALS` to a local, ignored service-account file.
 
 Run from the repository root:
 
