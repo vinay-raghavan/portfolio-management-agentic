@@ -202,33 +202,154 @@ def _build_eval_baseline(config: CapstoneEvidenceConfig) -> dict[str, Any]:
     summary = _as_dict(_load_json(config.repo_root / config.eval_summary))
     triage = _as_dict(_load_json(config.repo_root / config.triage_report))
     preflight = _as_dict(summary.get("preflight"))
+    summary_readiness = _as_dict(summary.get("submission_readiness"))
+    triage_readiness = _as_dict(triage.get("submission_readiness"))
+    triage_summary = _as_dict(triage.get("summary"))
+    trace_files = _relative_artifact_names(summary, "trace_files")
+    grade_result_files = _relative_artifact_names(summary, "grade_result_files")
+    failure_count = triage_summary.get("failure_count", 0)
+    critical_failure_count = triage_summary.get("critical_failure_count", 0)
 
     return {
         "status": str(summary.get("status") or "not_run"),
         "schema_version": str(summary.get("schema_version") or ""),
         "preflight_status": str(preflight.get("status") or ""),
         "triage_status": str(triage.get("status") or "not_run"),
+        "submission_readiness": _eval_submission_readiness(
+            baseline_status=str(summary.get("status") or "not_run"),
+            summary_readiness=summary_readiness,
+            triage_status=str(triage.get("status") or "not_run"),
+            triage_readiness=triage_readiness,
+            trace_files=trace_files,
+            grade_result_files=grade_result_files,
+            failure_count=failure_count,
+        ),
         "missing_environment": [
             str(item) for item in _safe_list(preflight.get("missing_environment"))
         ],
         "present_environment_keys": [
             str(item) for item in _safe_list(preflight.get("present_environment_keys"))
         ],
-        "trace_files": _relative_artifact_names(summary, "trace_files"),
-        "grade_result_files": _relative_artifact_names(summary, "grade_result_files"),
-        "triage_failure_count": _as_dict(triage.get("summary")).get("failure_count", 0),
+        "trace_files": trace_files,
+        "grade_result_files": grade_result_files,
+        "triage_failure_count": failure_count,
+        "triage_critical_failure_count": critical_failure_count,
         "runbook": "docs/runbooks/model-eval-baseline.md",
     }
 
 
+def _eval_submission_readiness(
+    *,
+    baseline_status: str,
+    summary_readiness: Mapping[str, Any],
+    triage_status: str,
+    triage_readiness: Mapping[str, Any],
+    trace_files: list[str],
+    grade_result_files: list[str],
+    failure_count: Any,
+) -> dict[str, Any]:
+    if baseline_status != "completed":
+        return {
+            "status": "blocked",
+            "source": "baseline_summary",
+            "blocking_reasons": _safe_string_list(
+                summary_readiness.get("blocking_reasons")
+            )
+            or ["Credentialed model eval baseline has not completed."],
+            "required_next_actions": _safe_string_list(
+                summary_readiness.get("required_next_actions")
+            )
+            or [
+                "Configure model credentials and run uv run python scripts/run_agent_evals.py run --fail-on-skip."
+            ],
+        }
+    if not trace_files or not grade_result_files:
+        missing = []
+        if not trace_files:
+            missing.append("No eval trace artifacts were listed.")
+        if not grade_result_files:
+            missing.append("No eval grade-result artifacts were listed.")
+        return {
+            "status": "artifact_gap",
+            "source": "baseline_summary",
+            "blocking_reasons": missing,
+            "required_next_actions": [
+                "Inspect agents-cli output and rerun uv run python scripts/run_agent_evals.py run --fail-on-skip."
+            ],
+        }
+    if triage_status == "passed":
+        return {
+            "status": "ready_for_capstone_submission",
+            "source": "triage_report",
+            "blocking_reasons": _safe_string_list(
+                triage_readiness.get("blocking_reasons")
+            ),
+            "required_next_actions": _safe_string_list(
+                triage_readiness.get("required_next_actions")
+            )
+            or ["Keep eval artifacts with the capstone evidence package."],
+        }
+    if triage_status == "failures_detected":
+        return {
+            "status": "needs_hardening",
+            "source": "triage_report",
+            "blocking_reasons": _safe_string_list(
+                triage_readiness.get("blocking_reasons")
+            )
+            or [f"{failure_count} eval failure(s) detected."],
+            "required_next_actions": _safe_string_list(
+                triage_readiness.get("required_next_actions")
+            )
+            or ["Fix triaged eval failures and rerun the credentialed baseline."],
+        }
+    return {
+        "status": "needs_triage",
+        "source": "baseline_summary",
+        "blocking_reasons": ["Credentialed eval completed but triage has not passed."],
+        "required_next_actions": [
+            "Run uv run python scripts/run_agent_evals.py triage --json."
+        ],
+    }
+
+
+def _safe_string_list(value: Any) -> list[str]:
+    return [str(item) for item in _safe_list(value)]
+
+
 def _remaining_gaps(eval_baseline: Mapping[str, Any]) -> list[dict[str, str]]:
     gaps: list[dict[str, str]] = []
+    readiness = _as_dict(eval_baseline.get("submission_readiness"))
+    readiness_status = str(readiness.get("status") or "blocked")
     if eval_baseline.get("status") != "completed":
         gaps.append(
             {
                 "id": "credentialed_model_eval_baseline",
                 "status": "blocked_without_model_credentials",
                 "next_action": "Configure model or judge credentials and run uv run python scripts/run_agent_evals.py run --fail-on-skip.",
+            }
+        )
+    elif readiness_status == "needs_triage":
+        gaps.append(
+            {
+                "id": "eval_triage_report",
+                "status": "pending_triage",
+                "next_action": "Run uv run python scripts/run_agent_evals.py triage --json.",
+            }
+        )
+    elif readiness_status == "needs_hardening":
+        gaps.append(
+            {
+                "id": "eval_failure_hardening",
+                "status": "pending_eval_fixes",
+                "next_action": "Fix or disposition triaged eval failures, then rerun the credentialed baseline and triage.",
+            }
+        )
+    elif readiness_status == "artifact_gap":
+        gaps.append(
+            {
+                "id": "eval_artifact_gap",
+                "status": "missing_eval_artifacts",
+                "next_action": "Rerun the credentialed eval and confirm traces plus grade results are listed.",
             }
         )
     if not eval_baseline.get("grade_result_files"):

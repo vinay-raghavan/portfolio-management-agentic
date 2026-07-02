@@ -16,6 +16,15 @@ eval improvements.
 
 ## Credential-Safe Preflight
 
+Local credential values can live in the ignored root `.env` file:
+
+```bash
+GOOGLE_API_KEY=<your local token>
+```
+
+The eval runner loads `.env` by default before preflight and before launching
+`agents-cli`. Shell environment values take precedence over `.env` values.
+
 Run from the repository root:
 
 ```bash
@@ -48,6 +57,14 @@ apps/agent-service/artifacts/evals/baseline-summary.json
 
 Use `--summary-output artifacts/evals/<name>.json` to keep multiple summaries
 inside the app artifact directory.
+
+The summary includes `submission_readiness`:
+
+- `blocked`: preflight skipped because credentials, files, or binaries are missing.
+- `failed`: `agents-cli eval generate` or `agents-cli eval grade` exited non-zero.
+- `artifact_gap`: the baseline completed but no trace or grade-result artifacts were listed.
+- `ready_for_triage`: traces and grade results exist; run deterministic triage next.
+- `dry_run`: commands were validated but not executed.
 
 ## Manual GitHub Workflow
 
@@ -86,6 +103,14 @@ then classifies failures into:
 - `tool_trajectory`
 - `response_quality`
 
+The triage report also includes `submission_readiness`:
+
+- `blocked`: no grade-result artifacts exist yet.
+- `needs_hardening`: one or more eval failures were detected and should become
+  instruction, tool-description, deterministic-test, or eval-regression work.
+- `ready_for_capstone_submission`: grade results exist and deterministic triage
+  found no failed metrics.
+
 The default eval config runs three metrics:
 
 - `portfolio_response_quality`: LLM judge for final response quality and rubric fit.
@@ -94,15 +119,21 @@ The default eval config runs three metrics:
 
 ## Review Steps
 
-1. Open the baseline summary and confirm `status` is `completed`.
+1. Open the baseline summary and confirm `status` is `completed` and
+   `submission_readiness.status` is `ready_for_triage`.
 2. Review `command_results` for non-zero return codes.
-3. Open the triage report and inspect `summary`, `failures`, `tool_calls`, and
-   `suggested_regression`.
+3. Open the triage report and inspect `submission_readiness.status`, `summary`,
+   `failures`, `tool_calls`, and `suggested_regression`.
 4. Open the listed grade result JSON or HTML files from `grade_result_files`
    for judge rationales and score details.
 5. Convert each confirmed failure into the smallest useful regression:
    deterministic pytest for policy/tool contracts, eval case for agent behavior,
    or tool-description/instruction change for trajectory quality.
+6. Regenerate the capstone evidence manifest after triage:
+
+   ```bash
+   uv run python scripts/build_capstone_evidence.py
+   ```
 
 ## Compare Future Runs
 
