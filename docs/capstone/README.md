@@ -83,5 +83,13 @@ The manifest records:
 - Implemented workflow evidence for briefing, provider readiness, screeners, recommendations, approval-gated simulated fills, reports, and live-trading refusal.
 - Credentialed eval status from the redacted baseline summary and triage report when present.
 - Remaining gaps, including the credentialed model eval baseline when model credentials are absent.
+- Eval submission readiness from the baseline and triage reports:
+  `blocked`, `ready_for_triage`, `needs_hardening`, `artifact_gap`, or
+  `ready_for_capstone_submission`.
 
 The manifest must not contain local absolute paths, provider payloads, broker tokens, credential values, or real account data.
+
+For final submission, `eval_baseline.submission_readiness.status` should be
+`ready_for_capstone_submission`. If it is `ready_for_triage`, run deterministic
+triage. If it is `needs_hardening`, fix or explicitly disposition the listed
+failures and rerun the credentialed baseline.

@@ -11,6 +11,7 @@ from scripts.run_agent_evals import (
     build_preflight,
     build_run_summary,
     build_triage_report,
+    load_env_file,
     run_eval_mode,
     write_triage_report,
     write_run_summary,
@@ -67,6 +68,37 @@ def test_eval_preflight_is_ready_with_provider_and_judge_credentials() -> None:
     assert report.missing_environment == []
     assert "super-secret-value" not in serialized
     assert "GOOGLE_API_KEY" in report.present_environment_keys
+
+
+def test_eval_runner_loads_local_env_file_without_overwriting_shell_values(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "GOOGLE_API_KEY=super-secret-value",
+                "ANTHROPIC_API_KEY='anthropic-secret'",
+                "EXISTING_KEY=file-value",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    env = load_env_file(env_file, base_env={"EXISTING_KEY": "shell-value"})
+    report = build_preflight(
+        EvalRunConfig(provider="gemini"),
+        env=env,
+        agents_cli_path="/usr/local/bin/agents-cli",
+    )
+    serialized = json.dumps(report.to_dict())
+
+    assert env["GOOGLE_API_KEY"] == "super-secret-value"
+    assert env["ANTHROPIC_API_KEY"] == "anthropic-secret"
+    assert env["EXISTING_KEY"] == "shell-value"
+    assert report.status == "ready"
+    assert "GOOGLE_API_KEY" in report.present_environment_keys
+    assert "super-secret-value" not in serialized
 
 
 def test_eval_preflight_requires_provider_specific_generation_credentials() -> None:
@@ -133,6 +165,14 @@ def test_eval_run_summary_records_artifacts_without_secret_values(tmp_path: Path
 
     assert payload["schema_version"] == "portfolio-agent-eval-baseline/v1"
     assert payload["status"] == "completed"
+    assert payload["submission_readiness"] == {
+        "status": "ready_for_triage",
+        "blocking_reasons": [],
+        "required_next_actions": [
+            "Run uv run python scripts/run_agent_evals.py triage --json.",
+            "Review grade results and promote any failed trajectories into regressions.",
+        ],
+    }
     assert payload["artifacts"]["trace_files"] == ["trace_001.json"]
     assert payload["artifacts"]["grade_result_files"] == ["results_001.json"]
     assert payload["commands"]["compare_template"] == [
@@ -249,6 +289,17 @@ def test_eval_triage_classifies_grade_failures_and_trace_tool_calls(
 
     assert payload["schema_version"] == "portfolio-agent-eval-triage/v1"
     assert payload["status"] == "failures_detected"
+    assert payload["submission_readiness"] == {
+        "status": "needs_hardening",
+        "blocking_reasons": [
+            "3 eval failure(s) detected, including 1 critical failure(s)."
+        ],
+        "required_next_actions": [
+            "Fix or explicitly disposition each triaged eval failure.",
+            "Rerun uv run python scripts/run_agent_evals.py run --fail-on-skip.",
+            "Rerun uv run python scripts/run_agent_evals.py triage --json.",
+        ],
+    }
     assert payload["summary"]["failure_count"] == 3
     assert payload["summary"]["critical_failure_count"] == 1
     assert payload["summary"]["category_counts"] == {
@@ -263,6 +314,53 @@ def test_eval_triage_classifies_grade_failures_and_trace_tool_calls(
     assert payload["failures"][1]["category"] == "provider_readiness"
     assert payload["failures"][2]["category"] == "grounding_and_citations"
     assert "super-secret" not in json.dumps(payload)
+
+
+def test_eval_triage_marks_passing_results_ready_for_capstone(tmp_path: Path) -> None:
+    app_dir = tmp_path / "apps" / "agent-service"
+    results_dir = app_dir / "artifacts/evals/grade-results"
+    traces_dir = app_dir / "artifacts/evals/traces"
+    results_dir.mkdir(parents=True)
+    traces_dir.mkdir(parents=True)
+    (results_dir / "results_001.json").write_text(
+        json.dumps(
+            {
+                "eval_cases": [
+                    {
+                        "eval_case_id": "pre_market_briefing",
+                        "metrics": {
+                            "portfolio_response_quality": {
+                                "score": 5,
+                                "explanation": "Strong response.",
+                            },
+                            "workflow_tool_trajectory_policy": {
+                                "score": 1,
+                                "explanation": "Required route used.",
+                            },
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (traces_dir / "trace_001.json").write_text(
+        json.dumps({"eval_cases": []}),
+        encoding="utf-8",
+    )
+
+    payload = build_triage_report(EvalRunConfig(app_dir=app_dir)).to_dict()
+
+    assert payload["status"] == "passed"
+    assert payload["submission_readiness"] == {
+        "status": "ready_for_capstone_submission",
+        "blocking_reasons": [],
+        "required_next_actions": [
+            "Keep the baseline summary, triage report, traces, and grade artifacts with the capstone evidence package.",
+            "Regenerate uv run python scripts/build_capstone_evidence.py.",
+        ],
+    }
+    assert payload["failures"] == []
 
 
 def test_eval_triage_reports_no_results_before_credentialed_run(tmp_path: Path) -> None:

@@ -109,6 +109,7 @@ class EvalRunSummary:
     commands: dict[str, list[str]]
     notes: list[str]
     next_actions: list[str]
+    submission_readiness: dict[str, object]
     schema_version: str = "portfolio-agent-eval-baseline/v1"
 
     def to_dict(self) -> dict[str, object]:
@@ -126,6 +127,7 @@ class EvalRunSummary:
             "commands": self.commands,
             "notes": self.notes,
             "next_actions": self.next_actions,
+            "submission_readiness": self.submission_readiness,
         }
 
 
@@ -169,6 +171,7 @@ class EvalTriageReport:
     trace_files: list[str]
     failures: list[EvalFailure]
     next_actions: list[str]
+    submission_readiness: dict[str, object]
     schema_version: str = "portfolio-agent-eval-triage/v1"
 
     def to_dict(self) -> dict[str, object]:
@@ -198,6 +201,7 @@ class EvalTriageReport:
             },
             "failures": [failure.to_dict() for failure in self.failures],
             "next_actions": self.next_actions,
+            "submission_readiness": self.submission_readiness,
         }
 
 
@@ -234,6 +238,28 @@ def _artifact_files(app_dir: Path, path: Path) -> list[str]:
 
 def _load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_env_file(path: Path, base_env: Mapping[str, str] | None = None) -> dict[str, str]:
+    env = dict(os.environ if base_env is None else base_env)
+    if not path.exists():
+        return env
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in env and env[key]:
+            continue
+        env[key] = _parse_env_value(value.strip())
+    return env
+
+
+def _parse_env_value(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -666,7 +692,93 @@ def build_run_summary(
         },
         notes=notes,
         next_actions=next_actions,
+        submission_readiness=_run_submission_readiness(
+            status=status,
+            command_results=command_results,
+            trace_files=_artifact_files(config.app_dir, config.traces_dir),
+            grade_result_files=_artifact_files(config.app_dir, config.results_dir),
+            missing_environment=preflight.missing_environment,
+            missing_binaries=preflight.missing_binaries,
+            missing_files=preflight.missing_files,
+        ),
     )
+
+
+def _run_submission_readiness(
+    *,
+    status: str,
+    command_results: list[EvalCommandResult],
+    trace_files: list[str],
+    grade_result_files: list[str],
+    missing_environment: list[str],
+    missing_binaries: list[str],
+    missing_files: list[str],
+) -> dict[str, object]:
+    blocking_reasons: list[str] = []
+    required_next_actions: list[str] = []
+
+    if status == "completed":
+        if not trace_files:
+            blocking_reasons.append("No eval trace artifacts were produced.")
+        if not grade_result_files:
+            blocking_reasons.append("No eval grade-result artifacts were produced.")
+        if blocking_reasons:
+            readiness_status = "artifact_gap"
+            required_next_actions.extend(
+                [
+                    "Inspect agents-cli output for missing trace or grade result files.",
+                    "Rerun uv run python scripts/run_agent_evals.py run --fail-on-skip.",
+                ]
+            )
+        else:
+            readiness_status = "ready_for_triage"
+            required_next_actions.extend(
+                [
+                    "Run uv run python scripts/run_agent_evals.py triage --json.",
+                    "Review grade results and promote any failed trajectories into regressions.",
+                ]
+            )
+    elif status == "skipped":
+        readiness_status = "blocked"
+        if missing_environment:
+            blocking_reasons.append(
+                "Missing credential environment: " + ", ".join(missing_environment)
+            )
+        if missing_binaries:
+            blocking_reasons.append("Missing binaries: " + ", ".join(missing_binaries))
+        if missing_files:
+            blocking_reasons.append("Missing eval files: " + ", ".join(missing_files))
+        required_next_actions.append(
+            "Configure the missing preflight requirements and rerun uv run python scripts/run_agent_evals.py run --fail-on-skip."
+        )
+    elif status == "failed":
+        readiness_status = "failed"
+        failed = [result for result in command_results if result.return_code != 0]
+        if failed:
+            blocking_reasons.append(
+                f"{failed[0].name} command exited with {failed[0].return_code}."
+            )
+        required_next_actions.extend(
+            [
+                "Inspect command output and any generated artifacts.",
+                "Run uv run python scripts/run_agent_evals.py triage --json if grade artifacts exist.",
+            ]
+        )
+    elif status == "dry_run":
+        readiness_status = "dry_run"
+        required_next_actions.append(
+            "Run without --dry-run in a credentialed environment."
+        )
+    else:
+        readiness_status = "unknown"
+        blocking_reasons.append(f"Unhandled eval status: {status}")
+        required_next_actions.append("Review the eval baseline summary.")
+
+    return {
+        "status": readiness_status,
+        "blocking_reasons": blocking_reasons,
+        "required_next_actions": required_next_actions,
+    }
 
 
 def write_run_summary(summary: EvalRunSummary, output: Path) -> Path:
@@ -735,6 +847,13 @@ def build_triage_report(
         next_actions = [
             "Run uv run python scripts/run_agent_evals.py run --fail-on-skip in a credentialed environment.",
         ]
+        submission_readiness = {
+            "status": "blocked",
+            "blocking_reasons": ["No eval grade-result artifacts were found."],
+            "required_next_actions": [
+                "Run uv run python scripts/run_agent_evals.py run --fail-on-skip.",
+            ],
+        }
     elif failures:
         status = "failures_detected"
         next_actions = [
@@ -742,11 +861,31 @@ def build_triage_report(
             "Convert confirmed failures into deterministic tests, eval cases, or tool-description fixes.",
             "Rerun the credentialed eval and compare results against the baseline.",
         ]
+        critical_count = sum(1 for failure in failures if failure.severity == "critical")
+        submission_readiness = {
+            "status": "needs_hardening",
+            "blocking_reasons": [
+                f"{len(failures)} eval failure(s) detected, including {critical_count} critical failure(s)."
+            ],
+            "required_next_actions": [
+                "Fix or explicitly disposition each triaged eval failure.",
+                "Rerun uv run python scripts/run_agent_evals.py run --fail-on-skip.",
+                "Rerun uv run python scripts/run_agent_evals.py triage --json.",
+            ],
+        }
     else:
         status = "passed"
         next_actions = [
             "Keep the grade result as the current baseline and compare future eval runs against it.",
         ]
+        submission_readiness = {
+            "status": "ready_for_capstone_submission",
+            "blocking_reasons": [],
+            "required_next_actions": [
+                "Keep the baseline summary, triage report, traces, and grade artifacts with the capstone evidence package.",
+                "Regenerate uv run python scripts/build_capstone_evidence.py.",
+            ],
+        }
 
     return EvalTriageReport(
         status=status,
@@ -757,6 +896,7 @@ def build_triage_report(
         trace_files=trace_files,
         failures=failures,
         next_actions=next_actions,
+        submission_readiness=submission_readiness,
     )
 
 
@@ -836,6 +976,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default="preflight",
     )
     parser.add_argument("--provider", default=os.getenv("LLM_PROVIDER", "gemini"))
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=Path(".env"),
+        help="Load local environment values before preflight and agents-cli execution. Values are never printed.",
+    )
     parser.add_argument("--app-dir", type=Path, default=Path("apps/agent-service"))
     parser.add_argument(
         "--dataset",
@@ -895,6 +1041,8 @@ def main(argv: list[str] | None = None) -> int:
         results_dir=args.results_dir,
         summary_output=args.summary_output,
     )
+    eval_env = load_env_file(args.env_file)
+    os.environ.update(eval_env)
     if args.mode == "triage":
         report = build_triage_report(config)
         triage_path = write_triage_report(
@@ -909,7 +1057,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Eval triage summary: {_path_string(triage_path)}", file=sys.stderr)
         return 0
 
-    report = build_preflight(config)
+    report = build_preflight(config, env=eval_env)
     _print_report(report, as_json=args.json)
 
     command_results: list[EvalCommandResult] = []

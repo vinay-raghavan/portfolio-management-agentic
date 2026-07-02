@@ -30,6 +30,15 @@ def test_capstone_evidence_manifest_is_repo_safe_and_actionable(tmp_path: Path) 
                     "trace_files": [],
                     "grade_result_files": [],
                 },
+                "submission_readiness": {
+                    "status": "blocked",
+                    "blocking_reasons": [
+                        "Missing credential environment: GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS"
+                    ],
+                    "required_next_actions": [
+                        "Configure the missing preflight requirements and rerun uv run python scripts/run_agent_evals.py run --fail-on-skip."
+                    ],
+                },
             }
         ),
         encoding="utf-8",
@@ -58,6 +67,10 @@ def test_capstone_evidence_manifest_is_repo_safe_and_actionable(tmp_path: Path) 
     assert payload["eval_baseline"]["triage_status"] == "no_results"
     assert payload["eval_baseline"]["missing_environment"] == [
         "GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS"
+    ]
+    assert payload["eval_baseline"]["submission_readiness"]["status"] == "blocked"
+    assert payload["eval_baseline"]["submission_readiness"]["blocking_reasons"] == [
+        "Missing credential environment: GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS"
     ]
     assert payload["verification_commands"] == [
         "uv run pytest tests",
@@ -98,3 +111,69 @@ def test_write_capstone_evidence_creates_parent_directory(tmp_path: Path) -> Non
 
     assert written == output
     assert payload["schema_version"] == "portfolio-agentic-capstone-evidence/v1"
+
+
+def test_capstone_evidence_marks_passing_eval_ready_for_submission(
+    tmp_path: Path,
+) -> None:
+    eval_dir = tmp_path / "apps" / "agent-service" / "artifacts" / "evals"
+    eval_dir.mkdir(parents=True)
+    (eval_dir / "baseline-summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "portfolio-agent-eval-baseline/v1",
+                "status": "completed",
+                "preflight": {
+                    "status": "ready",
+                    "missing_environment": [],
+                    "present_environment_keys": ["GOOGLE_API_KEY"],
+                },
+                "artifacts": {
+                    "trace_files": ["trace_001.json"],
+                    "grade_result_files": ["results_001.json"],
+                },
+                "submission_readiness": {
+                    "status": "ready_for_triage",
+                    "blocking_reasons": [],
+                    "required_next_actions": [
+                        "Run uv run python scripts/run_agent_evals.py triage --json."
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (eval_dir / "triage-report.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "portfolio-agent-eval-triage/v1",
+                "status": "passed",
+                "summary": {"failure_count": 0, "critical_failure_count": 0},
+                "submission_readiness": {
+                    "status": "ready_for_capstone_submission",
+                    "blocking_reasons": [],
+                    "required_next_actions": [
+                        "Keep the baseline summary, triage report, traces, and grade artifacts with the capstone evidence package.",
+                        "Regenerate uv run python scripts/build_capstone_evidence.py.",
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_capstone_evidence(
+        CapstoneEvidenceConfig(repo_root=tmp_path),
+        generated_at="2026-06-29T00:00:00Z",
+    ).to_dict()
+
+    assert payload["eval_baseline"]["submission_readiness"]["status"] == (
+        "ready_for_capstone_submission"
+    )
+    assert payload["eval_baseline"]["triage_failure_count"] == 0
+    assert "credentialed_model_eval_baseline" not in {
+        item["id"] for item in payload["remaining_gaps"]
+    }
+    assert "eval_grade_artifacts" not in {
+        item["id"] for item in payload["remaining_gaps"]
+    }
