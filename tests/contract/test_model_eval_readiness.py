@@ -47,19 +47,62 @@ def test_eval_preflight_skips_without_credentials() -> None:
         EvalRunConfig(provider="gemini"),
         env={},
         agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=False,
     )
 
     assert report.status == "skipped"
-    assert "GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS" in report.missing_environment
+    assert "GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS" in report.missing_environment
+    assert "GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS" in report.missing_environment
+    assert (
+        "GOOGLE_APPLICATION_CREDENTIALS or gcloud application-default credentials"
+        in report.missing_environment
+    )
     assert report.commands["generate"][:3] == ["agents-cli", "eval", "generate"]
     assert report.commands["grade"][:3] == ["agents-cli", "eval", "grade"]
+
+
+def test_eval_preflight_skips_with_api_key_but_no_project_context() -> None:
+    report = build_preflight(
+        EvalRunConfig(provider="gemini"),
+        env={"GOOGLE_API_KEY": "super-secret-value"},
+        agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=False,
+    )
+
+    assert report.status == "skipped"
+    assert "GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS" in report.missing_environment
+    assert (
+        "GOOGLE_APPLICATION_CREDENTIALS or gcloud application-default credentials"
+        in report.missing_environment
+    )
+
+
+def test_eval_preflight_skips_with_api_key_and_project_but_no_adc() -> None:
+    report = build_preflight(
+        EvalRunConfig(provider="gemini"),
+        env={
+            "GOOGLE_API_KEY": "super-secret-value",
+            "GOOGLE_CLOUD_PROJECT": "portfolio-capstone",
+        },
+        agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=False,
+    )
+
+    assert report.status == "skipped"
+    assert report.missing_environment == [
+        "GOOGLE_APPLICATION_CREDENTIALS or gcloud application-default credentials"
+    ]
 
 
 def test_eval_preflight_is_ready_with_provider_and_judge_credentials() -> None:
     report = build_preflight(
         EvalRunConfig(provider="gemini"),
-        env={"GOOGLE_API_KEY": "super-secret-value"},
+        env={
+            "GOOGLE_API_KEY": "super-secret-value",
+            "GOOGLE_CLOUD_PROJECT": "portfolio-capstone",
+        },
         agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=True,
     )
 
     serialized = json.dumps(report.to_dict())
@@ -68,6 +111,7 @@ def test_eval_preflight_is_ready_with_provider_and_judge_credentials() -> None:
     assert report.missing_environment == []
     assert "super-secret-value" not in serialized
     assert "GOOGLE_API_KEY" in report.present_environment_keys
+    assert "GOOGLE_CLOUD_PROJECT" in report.present_environment_keys
 
 
 def test_eval_runner_loads_local_env_file_without_overwriting_shell_values(
@@ -78,6 +122,7 @@ def test_eval_runner_loads_local_env_file_without_overwriting_shell_values(
         "\n".join(
             [
                 "GOOGLE_API_KEY=super-secret-value",
+                "GOOGLE_CLOUD_PROJECT=portfolio-capstone",
                 "ANTHROPIC_API_KEY='anthropic-secret'",
                 "EXISTING_KEY=file-value",
             ]
@@ -90,10 +135,12 @@ def test_eval_runner_loads_local_env_file_without_overwriting_shell_values(
         EvalRunConfig(provider="gemini"),
         env=env,
         agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=True,
     )
     serialized = json.dumps(report.to_dict())
 
     assert env["GOOGLE_API_KEY"] == "super-secret-value"
+    assert env["GOOGLE_CLOUD_PROJECT"] == "portfolio-capstone"
     assert env["ANTHROPIC_API_KEY"] == "anthropic-secret"
     assert env["EXISTING_KEY"] == "shell-value"
     assert report.status == "ready"
@@ -104,13 +151,18 @@ def test_eval_runner_loads_local_env_file_without_overwriting_shell_values(
 def test_eval_preflight_requires_provider_specific_generation_credentials() -> None:
     report = build_preflight(
         EvalRunConfig(provider="claude"),
-        env={"GOOGLE_API_KEY": "judge-only"},
+        env={
+            "GOOGLE_API_KEY": "judge-only",
+            "GOOGLE_CLOUD_PROJECT": "portfolio-capstone",
+        },
         agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=True,
     )
 
     assert report.status == "skipped"
     assert "ANTHROPIC_API_KEY" in report.missing_environment
-    assert "GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS" not in report.missing_environment
+    assert "GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS" not in report.missing_environment
+    assert "GOOGLE_CLOUD_PROJECT or GOOGLE_APPLICATION_CREDENTIALS" not in report.missing_environment
 
 
 def test_eval_run_mode_records_command_results_and_stops_on_failure(tmp_path: Path) -> None:
@@ -146,8 +198,12 @@ def test_eval_run_summary_records_artifacts_without_secret_values(tmp_path: Path
 
     report = build_preflight(
         config,
-        env={"GOOGLE_API_KEY": "super-secret-value"},
+        env={
+            "GOOGLE_API_KEY": "super-secret-value",
+            "GOOGLE_CLOUD_PROJECT": "portfolio-capstone",
+        },
         agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=True,
     )
     summary = build_run_summary(
         mode="run",
@@ -183,12 +239,21 @@ def test_eval_run_summary_records_artifacts_without_secret_values(tmp_path: Path
         "<candidate_results_json>",
     ]
     assert "super-secret-value" not in serialized
-    assert payload["preflight"]["present_environment_keys"] == ["GOOGLE_API_KEY"]
+    assert payload["preflight"]["present_environment_keys"] == [
+        "GOOGLE_API_KEY",
+        "GOOGLE_CLOUD_PROJECT",
+        "gcloud_application_default_credentials",
+    ]
 
 
 def test_write_run_summary_creates_parent_directory(tmp_path: Path) -> None:
     config = EvalRunConfig(app_dir=tmp_path)
-    report = build_preflight(config, env={}, agents_cli_path="/usr/local/bin/agents-cli")
+    report = build_preflight(
+        config,
+        env={},
+        agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=False,
+    )
     summary = build_run_summary(
         mode="preflight",
         config=config,
