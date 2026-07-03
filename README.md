@@ -1,6 +1,6 @@
 # TradePilot Sentinel
 
-Agentic portfolio research and paper-trading guardrail system for the Kaggle AI Agents capstone.
+Agentic trading workflow and risk-control system for the Kaggle AI Agents capstone.
 
 This is a standalone repository boundary. Implementation should use documented API contracts, bounded tools, configured data adapters, offline-safe fixtures, and explicit safety policy.
 
@@ -30,7 +30,7 @@ This is a standalone repository boundary. Implementation should use documented A
 
 ## Repository Intent
 
-The project will become a functioning agentic portfolio research and paper-trading tool. The Kaggle demo is one evidence path, not the product boundary. The system should support real configured data providers, deterministic analysis, explainable strategy evidence, a persistent paper-trading ledger, and policy-controlled agent workflows while forbidding live order placement.
+The project will become a functioning agentic trading workflow platform. The Kaggle demo uses paper trading and simulation as the evidence path, not the product boundary. The system should support real configured data providers, deterministic analysis, explainable strategy evidence, a persistent paper-trading ledger, and policy-controlled agent workflows while live execution remains disabled until explicit broker, approval, audit, and release controls are designed and enabled.
 
 ## North Star
 
