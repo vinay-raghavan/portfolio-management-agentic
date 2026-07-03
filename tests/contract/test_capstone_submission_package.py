@@ -20,6 +20,8 @@ def _png_dimensions(path: Path) -> tuple[int, int]:
 def test_capstone_writeup_and_public_evidence_are_submission_ready() -> None:
     writeup = (CAPSTONE_DIR / "writeup.md").read_text(encoding="utf-8")
     assert len(writeup.split()) <= 2_500
+    assert "**Track:** Concierge Agents" in writeup
+    assert "Agents for Business" not in writeup
 
     summary = json.loads(
         (CAPSTONE_DIR / "evidence" / "eval-summary.json").read_text(
@@ -59,6 +61,11 @@ def test_capstone_slide_assets_are_16_by_9_and_deck_has_notes() -> None:
     deck = CAPSTONE_DIR / "TradePilot-Sentinel-Capstone.pptx"
     with zipfile.ZipFile(deck) as archive:
         names = archive.namelist()
+        deck_xml = "\n".join(
+            archive.read(name).decode("utf-8", errors="ignore")
+            for name in names
+            if name.endswith(".xml")
+        )
     slide_xml = [
         name
         for name in names
@@ -72,3 +79,5 @@ def test_capstone_slide_assets_are_16_by_9_and_deck_has_notes() -> None:
     ]
     assert len(slide_xml) == 9
     assert len(notes_xml) == 9
+    assert "Concierge Agents" in deck_xml
+    assert "Agents for Business" not in deck_xml

@@ -1,6 +1,6 @@
 # TradePilot Sentinel
 
-**Track:** Agents for Business
+**Track:** Concierge Agents
 
 ## The Problem
 
@@ -151,19 +151,18 @@ limitation.
 Credential-free tests still verify imports, contracts, policy, persistence,
 API behavior, web compilation, Compose configuration, and MCP tool exposure.
 
-## Business Value
+## User Value
 
 TradePilot Sentinel turns a chain of manual handoffs into a governed,
-repeatable workflow. Analysts receive one evidence-backed explanation instead
-of assembling disconnected screens. Risk reviewers can see why an action is,
-or is not, eligible. Operators can inspect provider readiness and
-reconciliation before trusting a recommendation. Every consequential
-simulation leaves an approval and audit record.
+repeatable workflow for personal portfolio management. A user receives one
+evidence-backed explanation instead of assembling disconnected screens. They
+can see why an action is, or is not, eligible. They can inspect provider
+readiness and reconciliation before trusting a recommendation. Every
+consequential simulation leaves an approval and audit record.
 
-The same architecture can support research desks, portfolio teams, and
-individual systematic traders because the model provider, data adapters, and
-agent client are replaceable while the policy and domain contracts remain
-stable.
+The same architecture can support individual investors and systematic traders
+because the model provider, data adapters, and agent client are replaceable
+while the policy and domain contracts remain stable.
 
 ## What Comes Next
 

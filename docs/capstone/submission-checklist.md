@@ -55,7 +55,7 @@
 
 ## Kaggle Form
 
-- [ ] Select the Agents for Business track.
+- [ ] Select the Concierge Agents track.
 - [ ] Create the Kaggle Writeup and paste `writeup.md`.
 - [ ] Confirm the writeup remains below 2,500 words after Kaggle formatting.
 - [ ] Attach the public project link.
