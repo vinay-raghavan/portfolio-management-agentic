@@ -52,6 +52,11 @@ def test_capstone_writeup_and_public_evidence_are_submission_ready() -> None:
 
 
 def test_capstone_slide_assets_are_16_by_9_and_deck_has_notes() -> None:
+    assert _png_dimensions(CAPSTONE_DIR / "media" / "card-thumbnail.png") == (
+        560,
+        280,
+    )
+
     slide_names = [
         "01-cover.png",
         "02-problem-value.png",
