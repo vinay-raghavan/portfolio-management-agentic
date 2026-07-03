@@ -1181,7 +1181,7 @@ function App() {
           </div>
           <div>
             <strong>TradePilot Sentinel</strong>
-            <span>Paper trading guardrails</span>
+            <span>Trading workflow guardrails</span>
           </div>
         </div>
 
@@ -1212,8 +1212,8 @@ function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <h1>Agentic paper-trading command center</h1>
-            <p>Screen candidates, draft strategies, review approvals, and inspect reports behind live-trading guardrails.</p>
+            <h1>Agentic trading command center</h1>
+            <p>Screen candidates, draft strategies, review approvals, and inspect reports through policy-controlled trading workflows.</p>
           </div>
           <div className="topbar-actions">
             <StatusPill tone={loadState === 'ready' && workflowState === 'ready' ? 'good' : 'warn'}>

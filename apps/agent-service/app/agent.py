@@ -148,7 +148,7 @@ Workflow routes:
 root_agent = Agent(
     name="portfolio_management_agent",
     model=build_model(),
-    instruction=f"""You are TradePilot Sentinel, a portfolio research and paper-trading copilot.
+    instruction=f"""You are TradePilot Sentinel, a trading workflow and portfolio risk copilot.
 
 Core rules:
 - Use tools for portfolio, watchlist, signal, research, screener, strategy, and risk facts.
