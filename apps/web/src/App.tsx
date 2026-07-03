@@ -1180,8 +1180,8 @@ function App() {
             <Activity size={20} aria-hidden="true" />
           </div>
           <div>
-            <strong>Portfolio Agentic</strong>
-            <span>Paper workspace</span>
+            <strong>TradePilot Sentinel</strong>
+            <span>Paper trading guardrails</span>
           </div>
         </div>
 
@@ -1212,8 +1212,8 @@ function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <h1>Agentic portfolio console</h1>
-            <p>Focused workflow pages for screeners, strategy drafts, paper approvals, and reports.</p>
+            <h1>Agentic paper-trading command center</h1>
+            <p>Screen candidates, draft strategies, review approvals, and inspect reports behind live-trading guardrails.</p>
           </div>
           <div className="topbar-actions">
             <StatusPill tone={loadState === 'ready' && workflowState === 'ready' ? 'good' : 'warn'}>
