@@ -19,6 +19,13 @@ provider secret, or local path information.
 Use `card-thumbnail.png` as the main project card or first writeup image. It
 uses a `560x280` canvas.
 
+## Video
+
+Use `video/tradepilot-sentinel-product-walkthrough.mp4` as the source for the
+Kaggle YouTube upload. It is a `1280x720` product walkthrough with presentation
+context, actual web-console frames from the local app, and Indian male
+voiceover. Runtime is approximately 3 minutes 25 seconds.
+
 The slide palette is TradePilot-specific: graphite, off-white, forest green,
 warm gold, and restrained red. Product screenshots retain the actual web
 console styling because they are evidence rather than presentation decoration.

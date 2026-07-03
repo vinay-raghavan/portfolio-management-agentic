@@ -50,6 +50,15 @@ def test_capstone_writeup_and_public_evidence_are_submission_ready() -> None:
         / "approval-gated-paper-report.png"
     ).is_file()
 
+    walkthrough = (
+        CAPSTONE_DIR
+        / "media"
+        / "video"
+        / "tradepilot-sentinel-product-walkthrough.mp4"
+    )
+    assert walkthrough.is_file()
+    assert 1_000_000 < walkthrough.stat().st_size < 100_000_000
+
 
 def test_capstone_slide_assets_are_16_by_9_and_deck_has_notes() -> None:
     assert _png_dimensions(CAPSTONE_DIR / "media" / "card-thumbnail.png") == (
