@@ -1,6 +1,6 @@
-# Portfolio Management Agentic
+# TradePilot Sentinel
 
-Agentic portfolio research and paper-trading workbench for the Kaggle AI Agents capstone.
+Agentic portfolio research and paper-trading guardrail system for the Kaggle AI Agents capstone.
 
 This is a standalone repository boundary. Implementation should use documented API contracts, bounded tools, configured data adapters, offline-safe fixtures, and explicit safety policy.
 
