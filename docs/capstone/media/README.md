@@ -24,7 +24,7 @@ uses a `560x280` canvas.
 Use `video/tradepilot-sentinel-product-walkthrough.mp4` as the source for the
 Kaggle YouTube upload. It is a `1280x720` product walkthrough with presentation
 context, actual web-console frames from the local app, and Indian male
-voiceover. Runtime is approximately 3 minutes 25 seconds.
+voiceover. Runtime is approximately 3 minutes 11 seconds.
 
 The slide palette is TradePilot-specific: graphite, off-white, forest green,
 warm gold, and restrained red. Product screenshots retain the actual web
