@@ -1,95 +1,101 @@
-# Capstone Notes
+# TradePilot Sentinel Capstone Package
 
-Kaggle submission docs and repo-safe evidence live here.
+TradePilot Sentinel is a governed agentic trading workflow and risk-control
+platform. The Kaggle submission demonstrates the system through safe fixture
+data, read-only provider adapters, deterministic analysis, and
+approval-gated paper simulation. Paper trading is the capstone evidence path,
+not the long-term product boundary.
 
-## Product North Star
+## Submission Assets
 
-The capstone should demonstrate a functioning portfolio research and paper-trading tool, not a demo-only product and not just a chat endpoint. Public capstone evidence may use offline-safe fixtures, but the architecture should support configured data adapters and persistent paper-trading state.
+- [Capstone presentation](TradePilot-Sentinel-Capstone.pptx)
+- [Kaggle writeup](writeup.md)
+- [Video storyboard and narration](video-storyboard.md)
+- [Submission checklist](submission-checklist.md)
+- [Architecture source of truth](../architecture/README.md)
+- [Media gallery assets](media/README.md)
+- [Public-safe eval summary](evidence/eval-summary.json)
 
-The product path should include:
+The cover image is
+[01-cover.png](media/slides/01-cover.png). Architecture, workflow, safety,
+product, and evaluation visuals are exported as individual 16:9 PNG files in
+`media/slides`.
 
-- Agent-guided dashboard and pre-market briefing.
-- Portfolio, watchlist, screener, research, signal, strategy, backtest, risk, report, and settings coverage.
-- Paper-trading proposals with human approval.
-- Real market, fundamental, sentiment, volatility, and macro data adapters where explicitly configured.
-- Deterministic screeners and factor evidence before agent-written explanations.
-- Policy-enforced refusal of live trading and broker-token access.
+## Product Story
 
-## Source Workflow Repurposing
+A user can ask the agent to review market conditions, screen candidates,
+explain a factor stack, retrieve pattern citations, draft a strategy, request a
+simulated backtest, create a paper order proposal, review approval state,
+simulate an approved fill, and generate a redacted report. The agent does not
+replace deterministic scoring or policy. It coordinates those services and
+turns their outputs into an understandable workflow.
 
-Source-system scripts are treated as reference context. They should be inventoried and classified before implementation:
-
-- Safe ideas become typed domain functions or offline-safe fixtures.
-- Safe workflows become MCP tools with explicit policy tiers.
-- Strategy explanations become RAG pattern cards with citations.
-- Live, credentialed, account-specific, or direct-execution behavior is excluded.
-
-The capstone evidence should show that useful workflow knowledge was preserved while the implementation became portable, testable, and paper-only.
-
-## Product Scenario
-
-Prompt:
-
-```text
-What should I review before market open?
-```
-
-Expected agent flow:
-
-- Use the pre-market briefing tool or gather portfolio, watchlist, signal, research, and risk context.
-- Identify whether the run uses configured data or offline-safe fixtures.
-- Summarize exposure, watchlist candidates, signal regime, research notes, counterevidence, and risk switches.
-- Suggest review actions only.
-- Do not place orders, enable live strategies, retrieve broker tokens, or simulate execution.
-
-## Product-Grade Evidence
-
-The final submission should show that the same workflows can run with fixtures for reproducibility and with configured read-only providers for real use. Evidence should include:
-
-- Screener run summary with hard gates, component scores, and multi-hit ranking.
-- Factor-stack explanation with technical, fundamental, sentiment, volatility, macro, and portfolio-fit sections.
-- Pattern-card citations from public references.
-- Paper-trading proposal that remains draft or pending until approved.
-- Simulated backtest result feeding a paper order proposal, approval-gated simulated fill, and paper accounting update.
-- Audit log or trace showing policy boundaries and refusal of live-trading requests.
-- Model-backed eval baseline showing positive workflow quality and negative safety refusal behavior when credentials are configured, backed by the redacted baseline summary, deterministic triage report, and grade artifacts.
-- Web console screenshots showing focused screener, strategy/backtest, paper approval, report, and provider-settings pages from safe workflows.
-
-## Evidence Manifest
-
-Build the repo-safe capstone evidence manifest from the repository root:
-
-```bash
-uv run python scripts/build_capstone_evidence.py
-```
-
-The default output is ignored by Git:
+The implemented evidence path is:
 
 ```text
-artifacts/capstone/evidence-manifest.json
+intent -> evidence -> recommendation -> strategy -> backtest -> proposal
+       -> human approval -> simulated fill -> accounting -> audit report
 ```
 
-Use JSON mode when another tool needs to read it directly:
+## Course Concepts Demonstrated
+
+| Concept | Repository evidence | Submission evidence |
+| --- | --- | --- |
+| Google ADK agent | `apps/agent-service/app/agent.py` | Architecture and workflow slides; live prompt demo |
+| MCP server | `apps/mcp-server/portfolio_mcp/server.py` | Architecture and safety slides |
+| Security controls | `packages/policy` and contract tests | Safety slide; approval and refusal demo |
+| Deployability | `compose.yaml`, Dockerfiles, GitHub Actions | Evaluation and deployment slide |
+| Agents CLI evals and skills | eval datasets, wrapper, skills, and runbook | Public eval summary and video evidence |
+
+## Evidence Status
+
+- Product workflow screenshots: ready.
+- Architecture and workflow diagrams: ready.
+- Presentation deck and cover image: ready.
+- Credentialed Gemini baseline: completed.
+- Deterministic eval triage: passed with zero failures and zero critical
+  failures.
+- Latest `develop` CI at the start of this package: passed.
+- Final narrated video and YouTube upload: pending.
+- Kaggle writeup publication and Media Gallery upload: pending.
+- Public GitHub visibility and release merge to `main`: pending human action.
+
+## Safety Boundary
+
+- Live order placement is unavailable.
+- Live strategy enablement is unavailable.
+- Broker trading-token access is forbidden.
+- Provider secrets and credential values are never returned.
+- Paper fills require persisted human approval.
+- Forbidden compatibility traps are not registered as MCP tools.
+- Evidence contains no real account data, private source, or local paths.
+
+Future execution support is a separate production milestone. It requires
+explicit broker isolation, stronger approvals, audit and observability review,
+rollback, and release controls before any adapter can be enabled.
+
+## Build Evidence Manifest
+
+From the repository root:
 
 ```bash
 uv run python scripts/build_capstone_evidence.py --json
 ```
 
-The manifest records:
+The generated manifest reports product scope, workflow coverage, eval
+readiness, container services, tracked media readiness, and remaining gaps
+without recording credential values or local absolute paths.
 
-- Paper-only product scope and safety boundaries.
-- Deterministic verification commands.
-- Docker or Podman Compose service evidence.
-- Implemented workflow evidence for briefing, provider readiness, screeners, recommendations, approval-gated simulated fills, reports, and live-trading refusal.
-- Credentialed eval status from the redacted baseline summary and triage report when present.
-- Remaining gaps, including the credentialed model eval baseline when model credentials are absent.
-- Eval submission readiness from the baseline and triage reports:
-  `blocked`, `ready_for_triage`, `needs_hardening`, `artifact_gap`, or
-  `ready_for_capstone_submission`.
+## Verification
 
-The manifest must not contain local absolute paths, provider payloads, broker tokens, credential values, or real account data.
+```bash
+uv run pytest tests
+cd apps/agent-service && uv run pytest tests/unit tests/integration
+cd apps/web && npm run typecheck && npm run build
+podman compose config --quiet
+uv run python scripts/run_agent_evals.py triage --json
+```
 
-For final submission, `eval_baseline.submission_readiness.status` should be
-`ready_for_capstone_submission`. If it is `ready_for_triage`, run deterministic
-triage. If it is `needs_hardening`, fix or explicitly disposition the listed
-failures and rerun the credentialed baseline.
+Model-backed eval generation remains credential-gated. Deterministic tests and
+triage remain runnable without cloud credentials once the redacted grade
+artifacts are available.

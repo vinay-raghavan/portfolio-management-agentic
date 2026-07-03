@@ -65,6 +65,14 @@ def test_capstone_evidence_manifest_is_repo_safe_and_actionable(tmp_path: Path) 
 
     assert payload["schema_version"] == "portfolio-agentic-capstone-evidence/v1"
     assert payload["generated_at"] == "2026-06-29T00:00:00Z"
+    assert payload["product_scope"] == {
+        "mode": "governed_trading_workflow_platform",
+        "capstone_execution_mode": "approval_gated_paper_simulation",
+        "live_execution_status": "disabled_until_explicit_production_controls",
+        "deployment_shape": "Docker or Podman Compose",
+        "default_data_mode": "offline_safe_fixtures",
+        "configured_data_mode": "read_only_provider_adapters",
+    }
     assert payload["eval_baseline"]["status"] == "skipped"
     assert payload["eval_baseline"]["triage_status"] == "no_results"
     assert payload["eval_baseline"]["missing_environment"] == [
@@ -95,6 +103,9 @@ def test_capstone_evidence_manifest_is_repo_safe_and_actionable(tmp_path: Path) 
     }.issubset({item["id"] for item in payload["workflow_evidence"]})
     assert all(item["status"] == "implemented" for item in payload["workflow_evidence"])
     assert "credentialed_model_eval_baseline" in {
+        item["id"] for item in payload["remaining_gaps"]
+    }
+    assert "capstone_media_package" in {
         item["id"] for item in payload["remaining_gaps"]
     }
     assert "/" + "Users/" not in serialized
@@ -165,6 +176,19 @@ def test_capstone_evidence_marks_passing_eval_ready_for_submission(
         ),
         encoding="utf-8",
     )
+    media_dir = tmp_path / "docs" / "capstone" / "media" / "slides"
+    media_dir.mkdir(parents=True)
+    for filename in (
+        "01-cover.png",
+        "03-system-architecture.png",
+        "05-agentic-workflow.png",
+        "06-safety-model.png",
+        "08-evaluation-deployability.png",
+    ):
+        (media_dir / filename).write_bytes(b"repo-safe-evidence")
+    (tmp_path / "docs" / "capstone" / "TradePilot-Sentinel-Capstone.pptx").write_bytes(
+        b"repo-safe-deck"
+    )
 
     payload = build_capstone_evidence(
         CapstoneEvidenceConfig(repo_root=tmp_path),
@@ -179,5 +203,9 @@ def test_capstone_evidence_marks_passing_eval_ready_for_submission(
         item["id"] for item in payload["remaining_gaps"]
     }
     assert "eval_grade_artifacts" not in {
+        item["id"] for item in payload["remaining_gaps"]
+    }
+    assert payload["submission_assets"]["status"] == "ready"
+    assert "capstone_media_package" not in {
         item["id"] for item in payload["remaining_gaps"]
     }

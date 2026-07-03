@@ -23,6 +23,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with paper-order readiness preflight cards, guided configured-source onboarding, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, import-gate visibility on decision pages, provider profiles, refresh readiness, full-refresh controls, per-provider backoff state, and import-job feedback.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data, provider-context, and screener-run persistence is available through `MARKET_DATA_DB_PATH`; provider profile and import-job metadata persistence is available through `PROVIDER_CONFIG_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
+- A public-safe capstone package includes a presentation deck, 16:9 architecture and workflow visuals, selected product screenshots, a redacted eval summary, a Kaggle writeup, and a sub-five-minute video storyboard under `docs/capstone`.
 - No copied portfolio data.
 - No broker trading credentials.
 - No live trading.
@@ -34,13 +35,13 @@ The project will become a functioning agentic trading workflow platform. The Kag
 
 ## North Star
 
-The end goal is a full agentic portfolio and paper-trading web application. It should cover dashboard, portfolio, watchlist, screeners, research, signals, strategies, backtests, risk, paper trades, reports, and settings while making every major capability reachable through agent workflows.
+The end goal is a governed agentic trading workflow application. It should cover dashboard, portfolio, watchlist, screeners, research, signals, strategies, backtests, risk, paper trades, reports, and settings while making every major capability reachable through agent workflows. The current release proves those controls through paper simulation; future execution adapters remain a separate production milestone.
 
 Source-system scripts and workflows are reference material only. Useful logic should be rewritten as typed domain functions, MCP tools, scheduled jobs, RAG pattern cards, evals, or UI flows with offline-safe fixtures and policy tests. Live-account assumptions, broker-token access, direct execution paths, and local state should not be imported.
 
 Primary constraints:
 
-- Paper trading and simulation only.
+- The current release permits paper trading and simulation only.
 - All major app features should be reachable through agent workflows.
 - Broker/provider credentials may be used only for data fetching, never live order execution.
 - Private source, local paths, and real financial data are excluded from the repo.
@@ -52,7 +53,7 @@ Primary constraints:
 
 - `apps/agent-service`: ADK coordinator and sub-agent service.
 - `apps/mcp-server`: MCP tool server and policy enforcement boundary.
-- `apps/web`: Thin React console for the agentic portfolio and paper-trading workflows.
+- `apps/web`: React console for policy-controlled trading workflows.
 - `packages/policy`: Shared action-tier and safety policy logic.
 - `packages/model-provider`: Model provider configuration and adapter contracts.
 - `packages/agent-platform`: Agent runtime and coding-agent handoff contracts.
@@ -65,15 +66,17 @@ Primary constraints:
 - `demo`: Offline-safe fixtures and public demo scenarios only.
 - `references`: Public-safe reference policy and approved public links.
 
-## Next Step
+## Capstone Submission
 
-Next implementation milestones:
+The submission package is documented in `docs/capstone/README.md`. It includes:
 
-1. Run `scripts/run_agent_evals.py run --fail-on-skip` in a credentialed environment or dispatch the manual Eval baseline workflow.
-2. Run `scripts/run_agent_evals.py triage --json`, review the redacted baseline summary, triage report, traces, grade artifacts, and `submission_readiness` status, then tune agent instructions or tool descriptions from failed cases.
-3. Add eval-derived agent instruction, workflow-routing, and tool-description refinements for any failed paper-trading, provider-readiness, grounding, tool-trajectory, or forbidden-action trajectories.
+- `TradePilot-Sentinel-Capstone.pptx` with speaker notes.
+- 16:9 cover, architecture, decision, workflow, safety, product-evidence, and evaluation images.
+- A Kaggle writeup under the 2,500-word limit.
+- A timed storyboard for the required public video of five minutes or less.
+- A public-safe eval summary and final submission checklist.
 
-Runbook: `docs/runbooks/model-eval-baseline.md`.
+Remaining external steps are recording and publishing the video, merging the release into `main`, completing the secret and history scan, making the repository public, and creating the Kaggle Writeup and Media Gallery.
 
 ## Verification
 
@@ -130,7 +133,8 @@ uv run python scripts/build_capstone_evidence.py
 
 The manifest writes to `artifacts/capstone/evidence-manifest.json` by default.
 Use `--json` to print it for another tool. For submission, the target eval gate
-is `eval_baseline.submission_readiness.status=ready_for_capstone_submission`.
+is `eval_baseline.submission_readiness.status=ready_for_capstone_submission`
+and the tracked media gate is `submission_assets.status=ready`.
 
 ## Container Runtime
 
