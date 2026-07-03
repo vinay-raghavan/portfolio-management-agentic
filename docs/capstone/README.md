@@ -1,10 +1,10 @@
 # TradePilot Sentinel Capstone Package
 
 TradePilot Sentinel is a governed agentic trading workflow and risk-control
-platform. The Kaggle submission demonstrates the system through safe fixture
-data, read-only provider adapters, deterministic analysis, and
-approval-gated paper simulation. Paper trading is the capstone evidence path,
-not the long-term product boundary.
+platform. The Kaggle submission demonstrates the system with safe fixture data,
+read-only provider adapters, deterministic analysis, and approval-gated paper
+simulation. Paper trading is the capstone evidence path, not the long-term
+product boundary.
 
 ## Submission Assets
 
@@ -28,7 +28,7 @@ explain a factor stack, retrieve pattern citations, draft a strategy, request a
 simulated backtest, create a paper order proposal, review approval state,
 simulate an approved fill, and generate a redacted report. The agent does not
 replace deterministic scoring or policy. It coordinates those services and
-turns their outputs into an understandable workflow.
+summarizes their outputs into a workflow the user can review.
 
 The implemented evidence path is:
 

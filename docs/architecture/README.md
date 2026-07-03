@@ -1,9 +1,9 @@
 # TradePilot Sentinel Architecture
 
 TradePilot Sentinel is a governed agentic trading workflow platform. The
-current capstone release proves the architecture with read-only data access,
-deterministic analysis, strategy and backtest drafts, and approval-gated paper
-simulation. Live execution is not implemented or exposed.
+current capstone release demonstrates the architecture with read-only data
+access, deterministic analysis, strategy and backtest drafts, and
+approval-gated paper simulation. Live execution is not implemented or exposed.
 
 The presentation-ready architecture is available as a
 [16:9 image](../capstone/media/slides/03-system-architecture.png) and in the
@@ -115,7 +115,7 @@ domain contracts, eval datasets, and the MCP server remain portable to Codex,
 Claude Code, and generic MCP clients.
 
 Provider neutrality is a deployment option, not a permission escape hatch. A
-local or weaker model receives the same bounded tool catalog.
+local or weaker model receives the same scoped tool catalog.
 
 ## Deployment
 

@@ -17,8 +17,7 @@ billing pages, local absolute paths, or raw provider payloads.
 
 > TradePilot Sentinel is a governed agentic trading workflow platform. Trading
 > decisions combine many signals, but most tools separate evidence, reasoning,
-> and execution control. TradePilot Sentinel makes those controls part of the
-> workflow.
+> and execution control. This system puts those controls into the workflow.
 
 ### 0:20-0:55 — Architecture
 
@@ -27,9 +26,9 @@ billing pages, local absolute paths, or raw provider payloads.
 **Narration:**
 
 > A FastAPI service hosts a Google ADK agent. The agent interprets intent and
-> coordinates tools, but deterministic services own facts, scoring, policy,
+> coordinates tools. Deterministic services own facts, scoring, policy,
 > persistence, and audit state. The MCP server exposes only the approved tool
-> catalog. Gemini is the default model, while the provider adapter also supports
+> catalog. Gemini is the default model, and the provider adapter also supports
 > Claude, OpenAI-compatible endpoints, and Ollama without changing permissions.
 
 ### 0:55-1:25 — Agentic Request
@@ -44,9 +43,9 @@ research, and risk evidence. Do not create or execute an order.
 **Narration:**
 
 > This is not a direct dashboard query. The agent routes the request through a
-> bounded pre-market workflow, gathers portfolio, watchlist, signal, research,
-> and risk context, then synthesizes review actions. It clearly distinguishes
-> fixture evidence from configured data and does not create an order.
+> pre-market workflow, gathers portfolio, watchlist, signal, research, and risk
+> context, then synthesizes review actions. It distinguishes fixture evidence
+> from configured data and does not create an order.
 
 ### 1:25-2:00 — Screener And Recommendation
 
@@ -58,8 +57,8 @@ then show `media/slides/04-decision-intelligence.png`.
 > The screener combines technical, fundamental, sentiment, volatility, macro,
 > and portfolio-fit evidence. Provider freshness and import reconciliation are
 > hard gates before scoring. The recommendation includes supporting evidence,
-> counterevidence, citations, uncertainty, and only the next actions that policy
-> permits.
+> counterevidence, citations, uncertainty, and only the next actions permitted
+> by policy.
 
 ### 2:00-3:05 — Strategy To Approved Simulation
 
@@ -85,9 +84,9 @@ preflight, accounting, and redacted audit rows. Use
 
 **Narration:**
 
-> The result is durable and reviewable. The paper ledger records the approval,
-> simulated fill, positions, accounting, and redacted audit events. Live trading
-> and broker-token access remain unavailable.
+> The result is reviewable. The paper ledger records the approval, simulated
+> fill, positions, accounting, and redacted audit events. Live trading and
+> broker-token access remain unavailable.
 
 ### 3:35-4:05 — Safety
 
@@ -96,7 +95,7 @@ preflight, accounting, and redacted audit rows. Use
 **Narration:**
 
 > Safety is enforced outside the language model. Read-only and draft tools are
-> bounded. Consequential simulation requires approval. Live orders, broker
+> scoped. Consequential simulation requires approval. Live orders, broker
 > tokens, credential disclosure, and approval bypass are absent from the MCP
 > catalog, so a weaker or compromised model cannot call them.
 
@@ -119,7 +118,7 @@ preflight, accounting, and redacted audit rows. Use
 **Narration:**
 
 > The model can recommend. The system decides what is permitted. A human
-> controls the consequential step. That is TradePilot Sentinel.
+> controls the consequential step.
 
 ## Recording Evidence Checklist
 

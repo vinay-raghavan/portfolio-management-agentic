@@ -1,8 +1,11 @@
 # TradePilot Sentinel
 
-Agentic trading workflow and risk-control system for the Kaggle AI Agents capstone.
+Agentic trading workflow and risk-control system for the Kaggle AI Agents
+capstone.
 
-This is a standalone repository boundary. Implementation should use documented API contracts, bounded tools, configured data adapters, offline-safe fixtures, and explicit safety policy.
+This repository is self-contained. Implementation should use documented API
+contracts, scoped tools, configured data adapters, offline-safe fixtures, and
+explicit safety policy.
 
 ## Current State
 
@@ -18,7 +21,7 @@ This is a standalone repository boundary. Implementation should use documented A
 - Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval infrastructure is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade`, writes redacted baseline summaries, and produces deterministic triage reports for grade-result failures without printing secret values. The eval config combines an LLM response-quality rubric with deterministic forbidden-action and workflow-tool-trajectory code metrics. A manual GitHub Actions workflow can run the credentialed baseline and upload ignored eval artifacts.
-- Capstone evidence manifest generation is available through `scripts/build_capstone_evidence.py`; it summarizes deterministic proof, container services, implemented workflow evidence, eval baseline status, eval submission readiness, and remaining submission gaps without local paths or secret values.
+- Capstone evidence manifest generation is available through `scripts/build_capstone_evidence.py`; it summarizes deterministic verification, container services, implemented workflow evidence, eval baseline status, eval submission readiness, and remaining submission gaps without local paths or secret values.
 - Agent workflow-routing guidance is embedded in the ADK instruction and eval rubric so pre-market, provider-readiness, candidate explanation, recommendation-to-paper-order, approval-gated fill, reporting, feature-navigation, and forbidden-action requests have explicit safe tool paths before the first credentialed baseline. Model-facing MCP tool descriptions now name policy tiers and high-risk workflow sequencing constraints.
 - Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with paper-order readiness preflight cards, guided configured-source onboarding, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, import-gate visibility on decision pages, provider profiles, refresh readiness, full-refresh controls, per-provider backoff state, and import-job feedback.
 - SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data, provider-context, and screener-run persistence is available through `MARKET_DATA_DB_PATH`; provider profile and import-job metadata persistence is available through `PROVIDER_CONFIG_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
@@ -31,11 +34,21 @@ This is a standalone repository boundary. Implementation should use documented A
 
 ## Repository Intent
 
-The project will become a functioning agentic trading workflow platform. The Kaggle demo uses paper trading and simulation as the evidence path, not the product boundary. The system should support real configured data providers, deterministic analysis, explainable strategy evidence, a persistent paper-trading ledger, and policy-controlled agent workflows while live execution remains disabled until explicit broker, approval, audit, and release controls are designed and enabled.
+The project is a functioning agentic trading workflow platform. The Kaggle demo
+uses paper trading and simulation as the evidence path, not the product
+boundary. The system should support configured data providers, deterministic
+analysis, explainable strategy evidence, a persistent paper-trading ledger, and
+policy-controlled agent workflows while live execution remains disabled until
+broker, approval, audit, and release controls are designed and enabled.
 
 ## North Star
 
-The end goal is a governed agentic trading workflow application. It should cover dashboard, portfolio, watchlist, screeners, research, signals, strategies, backtests, risk, paper trades, reports, and settings while making every major capability reachable through agent workflows. The current release proves those controls through paper simulation; future execution adapters remain a separate production milestone.
+The target product is a governed agentic trading workflow application. It should
+cover dashboard, portfolio, watchlist, screeners, research, signals, strategies,
+backtests, risk, paper trades, reports, and settings while making every major
+capability reachable through agent workflows. The current release demonstrates
+those controls through paper simulation; future execution adapters remain a
+separate production milestone.
 
 Source-system scripts and workflows are reference material only. Useful logic should be rewritten as typed domain functions, MCP tools, scheduled jobs, RAG pattern cards, evals, or UI flows with offline-safe fixtures and policy tests. Live-account assumptions, broker-token access, direct execution paths, and local state should not be imported.
 
