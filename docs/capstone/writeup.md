@@ -2,6 +2,10 @@
 
 **Track:** Concierge Agents
 
+TradePilot Sentinel helps an individual investor turn portfolio, market,
+strategy, and risk evidence into reviewable paper-trading decisions through a
+policy-controlled agent workflow with human approval.
+
 ## The Problem
 
 Trading decisions rarely fail because one indicator is missing. They fail

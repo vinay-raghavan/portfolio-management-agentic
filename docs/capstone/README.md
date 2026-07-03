@@ -6,6 +6,12 @@ read-only provider adapters, deterministic analysis, and approval-gated paper
 simulation. Paper trading is the capstone evidence path, not the long-term
 product boundary.
 
+## One-Sentence Summary
+
+TradePilot Sentinel helps an individual investor turn portfolio, market,
+strategy, and risk evidence into reviewable paper-trading decisions through a
+policy-controlled agent workflow with human approval.
+
 ## Submission Assets
 
 - [Capstone presentation](TradePilot-Sentinel-Capstone.pptx)

@@ -9,6 +9,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CAPSTONE_DIR = REPO_ROOT / "docs" / "capstone"
 SLIDES_DIR = CAPSTONE_DIR / "media" / "slides"
+ONE_SENTENCE_SUMMARY = (
+    "TradePilot Sentinel helps an individual investor turn portfolio, market, "
+    "strategy, and risk evidence into reviewable paper-trading decisions "
+    "through a policy-controlled agent workflow with human approval."
+)
 
 
 def _png_dimensions(path: Path) -> tuple[int, int]:
@@ -21,7 +26,11 @@ def test_capstone_writeup_and_public_evidence_are_submission_ready() -> None:
     writeup = (CAPSTONE_DIR / "writeup.md").read_text(encoding="utf-8")
     assert len(writeup.split()) <= 2_500
     assert "**Track:** Concierge Agents" in writeup
+    assert ONE_SENTENCE_SUMMARY in " ".join(writeup.split())
     assert "Agents for Business" not in writeup
+
+    capstone_readme = (CAPSTONE_DIR / "README.md").read_text(encoding="utf-8")
+    assert ONE_SENTENCE_SUMMARY in " ".join(capstone_readme.split())
 
     summary = json.loads(
         (CAPSTONE_DIR / "evidence" / "eval-summary.json").read_text(
