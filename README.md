@@ -62,6 +62,33 @@ Primary constraints:
 - Gemini is the first model provider, but the design must support other hosted and local providers such as Claude, OpenAI-compatible APIs, and Ollama later.
 - ADK is the first capstone runtime, but the reusable tool, policy, skill, and eval layers must remain portable to Codex, Claude Code, and generic MCP clients.
 
+## Architecture Overview
+
+At a high level, the model coordinates intent and explanation while
+deterministic services own facts, policy, routing, persistence, and audit
+state.
+
+```mermaid
+flowchart LR
+    U["User / Web console"] --> API["FastAPI agent service"]
+    API --> ROUTE["Harness router<br/>route decisions, context evaluation,<br/>response validation"]
+    ROUTE --> MODEL["Model provider adapter<br/>Gemini, Ollama, Claude,<br/>OpenAI-compatible"]
+    ROUTE --> MCP["MCP policy server<br/>route-scoped safe tools"]
+    MCP --> DOMAIN["Deterministic domain services<br/>screeners, risk, recommendations,<br/>backtests, paper ledger"]
+    DOMAIN --> DB["State stores<br/>SQLite local mode today<br/>Postgres production-like target"]
+    DOMAIN --> PROVIDERS["Read-only provider adapters<br/>fixtures, JSON files,<br/>future FYERS data connector"]
+    ROUTE --> AUDIT["Evaluator and audit evidence<br/>ContextPack, ResponseEvaluator,<br/>evals and CI artifacts"]
+
+    MODEL -. "synthesis only" .-> ROUTE
+    PROVIDERS -. "no credentials in prompts" .-> DOMAIN
+    DOMAIN -. "paper-only mutations" .-> DB
+```
+
+The safety invariant is intentionally simple: models may explain and propose,
+but only policy-classified tools and deterministic services can read data,
+write paper-only state, or record audit events. Live trading and broker trading
+tokens remain structurally forbidden.
+
 ## Planned Structure
 
 - `apps/agent-service`: ADK coordinator and sub-agent service.
@@ -167,12 +194,45 @@ The default services expose:
 - MCP server: `http://localhost:8081/mcp`
 - Web console: `http://localhost:3000`
 
-Both services use shared local databases when `PAPER_LEDGER_DB_PATH`,
+Deployment topology:
+
+```mermaid
+flowchart TB
+    Browser["Browser<br/>localhost:3000"] --> Web["web service<br/>React/Vite preview<br/>port 3000"]
+    Web --> Agent["agent-service<br/>FastAPI + ADK<br/>port 8000"]
+    Agent --> MCP["mcp-server<br/>Streamable HTTP MCP<br/>port 8081/mcp"]
+    Agent --> Model["Configured model runtime<br/>Gemini API or local Ollama gateway"]
+    MCP --> Domain["Domain packages<br/>policy, screeners, recommendations,<br/>paper ledger, provider adapters"]
+    Agent --> Domain
+    Domain --> Volume["paper-ledger-data volume<br/>/data/*.db SQLite local stores"]
+    Domain --> Postgres["Postgres production-like target<br/>tenants, sessions, providers,<br/>snapshots, research, ledger, audit"]
+    Domain --> LocalData["Ignored local data files<br/>optional JSON provider inputs"]
+    NativeOllama["Native Ollama on host<br/>host.containers.internal:11434"] -. "private gateway" .-> Agent
+    OllamaProfile["optional compose ollama profile<br/>not public by default"] -. "model storage" .-> OllamaVolume["ollama-data volume"]
+
+    subgraph Compose["Docker or Podman Compose"]
+        Web
+        Agent
+        MCP
+        Volume
+        Postgres
+        OllamaProfile
+        OllamaVolume
+    end
+```
+
+Current local Compose mode uses shared SQLite databases when `PAPER_LEDGER_DB_PATH`,
 `MARKET_DATA_DB_PATH`, and `PROVIDER_CONFIG_DB_PATH` are set. The Compose
 defaults are `/data/paper-ledger.db`, `/data/market-data.db`, and
 `/data/provider-config.db` on the `paper-ledger-data` volume; the local
 `.env.example` defaults are `data/paper-ledger.db`, `data/market-data.db`, and
 `data/provider-config.db`.
+
+The production-like storage target is Postgres, with tenant-scoped tables for
+sessions, FYERS/provider connections, normalized snapshots, research documents,
+paper policies, grants, ledger entries, and immutable audit events. SQLite
+remains useful for offline capstone mode and fast deterministic tests while
+Postgres-backed contract tests are introduced feature-by-feature.
 
 The default data-provider mode is offline-safe fixtures. To enable configured
 read-only market-data, universe, fundamentals, sentiment, volatility, and macro
