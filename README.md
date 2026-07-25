@@ -193,6 +193,8 @@ The default services expose:
 - Agent service: `http://localhost:8000`
 - MCP server: `http://localhost:8081/mcp`
 - Web console: `http://localhost:3000`
+- Postgres: `localhost:${POSTGRES_PORT:-5432}`
+- Redis: `localhost:${REDIS_PORT:-6379}`
 
 Deployment topology:
 
@@ -205,7 +207,10 @@ flowchart TB
     MCP --> Domain["Domain packages<br/>policy, screeners, recommendations,<br/>paper ledger, provider adapters"]
     Agent --> Domain
     Domain --> Volume["paper-ledger-data volume<br/>/data/*.db SQLite local stores"]
-    Domain --> Postgres["Postgres production-like target<br/>tenants, sessions, providers,<br/>snapshots, research, ledger, audit"]
+    Domain --> Postgres["postgres service<br/>Postgres 16<br/>production-like state target"]
+    Migrations["migrations job<br/>Alembic upgrade head"] --> Postgres
+    Redis["redis service<br/>jobs, queues, rate limits,<br/>short-lived cache"] --> Agent
+    Redis --> MCP
     Domain --> LocalData["Ignored local data files<br/>optional JSON provider inputs"]
     NativeOllama["Native Ollama on host<br/>host.containers.internal:11434"] -. "private gateway" .-> Agent
     OllamaProfile["optional compose ollama profile<br/>not public by default"] -. "model storage" .-> OllamaVolume["ollama-data volume"]
@@ -214,6 +219,8 @@ flowchart TB
         Web
         Agent
         MCP
+        Migrations
+        Redis
         Volume
         Postgres
         OllamaProfile
@@ -233,6 +240,30 @@ sessions, FYERS/provider connections, normalized snapshots, research documents,
 paper policies, grants, ledger entries, and immutable audit events. SQLite
 remains useful for offline capstone mode and fast deterministic tests while
 Postgres-backed contract tests are introduced feature-by-feature.
+
+Postgres schema changes live under `infra/db/alembic`. To validate migrations
+without touching a database, generate offline SQL:
+
+```bash
+uv run alembic -c infra/db/alembic.ini upgrade head --sql
+```
+
+To start only the database and apply migrations locally:
+
+```bash
+docker compose up --build postgres redis migrations
+```
+
+```bash
+podman compose up --build postgres redis migrations
+```
+
+The Compose database URL is
+`postgresql+psycopg://portfolio:portfolio-dev-password@postgres:5432/portfolio_agentic`.
+For host-local commands, `.env.example` uses the same database on
+`localhost:5432`. Production deployments must override the password and should
+provide `PORTFOLIO_DATABASE_URL` through the deployment secret manager rather
+than committing environment files.
 
 The default data-provider mode is offline-safe fixtures. To enable configured
 read-only market-data, universe, fundamentals, sentiment, volatility, and macro

@@ -7,8 +7,11 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+    "alembic>=1.16,<2",
     "mcp>=1.13.0,<2.0.0",
+    "psycopg[binary]>=3.2,<4",
     "pytest>=9.0.2,<10.0.0",
+    "sqlalchemy>=2.0,<3",
 ]
 
 [tool.pytest.ini_options]
