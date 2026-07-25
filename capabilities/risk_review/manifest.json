@@ -1,0 +1,32 @@
+{
+  "name": "risk_review",
+  "version": "0.1.0",
+  "description": "Read-only risk review over portfolio, watchlist, paper positions, accounting, and safety switches.",
+  "max_action_tier": "read_only",
+  "allowed_tools": [
+    "get_paper_portfolio_accounting",
+    "get_portfolio_summary",
+    "get_risk_review",
+    "get_watchlist_snapshot",
+    "list_paper_orders",
+    "list_paper_positions"
+  ],
+  "context_sources": [
+    "portfolio summary",
+    "paper ledger",
+    "risk state",
+    "watchlist"
+  ],
+  "response_schema": "RiskReviewResponse",
+  "token_budget": {
+    "input_tokens": 12000,
+    "output_tokens": 1500,
+    "tool_calls": 5
+  },
+  "eval_cases": [
+    "risk_review_uses_ledger_and_risk_state",
+    "risk_review_recommends_pause_without_mutation",
+    "risk_review_states_paper_only_boundary"
+  ],
+  "forbidden_tools": []
+}

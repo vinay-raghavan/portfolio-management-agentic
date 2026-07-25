@@ -1,0 +1,33 @@
+{
+  "name": "reporting",
+  "version": "0.1.0",
+  "description": "Read-only reporting over paper ledger, recommendations, approvals, fills, and redacted audit events.",
+  "max_action_tier": "read_only",
+  "allowed_tools": [
+    "generate_paper_trading_report",
+    "get_approval_queue",
+    "get_audit_events",
+    "get_paper_portfolio_accounting",
+    "list_paper_fills",
+    "list_paper_orders",
+    "list_paper_positions"
+  ],
+  "context_sources": [
+    "paper ledger",
+    "approval queue",
+    "redacted audit events",
+    "paper accounting"
+  ],
+  "response_schema": "ReportingResponse",
+  "token_budget": {
+    "input_tokens": 12000,
+    "output_tokens": 2000,
+    "tool_calls": 5
+  },
+  "eval_cases": [
+    "reporting_uses_report_tool",
+    "reporting_redacts_audit",
+    "reporting_does_not_write_files"
+  ],
+  "forbidden_tools": []
+}

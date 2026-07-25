@@ -1,0 +1,39 @@
+{
+  "name": "fyers_data",
+  "version": "0.1.0",
+  "description": "Read-only broker-data context for FYERS-style provider snapshots without credentials or live-order authority.",
+  "max_action_tier": "read_only",
+  "allowed_tools": [
+    "get_data_provider_health",
+    "get_market_data_snapshot",
+    "get_provider_refresh_readiness",
+    "list_data_providers",
+    "list_market_data_snapshots",
+    "list_provider_import_jobs",
+    "list_provider_import_reconciliation",
+    "list_provider_profiles",
+    "validate_data_provider_imports"
+  ],
+  "context_sources": [
+    "ProviderSnapshotEnvelope",
+    "BrokerAccountSnapshot",
+    "provider health",
+    "refresh readiness"
+  ],
+  "response_schema": "FyersDataResponse",
+  "token_budget": {
+    "input_tokens": 12000,
+    "output_tokens": 1500,
+    "tool_calls": 5
+  },
+  "eval_cases": [
+    "fyers_data_reports_unavailable_not_empty",
+    "fyers_data_redacts_credentials",
+    "fyers_data_never_calls_mutation"
+  ],
+  "forbidden_tools": [
+    "place_live_order",
+    "get_broker_trading_token",
+    "enable_live_strategy"
+  ]
+}
