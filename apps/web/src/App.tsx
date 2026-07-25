@@ -13,11 +13,13 @@ import {
   ListChecks,
   LockKeyhole,
   Microscope,
+  Moon,
   Play,
   RefreshCw,
   Search,
   Settings,
   ShieldCheck,
+  Sun,
   WalletCards,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -27,6 +29,7 @@ const API_BASE = import.meta.env.VITE_AGENT_API_URL ?? 'http://localhost:8000';
 
 type JsonRecord = Record<string, any>;
 type LoadState = 'loading' | 'ready' | 'fallback';
+type ThemeMode = 'dark' | 'light';
 type PageId =
   | 'dashboard'
   | 'screener'
@@ -825,6 +828,33 @@ function MetricTile({
   );
 }
 
+function OperatingModelStrip() {
+  const steps = [
+    { label: 'Collect', detail: 'FYERS + fixture signals', tone: 'blue' },
+    { label: 'Analyze', detail: 'deterministic factors', tone: 'cyan' },
+    { label: 'Propose', detail: 'agent synthesis', tone: 'yellow' },
+    { label: 'Approve', detail: 'human gate', tone: 'green' },
+  ];
+
+  return (
+    <section className="operating-model" aria-label="Operating model">
+      <div className="operating-model__heading">
+        <span>Operating model</span>
+        <strong>From market signals to bounded paper execution</strong>
+      </div>
+      <div className="operating-model__flow">
+        {steps.map((step, index) => (
+          <div className={`flow-step flow-step--${step.tone}`} key={step.label}>
+            <strong>{step.label}</strong>
+            <span>{step.detail}</span>
+            {index < steps.length - 1 ? <i aria-hidden="true" /> : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function PanelHeading({
   label,
   title,
@@ -911,6 +941,12 @@ function ActionButton({
 }
 
 function App() {
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') {
+      return 'dark';
+    }
+    return window.localStorage.getItem('portfolio-theme') === 'light' ? 'light' : 'dark';
+  });
   const [overview, setOverview] = useState<JsonRecord>(fallbackOverview);
   const [workflows, setWorkflows] = useState<JsonRecord>(fallbackWorkflows);
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -920,6 +956,10 @@ function App() {
   const [screenerPreset, setScreenerPreset] = useState('momentum');
   const [busyAction, setBusyAction] = useState('');
   const [actionResult, setActionResult] = useState<JsonRecord | null>(null);
+
+  useEffect(() => {
+    window.localStorage.setItem('portfolio-theme', themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1173,7 +1213,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-theme={themeMode}>
       <aside className="sidebar" aria-label="Primary navigation">
         <div className="brand-mark">
           <div className="brand-icon">
@@ -1216,12 +1256,31 @@ function App() {
             <p>Screen candidates, draft strategies, review approvals, and inspect reports through policy-controlled trading workflows.</p>
           </div>
           <div className="topbar-actions">
+            <button
+              className="theme-toggle"
+              type="button"
+              aria-label={`Switch to ${themeMode === 'dark' ? 'light' : 'dark'} mode`}
+              onClick={() => setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'))}
+            >
+              {themeMode === 'dark' ? <Sun size={15} aria-hidden="true" /> : <Moon size={15} aria-hidden="true" />}
+              <span>{themeMode === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+            </button>
             <StatusPill tone={loadState === 'ready' && workflowState === 'ready' ? 'good' : 'warn'}>
               {loadState === 'ready' && workflowState === 'ready' ? 'API connected' : 'Fixture snapshot'}
             </StatusPill>
             <StatusPill tone="danger">Live trading blocked</StatusPill>
           </div>
         </header>
+
+        <section className="mission-band">
+          <span>Short summary</span>
+          <p>
+            Using Codex to turn portfolio signals into governed research, technical analysis,
+            paper proposals, and auditable human-approved simulation.
+          </p>
+        </section>
+
+        <OperatingModelStrip />
 
         <section className="metrics-grid" aria-label="Portfolio and paper ledger summary">
           <MetricTile
