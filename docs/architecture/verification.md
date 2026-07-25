@@ -40,6 +40,11 @@ Current coverage:
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require readiness preflight before paper order proposals, block incomplete proposal evidence before draft creation, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared; Ollama runtime profiles include route budgets, 80% context-window caps, model digest pinning, capability readiness, usage-event schema, and a prompt/routing/retrieval-first tuning gate.
 - ADK, Codex, Claude Code, Gemini CLI, and generic MCP client profiles use the MCP policy boundary.
+- Harness evaluator contracts define `ContextPack`, `ContextEvaluator`, and
+  `ResponseEvaluator` checks for tenant isolation, freshness, relevance,
+  duplication, prompt injection, secret leakage, budget, schema validity,
+  citation existence, tool-output agreement, policy statements, uncertainty,
+  and one structured repair attempt.
 
 ## ADK Scaffold Checks
 

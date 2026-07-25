@@ -16,6 +16,7 @@ pythonpath = [
     ".",
     "packages/policy",
     "packages/domain",
+    "packages/harness",
     "packages/model-provider",
     "packages/capabilities",
     "packages/agent-platform",

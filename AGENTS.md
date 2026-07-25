@@ -17,6 +17,7 @@ Useful starting points:
 - Spec: `.agents-cli-spec.md`
 - Reference map: `references/reference-map.md`
 - Policy code: `packages/policy`
+- Harness evaluators: `packages/harness`
 - MCP tools: `apps/mcp-server`
 - ADK prototype: `apps/agent-service`
 - Capability manifests and repository skills: `capabilities/<name>/manifest.json` and `capabilities/<name>/SKILL.md`

@@ -13,6 +13,7 @@ The presentation-ready architecture is available as a
 
 - [Tool Catalog](tool-catalog.md)
 - [Capability Manifests](capability-manifests.md)
+- [Context and Response Evaluators](context-response-evaluators.md)
 - [Verification](verification.md)
 - [Product Data Pattern Foundation](../product/product-data-pattern-foundation.md)
 - [Backtest Paper Ledger Contracts](../product/backtest-paper-ledger-contracts.md)
