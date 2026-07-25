@@ -9,6 +9,14 @@ The presentation-ready architecture is available as a
 [16:9 image](../capstone/media/slides/03-system-architecture.png) and in the
 [capstone deck](../capstone/TradePilot-Sentinel-Capstone.pptx).
 
+## Current Docs
+
+- [Tool Catalog](tool-catalog.md)
+- [Capability Manifests](capability-manifests.md)
+- [Verification](verification.md)
+- [Product Data Pattern Foundation](../product/product-data-pattern-foundation.md)
+- [Backtest Paper Ledger Contracts](../product/backtest-paper-ledger-contracts.md)
+
 ## Design Principle
 
 The model coordinates intent and explanation. Deterministic services own

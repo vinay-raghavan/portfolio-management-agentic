@@ -1,0 +1,30 @@
+{
+  "name": "research",
+  "version": "0.1.0",
+  "description": "Curated research synthesis using repository pattern cards and citation-backed research context.",
+  "max_action_tier": "read_only",
+  "allowed_tools": [
+    "cite_strategy_evidence",
+    "get_pattern_playbook",
+    "get_research_digest",
+    "search_pattern_library"
+  ],
+  "context_sources": [
+    "ResearchStore",
+    "PatternStore",
+    "public-safe citations",
+    "source freshness metadata"
+  ],
+  "response_schema": "ResearchResponse",
+  "token_budget": {
+    "input_tokens": 24000,
+    "output_tokens": 2000,
+    "tool_calls": 5
+  },
+  "eval_cases": [
+    "research_cites_pattern_card",
+    "research_refuses_uncited_claim",
+    "research_handles_stale_source"
+  ],
+  "forbidden_tools": []
+}

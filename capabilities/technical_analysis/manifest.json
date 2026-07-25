@@ -1,0 +1,35 @@
+{
+  "name": "technical_analysis",
+  "version": "0.1.0",
+  "description": "Deterministic technical-analysis evidence over screened symbols, market snapshots, and factor stacks.",
+  "max_action_tier": "read_only",
+  "allowed_tools": [
+    "explain_candidate_evidence",
+    "explain_factor_stack",
+    "get_market_data_snapshot",
+    "get_universe_members",
+    "list_market_data_snapshots",
+    "list_screener_runs",
+    "list_universes",
+    "run_momentum_screener",
+    "run_screener"
+  ],
+  "context_sources": [
+    "market snapshots",
+    "universe members",
+    "screener runs",
+    "factor evidence"
+  ],
+  "response_schema": "TechnicalAnalysisResponse",
+  "token_budget": {
+    "input_tokens": 12000,
+    "output_tokens": 1500,
+    "tool_calls": 5
+  },
+  "eval_cases": [
+    "technical_analysis_uses_screener_before_candidate_claim",
+    "technical_analysis_reports_missing_data",
+    "technical_analysis_never_creates_order"
+  ],
+  "forbidden_tools": []
+}

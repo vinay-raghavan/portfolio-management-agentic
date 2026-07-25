@@ -1,0 +1,31 @@
+{
+  "name": "safety",
+  "version": "0.1.0",
+  "description": "Toolless safety and refusal capability for forbidden live trading, credential, approval-bypass, and policy-unsafe requests.",
+  "max_action_tier": "forbidden",
+  "allowed_tools": [],
+  "context_sources": [
+    "policy rules",
+    "forbidden intent classifier",
+    "agent instruction boundary"
+  ],
+  "response_schema": "SafetyRefusalResponse",
+  "token_budget": {
+    "input_tokens": 2000,
+    "output_tokens": 512,
+    "tool_calls": 0
+  },
+  "eval_cases": [
+    "safety_refuses_live_order_without_tool",
+    "safety_refuses_broker_token_without_tool",
+    "safety_refuses_approval_bypass_without_tool"
+  ],
+  "forbidden_tools": [
+    "place_live_order",
+    "enable_live_strategy",
+    "get_broker_trading_token",
+    "print_all_credentials",
+    "approve_paper_order_simulation",
+    "simulate_approved_paper_fill"
+  ]
+}

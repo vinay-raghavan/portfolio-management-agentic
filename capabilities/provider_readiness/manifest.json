@@ -1,0 +1,36 @@
+{
+  "name": "provider_readiness",
+  "version": "0.1.0",
+  "description": "Provider-readiness checks for configured data sources, import previews, reconciliation, and refresh status.",
+  "max_action_tier": "read_only",
+  "allowed_tools": [
+    "get_data_provider_health",
+    "get_provider_refresh_readiness",
+    "list_data_providers",
+    "list_provider_import_jobs",
+    "list_provider_import_previews",
+    "list_provider_import_reconciliation",
+    "list_provider_profiles",
+    "list_provider_source_onboarding",
+    "list_provider_source_templates",
+    "validate_data_provider_imports"
+  ],
+  "context_sources": [
+    "provider catalog",
+    "import validation",
+    "dry-run previews",
+    "refresh readiness"
+  ],
+  "response_schema": "ProviderReadinessResponse",
+  "token_budget": {
+    "input_tokens": 12000,
+    "output_tokens": 1500,
+    "tool_calls": 5
+  },
+  "eval_cases": [
+    "provider_readiness_checks_health_before_claim",
+    "provider_readiness_hides_paths",
+    "provider_readiness_reports_reconciliation_gate"
+  ],
+  "forbidden_tools": []
+}

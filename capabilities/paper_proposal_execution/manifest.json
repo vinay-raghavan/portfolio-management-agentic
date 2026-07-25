@@ -1,0 +1,46 @@
+{
+  "name": "paper_proposal_execution",
+  "version": "0.1.0",
+  "description": "Proposal-only paper execution planning that can draft requests but cannot approve or simulate fills.",
+  "max_action_tier": "draft_only",
+  "allowed_tools": [
+    "create_backtest_request",
+    "create_paper_order_proposal",
+    "create_paper_trade_proposal",
+    "draft_paper_strategy",
+    "get_approval_queue",
+    "get_audit_events",
+    "get_backtest_request",
+    "get_backtest_result",
+    "get_recommendation_explanation",
+    "get_risk_review",
+    "list_backtest_requests",
+    "list_paper_orders",
+    "list_strategy_drafts"
+  ],
+  "context_sources": [
+    "recommendation explanation",
+    "backtest history",
+    "strategy drafts",
+    "risk review",
+    "approval queue",
+    "audit trail"
+  ],
+  "response_schema": "PaperProposalExecutionResponse",
+  "token_budget": {
+    "input_tokens": 8000,
+    "output_tokens": 1000,
+    "tool_calls": 3
+  },
+  "eval_cases": [
+    "paper_proposal_requires_preflight",
+    "paper_proposal_does_not_self_approve",
+    "paper_proposal_reports_pending_human_approval"
+  ],
+  "forbidden_tools": [
+    "approve_paper_order_simulation",
+    "simulate_approved_paper_fill",
+    "place_live_order",
+    "enable_live_strategy"
+  ]
+}

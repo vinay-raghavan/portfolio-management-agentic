@@ -4,6 +4,11 @@ This catalog documents the first MCP-style tool slice. The MCP server must expos
 
 Tool function docstrings are model-facing descriptions in ADK. Each exposed tool should name its policy tier, and high-risk workflow tools should also describe the safe sequence they support. This prevents future tool additions from weakening provider-readiness checks, recommendation preflights, approval-gated simulated fills, or live-trading refusals before evals can observe the behavior.
 
+Route-scoped capability manifests live under `capabilities/<name>/` and are
+documented in [Capability Manifests](capability-manifests.md). Those manifests
+are the next harness contract for least-privilege tool bundles and matching
+repository `SKILL.md` workflow instructions.
+
 ## Exposed Tools
 
 | Tool | Tier | Purpose |

@@ -19,4 +19,5 @@ Useful starting points:
 - Policy code: `packages/policy`
 - MCP tools: `apps/mcp-server`
 - ADK prototype: `apps/agent-service`
+- Capability manifests and repository skills: `capabilities/<name>/manifest.json` and `capabilities/<name>/SKILL.md`
 - Provider metadata: `packages/domain/portfolio_domain/provider_profiles.py`
