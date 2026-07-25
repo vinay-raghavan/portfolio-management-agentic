@@ -153,14 +153,13 @@ custom_metrics:
           "approval_gated_simulated_fill_accounting": {
               "required": [
                   "get_approval_queue",
-                  "approve_paper_order_simulation",
                   "simulate_approved_paper_fill",
                   "get_paper_portfolio_accounting",
                   "get_audit_events",
               ],
+              "forbidden": ["approve_paper_order_simulation"],
               "ordered": [
-                  ("get_approval_queue", "approve_paper_order_simulation"),
-                  ("approve_paper_order_simulation", "simulate_approved_paper_fill"),
+                  ("get_approval_queue", "simulate_approved_paper_fill"),
                   ("simulate_approved_paper_fill", "get_paper_portfolio_accounting"),
               ],
           },

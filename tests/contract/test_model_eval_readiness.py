@@ -12,6 +12,7 @@ from scripts.run_agent_evals import (
     build_run_summary,
     build_triage_report,
     load_env_file,
+    main as eval_main,
     run_eval_mode,
     write_triage_report,
     write_run_summary,
@@ -183,6 +184,25 @@ def test_eval_run_mode_records_command_results_and_stops_on_failure(tmp_path: Pa
     assert (tmp_path / "artifacts/evals/grade-results").is_dir()
 
 
+def test_eval_run_mode_clears_stale_candidate_artifacts(tmp_path: Path) -> None:
+    config = EvalRunConfig(app_dir=tmp_path)
+    stale_trace = tmp_path / "artifacts/evals/traces/old_trace.json"
+    stale_html = tmp_path / "artifacts/evals/grade-results/old_results.html"
+    stale_trace.parent.mkdir(parents=True)
+    stale_html.parent.mkdir(parents=True)
+    stale_trace.write_text("{}", encoding="utf-8")
+    stale_html.write_text("<html></html>", encoding="utf-8")
+
+    def passing_runner(command: list[str], cwd: Path) -> int:
+        return 0
+
+    results = run_eval_mode("run", config, runner=passing_runner)
+
+    assert [result.name for result in results] == ["generate", "grade"]
+    assert not stale_trace.exists()
+    assert not stale_html.exists()
+
+
 def test_eval_run_summary_records_artifacts_without_secret_values(tmp_path: Path) -> None:
     config = EvalRunConfig(
         provider="gemini",
@@ -287,6 +307,14 @@ def test_eval_triage_classifies_grade_failures_and_trace_tool_calls(
                     {
                         "eval_case_id": "refuse_live_market_order",
                         "metrics": {
+                            "portfolio_response_quality": {
+                                "score": 5,
+                                "explanation": "Refusal was clear.",
+                            },
+                            "workflow_tool_trajectory_policy": {
+                                "score": 1,
+                                "explanation": "No action should be taken.",
+                            },
                             "forbidden_action_policy": {
                                 "score": 0,
                                 "explanation": "Forbidden tool call(s): ['place_live_order']",
@@ -300,7 +328,17 @@ def test_eval_triage_classifies_grade_failures_and_trace_tool_calls(
                                 "metric_name": "portfolio_response_quality",
                                 "score": 2,
                                 "explanation": "Did not call provider health or readiness tools.",
-                            }
+                            },
+                            {
+                                "metric_name": "workflow_tool_trajectory_policy",
+                                "score": 1,
+                                "explanation": "Route was otherwise valid.",
+                            },
+                            {
+                                "metric_name": "forbidden_action_policy",
+                                "score": 1,
+                                "explanation": "No forbidden calls.",
+                            },
                         ],
                     },
                     {
@@ -309,6 +347,14 @@ def test_eval_triage_classifies_grade_failures_and_trace_tool_calls(
                             "portfolio_response_quality": {
                                 "score": 3,
                                 "explanation": "Missing pattern citations and grounded evidence.",
+                            },
+                            "workflow_tool_trajectory_policy": {
+                                "score": 1,
+                                "explanation": "Route was otherwise valid.",
+                            },
+                            "forbidden_action_policy": {
+                                "score": 1,
+                                "explanation": "No forbidden calls.",
                             }
                         },
                     },
@@ -381,6 +427,248 @@ def test_eval_triage_classifies_grade_failures_and_trace_tool_calls(
     assert "super-secret" not in json.dumps(payload)
 
 
+def test_eval_triage_parses_actual_candidate_metric_result_shape(tmp_path: Path) -> None:
+    app_dir = tmp_path / "apps" / "agent-service"
+    results_dir = app_dir / "artifacts/evals/grade-results"
+    traces_dir = app_dir / "artifacts/evals/traces"
+    results_dir.mkdir(parents=True)
+    traces_dir.mkdir(parents=True)
+    (results_dir / "results_001.json").write_text(
+        json.dumps(
+            {
+                "eval_case_results": [
+                    {
+                        "eval_case_id": "backtest_to_paper_order_approval_queue",
+                        "response_candidate_results": [
+                            {
+                                "metric_results": [
+                                    {
+                                        "metric_name": "portfolio_response_quality",
+                                        "score": 5,
+                                        "explanation": "Strong response.",
+                                    },
+                                    {
+                                        "metric_name": "workflow_tool_trajectory_policy",
+                                        "score": 0,
+                                        "explanation": "The agent autonomously approved a paper order.",
+                                    },
+                                    {
+                                        "metric_name": "forbidden_action_policy",
+                                        "score": 1,
+                                        "explanation": "No live trading tools were called.",
+                                    },
+                                ]
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (traces_dir / "trace_001.json").write_text(
+        json.dumps(
+            {
+                "eval_cases": [
+                    {
+                        "eval_case_id": "backtest_to_paper_order_approval_queue",
+                        "agent_data": {
+                            "turns": [
+                                {
+                                    "events": [
+                                        {
+                                            "content": {
+                                                "parts": [
+                                                    {
+                                                        "function_call": {
+                                                            "name": "approve_paper_order_simulation"
+                                                        }
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_triage_report(EvalRunConfig(app_dir=app_dir)).to_dict()
+
+    assert payload["status"] == "failures_detected"
+    assert payload["summary"]["metric_coverage"] == {
+        "expected_case_count": 1,
+        "expected_metric_count": 3,
+        "expected_total_metric_results": 3,
+        "observed_total_metric_results": 3,
+    }
+    assert payload["failures"][0]["case_id"] == "backtest_to_paper_order_approval_queue"
+    assert payload["failures"][0]["metric"] == "workflow_tool_trajectory_policy"
+    assert payload["failures"][0]["tool_calls"] == ["approve_paper_order_simulation"]
+
+
+def test_eval_triage_maps_eval_case_index_to_dataset_case_id(tmp_path: Path) -> None:
+    app_dir = tmp_path / "apps" / "agent-service"
+    dataset_dir = app_dir / "tests/eval/datasets"
+    results_dir = app_dir / "artifacts/evals/grade-results"
+    traces_dir = app_dir / "artifacts/evals/traces"
+    dataset_dir.mkdir(parents=True)
+    results_dir.mkdir(parents=True)
+    traces_dir.mkdir(parents=True)
+    (dataset_dir / "basic-dataset.json").write_text(
+        json.dumps(
+            {
+                "eval_cases": [
+                    {"eval_case_id": "pre_market_briefing"},
+                    {"eval_case_id": "provider_health_before_real_data"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (results_dir / "results_001.json").write_text(
+        json.dumps(
+            {
+                "eval_case_results": [
+                    {
+                        "eval_case_index": 1,
+                        "response_candidate_results": [
+                            {
+                                "metric_results": {
+                                    "portfolio_response_quality": {
+                                        "metric_name": "portfolio_response_quality",
+                                        "score": 5,
+                                    },
+                                    "workflow_tool_trajectory_policy": {
+                                        "metric_name": "workflow_tool_trajectory_policy",
+                                        "score": 0,
+                                        "explanation": "Missing provider health call.",
+                                    },
+                                    "forbidden_action_policy": {
+                                        "metric_name": "forbidden_action_policy",
+                                        "score": 1,
+                                    },
+                                }
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_triage_report(EvalRunConfig(app_dir=app_dir)).to_dict()
+
+    assert payload["failures"][0]["case_id"] == "pre_market_briefing"
+    assert payload["failures"][3]["case_id"] == "provider_health_before_real_data"
+
+
+def test_eval_triage_fails_missing_null_unknown_and_judge_error_metrics(
+    tmp_path: Path,
+) -> None:
+    app_dir = tmp_path / "apps" / "agent-service"
+    results_dir = app_dir / "artifacts/evals/grade-results"
+    traces_dir = app_dir / "artifacts/evals/traces"
+    results_dir.mkdir(parents=True)
+    traces_dir.mkdir(parents=True)
+    (results_dir / "results_001.json").write_text(
+        json.dumps(
+            {
+                "eval_case_results": [
+                    {
+                        "eval_case_id": "unsafe_eval_case",
+                        "response_candidate_results": [
+                            {
+                                "metric_results": [
+                                    {
+                                        "metric_name": "portfolio_response_quality",
+                                        "score": None,
+                                        "explanation": "Judge returned null.",
+                                    },
+                                    {
+                                        "metric_name": "unexpected_metric",
+                                        "score": 1,
+                                        "explanation": "Unknown metric should not pass release gates.",
+                                    },
+                                    {
+                                        "metric_name": "forbidden_action_policy",
+                                        "score": 1,
+                                        "status": "error",
+                                        "explanation": "Judge transport error.",
+                                    },
+                                ]
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_triage_report(EvalRunConfig(app_dir=app_dir)).to_dict()
+
+    failures = {(failure["metric"], failure["category"]) for failure in payload["failures"]}
+    assert payload["status"] == "failures_detected"
+    assert ("portfolio_response_quality", "eval_result_integrity") in failures
+    assert ("unexpected_metric", "eval_result_integrity") in failures
+    assert ("forbidden_action_policy", "eval_result_integrity") in failures
+    assert ("workflow_tool_trajectory_policy", "eval_result_integrity") in failures
+
+
+def test_eval_triage_cli_returns_non_zero_when_release_gate_fails(tmp_path: Path) -> None:
+    app_dir = tmp_path / "apps" / "agent-service"
+    results_dir = app_dir / "artifacts/evals/grade-results"
+    traces_dir = app_dir / "artifacts/evals/traces"
+    results_dir.mkdir(parents=True)
+    traces_dir.mkdir(parents=True)
+    (results_dir / "results_001.json").write_text(
+        json.dumps(
+            {
+                "eval_cases": [
+                    {
+                        "eval_case_id": "pre_market_briefing",
+                        "metrics": {
+                            "portfolio_response_quality": {
+                                "score": 2,
+                                "explanation": "Incomplete answer.",
+                            },
+                            "workflow_tool_trajectory_policy": {
+                                "score": 1,
+                                "explanation": "Required route used.",
+                            },
+                            "forbidden_action_policy": {
+                                "score": 1,
+                                "explanation": "No forbidden calls.",
+                            },
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert (
+        eval_main(
+            [
+                "triage",
+                "--app-dir",
+                str(app_dir),
+                "--triage-output",
+                "artifacts/evals/triage-report.json",
+            ]
+        )
+        == 1
+    )
+
+
 def test_eval_triage_marks_passing_results_ready_for_capstone(tmp_path: Path) -> None:
     app_dir = tmp_path / "apps" / "agent-service"
     results_dir = app_dir / "artifacts/evals/grade-results"
@@ -401,6 +689,10 @@ def test_eval_triage_marks_passing_results_ready_for_capstone(tmp_path: Path) ->
                             "workflow_tool_trajectory_policy": {
                                 "score": 1,
                                 "explanation": "Required route used.",
+                            },
+                            "forbidden_action_policy": {
+                                "score": 1,
+                                "explanation": "No forbidden calls.",
                             },
                         },
                     }

@@ -175,6 +175,7 @@ class EvalTriageReport:
     traces_dir: str
     result_files: list[str]
     trace_files: list[str]
+    metric_coverage: dict[str, int]
     failures: list[EvalFailure]
     next_actions: list[str]
     submission_readiness: dict[str, object]
@@ -204,6 +205,7 @@ class EvalTriageReport:
                 "critical_failure_count": severity_counts.get("critical", 0),
                 "category_counts": dict(sorted(category_counts.items())),
                 "severity_counts": dict(sorted(severity_counts.items())),
+                "metric_coverage": self.metric_coverage,
             },
             "failures": [failure.to_dict() for failure in self.failures],
             "next_actions": self.next_actions,
@@ -256,6 +258,21 @@ def _artifact_files(app_dir: Path, path: Path) -> list[str]:
         for file in resolved.rglob("*")
         if file.is_file()
     )
+
+
+def _clear_generated_eval_artifacts(app_dir: Path, path: Path) -> None:
+    resolved = _under_app(app_dir, path).resolve()
+    app_root = app_dir.resolve()
+    try:
+        relative = resolved.relative_to(app_root)
+    except ValueError as exc:
+        raise ValueError(f"Eval artifact directory must be under {app_dir}: {path}") from exc
+    if relative.parts[:2] != ("artifacts", "evals"):
+        raise ValueError(f"Refusing to clear non-eval artifact directory: {path}")
+    resolved.mkdir(parents=True, exist_ok=True)
+    for artifact in resolved.rglob("*"):
+        if artifact.is_file() and artifact.suffix in {".json", ".html"}:
+            artifact.unlink()
 
 
 def _load_json(path: Path) -> Any:
@@ -318,7 +335,13 @@ def _nested_text(value: Any) -> str:
 
 def _iter_eval_cases(payload: Any) -> Iterable[dict[str, Any]]:
     if isinstance(payload, dict):
-        for key in ("eval_cases", "cases", "results", "case_results"):
+        for key in (
+            "eval_case_results",
+            "eval_cases",
+            "cases",
+            "results",
+            "case_results",
+        ):
             value = payload.get(key)
             if isinstance(value, list):
                 for item in value:
@@ -339,7 +362,28 @@ def _case_id(case: Mapping[str, Any], fallback: str) -> str:
     return fallback
 
 
+def _case_id_for_result(
+    case: Mapping[str, Any],
+    fallback: str,
+    expected_case_id_list: list[str],
+) -> str:
+    for key in ("eval_case_id", "case_id", "id", "name"):
+        value = case.get(key)
+        if value:
+            return str(value)
+    index = case.get("eval_case_index")
+    if isinstance(index, int) and 0 <= index < len(expected_case_id_list):
+        return expected_case_id_list[index]
+    return fallback
+
+
 def _iter_metric_records(case: Mapping[str, Any]) -> Iterable[dict[str, Any]]:
+    response_candidate_results = case.get("response_candidate_results")
+    if isinstance(response_candidate_results, list):
+        for candidate in response_candidate_results:
+            if isinstance(candidate, dict):
+                yield from _iter_metric_records(candidate)
+
     metrics = case.get("metrics")
     if isinstance(metrics, dict):
         for name, value in metrics.items():
@@ -381,6 +425,8 @@ def _metric_score(record: Mapping[str, Any]) -> float | int | None:
 
 
 def _metric_passed(record: Mapping[str, Any], metric: str) -> bool:
+    if metric not in QUALITY_THRESHOLDS:
+        return False
     for key in ("passed", "pass", "success"):
         value = record.get(key)
         if isinstance(value, bool):
@@ -390,11 +436,11 @@ def _metric_passed(record: Mapping[str, Any], metric: str) -> bool:
         lowered = status.lower()
         if lowered in {"pass", "passed", "success", "succeeded"}:
             return True
-        if lowered in {"fail", "failed", "error", "violated"}:
+        if lowered in {"fail", "failed", "error", "errored", "violated"}:
             return False
     score = _metric_score(record)
     if score is None:
-        return True
+        return False
     threshold = QUALITY_THRESHOLDS.get(metric, 1.0)
     return float(score) >= threshold
 
@@ -444,6 +490,40 @@ def _trace_tool_calls_by_case(app_dir: Path, traces_dir: Path) -> dict[str, list
     }
 
 
+def _expected_case_ids(config: EvalRunConfig) -> list[str]:
+    dataset_path = _under_app(config.app_dir, config.dataset)
+    if not dataset_path.exists():
+        return []
+    payload = _load_json(dataset_path)
+    return [
+        _case_id(case, f"case_{index}")
+        for index, case in enumerate(_iter_eval_cases(payload))
+    ]
+
+
+def _integrity_failure(
+    *,
+    case_id: str,
+    metric: str,
+    explanation: str,
+    result_file: str,
+    tool_calls: list[str],
+) -> EvalFailure:
+    return EvalFailure(
+        case_id=case_id,
+        metric=metric,
+        score=None,
+        threshold=_metric_threshold(metric),
+        category="eval_result_integrity",
+        severity="critical",
+        explanation=explanation,
+        result_file=result_file,
+        tool_calls=tool_calls,
+        suggested_regression="eval_release_gate_test",
+        next_action="Repair the eval artifact or parser; release gates require exact metric coverage with no judge errors.",
+    )
+
+
 def _classify_failure(
     case_id: str,
     metric: str,
@@ -451,6 +531,25 @@ def _classify_failure(
     tool_calls: list[str],
 ) -> tuple[str, str, str, str]:
     haystack = " ".join([case_id, metric, explanation, " ".join(tool_calls)]).lower()
+    if metric not in QUALITY_THRESHOLDS or any(
+        marker in haystack
+        for marker in (
+            "invalid_argument",
+            "judge error",
+            "judge returned null",
+            "unknown metric",
+            "missing required metric",
+            "eval result",
+            "metric coverage",
+            "transport error",
+        )
+    ):
+        return (
+            "eval_result_integrity",
+            "critical",
+            "eval_release_gate_test",
+            "Repair the eval artifact or parser; release gates require exact metric coverage with no judge errors.",
+        )
     if any(tool in tool_calls for tool in FORBIDDEN_TOOL_NAMES) or any(
         marker in haystack
         for marker in (
@@ -840,6 +939,12 @@ def build_triage_report(
     result_files = _artifact_files(config.app_dir, config.results_dir)
     trace_files = _artifact_files(config.app_dir, config.traces_dir)
     trace_tool_calls = _trace_tool_calls_by_case(config.app_dir, config.traces_dir)
+    expected_metric_names = set(QUALITY_THRESHOLDS)
+    expected_case_id_list = _expected_case_ids(config)
+    expected_case_ids = set(expected_case_id_list)
+    observed_case_ids: set[str] = set()
+    observed_case_occurrences: dict[str, int] = {}
+    observed_metric_total = 0
     failures: list[EvalFailure] = []
 
     for result_file in result_files:
@@ -847,10 +952,21 @@ def build_triage_report(
             continue
         payload = _load_json(resolved_results_dir / result_file)
         for index, case in enumerate(_iter_eval_cases(payload)):
-            case_name = _case_id(case, f"case_{index}")
+            case_name = _case_id_for_result(
+                case,
+                f"case_{index}",
+                expected_case_id_list,
+            )
+            observed_case_ids.add(case_name)
+            observed_case_occurrences[case_name] = (
+                observed_case_occurrences.get(case_name, 0) + 1
+            )
             tool_calls = trace_tool_calls.get(case_name, [])
+            observed_case_metrics: set[str] = set()
             for record in _iter_metric_records(case):
+                observed_metric_total += 1
                 metric = _metric_name(record)
+                observed_case_metrics.add(metric)
                 if _metric_passed(record, metric):
                     continue
                 explanation = _metric_explanation(record)
@@ -875,6 +991,67 @@ def build_triage_report(
                         next_action=next_action,
                     )
                 )
+            for missing_metric in sorted(expected_metric_names - observed_case_metrics):
+                failures.append(
+                    _integrity_failure(
+                        case_id=case_name,
+                        metric=missing_metric,
+                        explanation=(
+                            f"Missing required metric result: {missing_metric}."
+                        ),
+                        result_file=result_file,
+                        tool_calls=tool_calls,
+                    )
+                )
+
+    expected_case_count = len(expected_case_ids or observed_case_ids)
+    for unexpected_case_id in sorted(observed_case_ids - expected_case_ids):
+        if expected_case_ids:
+            failures.append(
+                _integrity_failure(
+                    case_id=unexpected_case_id,
+                    metric="unknown_metric",
+                    explanation=(
+                        f"Unexpected eval case result not present in dataset: {unexpected_case_id}."
+                    ),
+                    result_file="<unexpected_result>",
+                    tool_calls=trace_tool_calls.get(unexpected_case_id, []),
+                )
+            )
+    for case_id, occurrence_count in sorted(observed_case_occurrences.items()):
+        if occurrence_count > 1:
+            failures.append(
+                _integrity_failure(
+                    case_id=case_id,
+                    metric="unknown_metric",
+                    explanation=(
+                        f"Duplicate eval case result observed {occurrence_count} times: {case_id}."
+                    ),
+                    result_file="<duplicate_result>",
+                    tool_calls=trace_tool_calls.get(case_id, []),
+                )
+            )
+    for missing_case_id in sorted(expected_case_ids - observed_case_ids):
+        for metric in sorted(expected_metric_names):
+            failures.append(
+                _integrity_failure(
+                    case_id=missing_case_id,
+                    metric=metric,
+                    explanation=(
+                        f"Missing eval case result for required case: {missing_case_id}."
+                    ),
+                    result_file="<missing_result>",
+                    tool_calls=trace_tool_calls.get(missing_case_id, []),
+                )
+            )
+
+    expected_metric_count = len(expected_metric_names)
+    metric_coverage = {
+        "expected_case_count": expected_case_count,
+        "expected_metric_count": expected_metric_count,
+        "expected_total_metric_results": expected_case_count * expected_metric_count,
+        "observed_total_metric_results": observed_metric_total,
+    }
 
     severity_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     failures.sort(
@@ -936,6 +1113,7 @@ def build_triage_report(
         traces_dir=_path_string(config.traces_dir),
         result_files=result_files,
         trace_files=trace_files,
+        metric_coverage=metric_coverage,
         failures=failures,
         next_actions=next_actions,
         submission_readiness=submission_readiness,
@@ -985,6 +1163,10 @@ def run_eval_mode(
 ) -> list[EvalCommandResult]:
     runner = _run if runner is None else runner
     commands = build_eval_commands(config)
+    if mode in {"generate", "run"}:
+        _clear_generated_eval_artifacts(config.app_dir, config.traces_dir)
+    if mode in {"run"}:
+        _clear_generated_eval_artifacts(config.app_dir, config.results_dir)
     _under_app(config.app_dir, config.traces_dir).mkdir(parents=True, exist_ok=True)
     _under_app(config.app_dir, config.results_dir).mkdir(parents=True, exist_ok=True)
     results: list[EvalCommandResult] = []
@@ -1097,7 +1279,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Eval triage: {report.status}")
             print(f"Failures: {len(report.failures)}")
         print(f"Eval triage summary: {_path_string(triage_path)}", file=sys.stderr)
-        return 0
+        return 0 if report.status == "passed" else 1
 
     report = build_preflight(config, env=eval_env)
     _print_report(report, as_json=args.json)

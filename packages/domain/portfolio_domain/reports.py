@@ -213,7 +213,7 @@ def build_paper_trading_report(
         "get_audit_events",
     ]
     if pending_approvals:
-        next_allowed_actions.append("approve_paper_order_simulation")
+        next_allowed_actions.append("verified_human_approval_api")
 
     return PaperTradingReport(
         report_id=f"paper-trading-report-{scope_slug}",
