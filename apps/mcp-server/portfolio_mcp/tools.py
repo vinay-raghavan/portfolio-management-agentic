@@ -93,7 +93,6 @@ EXPOSED_TOOL_NAMES = {
     "list_paper_orders",
     "list_paper_positions",
     "create_paper_order_proposal",
-    "approve_paper_order_simulation",
     "simulate_approved_paper_fill",
     "list_paper_fills",
     "get_paper_portfolio_accounting",
@@ -1250,7 +1249,7 @@ def simulate_approved_paper_fill(
     order_id: str,
     fill_price: float | None = None,
 ) -> dict[str, Any]:
-    """Approval-required approval-gated simulated fill only after approve_paper_order_simulation, never live."""
+    """Approval-required approval-gated simulated fill only after verified human approval, never live."""
     tool_name = "simulate_approved_paper_fill"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:

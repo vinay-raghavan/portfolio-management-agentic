@@ -175,7 +175,7 @@ def _workflow_evidence() -> list[dict[str, Any]]:
             "id": "approval_gated_simulated_fill",
             "status": "implemented",
             "evidence": [
-                "approve_paper_order_simulation",
+                "verified human approval API outside MCP",
                 "simulate_approved_paper_fill",
                 "get_paper_portfolio_accounting",
                 "get_audit_events",

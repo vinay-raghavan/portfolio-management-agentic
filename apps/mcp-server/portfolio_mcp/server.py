@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 
 from .tools import (
-    approve_paper_order_simulation,
     assert_exposed_tools_are_safe,
     create_backtest_request,
     create_pre_market_briefing,
@@ -123,7 +122,6 @@ def build_server():
     server.tool()(list_paper_fills)
     server.tool()(get_paper_portfolio_accounting)
     server.tool()(create_paper_order_proposal)
-    server.tool()(approve_paper_order_simulation)
     server.tool()(simulate_approved_paper_fill)
     server.tool()(get_approval_queue)
     server.tool()(get_audit_events)

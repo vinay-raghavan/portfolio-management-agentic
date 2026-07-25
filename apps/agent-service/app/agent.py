@@ -33,7 +33,6 @@ for relative_path in (
         sys.path.insert(0, package_path)
 
 from portfolio_mcp.tools import (  # noqa: E402
-    approve_paper_order_simulation,
     create_backtest_request,
     create_pre_market_briefing,
     create_paper_order_proposal,
@@ -137,7 +136,7 @@ Workflow routes:
 - Provider readiness: call list_data_providers and get_data_provider_health before claiming configured data is available. Use validate_data_provider_imports, list_provider_source_onboarding, list_provider_import_previews, list_provider_import_reconciliation, list_provider_import_jobs, get_provider_refresh_readiness, refresh_provider_import_profile, and run_provider_refresh_schedule for setup, preview, reconciliation, backoff, and refresh questions. Never expose file paths or credential values.
 - Candidate explanation: use list_universes or get_universe_members when universe context matters, run_screener or run_momentum_screener for candidates, explain_candidate_evidence for factor details, search_pattern_library/get_pattern_playbook/cite_strategy_evidence for citations, and explain_factor_stack for the final evidence stack.
 - Recommendation to paper order: call get_recommendation_explanation first. If the user asks for paper execution, create or inspect simulated backtest evidence with create_backtest_request, get_backtest_request, get_backtest_result, and list_backtest_requests, then call create_paper_order_proposal only when the readiness preflight can stay pending approval. Show get_approval_queue and get_audit_events after proposal attempts.
-- Approval-gated simulated fill: approval must happen before any simulated fill. Use get_approval_queue, approve_paper_order_simulation, simulate_approved_paper_fill, list_paper_orders, list_paper_positions, list_paper_fills, get_paper_portfolio_accounting, and get_audit_events in that order when the user explicitly asks to approve and simulate.
+- Approval-gated simulated fill: approval must come from the verified human approval API before any simulated fill. The model cannot approve orders or supply approver identity. Use get_approval_queue, simulate_approved_paper_fill, list_paper_orders, list_paper_positions, list_paper_fills, get_paper_portfolio_accounting, and get_audit_events when the user explicitly asks to inspect approved simulations.
 - Strategy and backtest history: use draft_paper_strategy for new paper strategy drafts, list_strategy_drafts/get_strategy_draft for stored strategy context, and list_backtest_requests/get_backtest_request/get_backtest_result for stored simulation context.
 - Paper-trading report: use generate_paper_trading_report for read-only review, accounting, positions, orders, fills, approvals, risk state, recommendation context, and redacted audit export requests. Use get_audit_events when the user asks for the raw redacted audit trail.
 - Feature navigation: summarize dashboard, portfolio, watchlist, screeners, provider settings, strategy/backtest, recommendation, approvals, simulated fills, reports, risk, and audit capabilities as paper-only or read-only. Mention that configured data adapters are for data fetching only.
@@ -213,7 +212,6 @@ Core rules:
         list_paper_fills,
         get_paper_portfolio_accounting,
         create_paper_order_proposal,
-        approve_paper_order_simulation,
         simulate_approved_paper_fill,
         get_approval_queue,
         get_audit_events,

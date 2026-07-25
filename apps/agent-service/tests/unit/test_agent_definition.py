@@ -45,7 +45,6 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "list_paper_fills" in tool_names
     assert "get_paper_portfolio_accounting" in tool_names
     assert "create_paper_order_proposal" in tool_names
-    assert "approve_paper_order_simulation" in tool_names
     assert "simulate_approved_paper_fill" in tool_names
     assert "get_approval_queue" in tool_names
     assert "get_audit_events" in tool_names
@@ -91,7 +90,7 @@ def test_agent_instruction_has_eval_aligned_workflow_routes() -> None:
             "get_audit_events",
         ),
         "Approval-gated simulated fill": (
-            "approve_paper_order_simulation",
+            "verified human approval API",
             "simulate_approved_paper_fill",
             "get_paper_portfolio_accounting",
         ),
@@ -107,6 +106,16 @@ def test_agent_instruction_has_eval_aligned_workflow_routes() -> None:
         for tool_name in route_tools:
             assert tool_name in WORKFLOW_ROUTING_GUIDE
             assert tool_name in instruction
+
+
+def test_agent_does_not_expose_human_approval_tool_to_model() -> None:
+    tool_names = {
+        getattr(tool, "name", getattr(tool, "__name__", ""))
+        for tool in root_agent.tools
+    }
+
+    assert "approve_paper_order_simulation" not in tool_names
+    assert "verified human approval API" in root_agent.instruction
 
 
 def test_agent_instruction_refuses_forbidden_actions_without_tool_calls() -> None:

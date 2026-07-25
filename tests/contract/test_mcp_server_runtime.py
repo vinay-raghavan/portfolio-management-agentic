@@ -28,3 +28,4 @@ def test_mcp_server_registers_only_safe_tools() -> None:
     assert EXPOSED_TOOL_NAMES == tool_names
     assert "place_live_order" not in tool_names
     assert "get_broker_trading_token" not in tool_names
+    assert "approve_paper_order_simulation" not in tool_names

@@ -46,8 +46,7 @@ Tool function docstrings are model-facing descriptions in ADK. Each exposed tool
 | `list_paper_orders` | read-only | Return paper order proposals and their approval/fill status. |
 | `list_paper_positions` | read-only | Return fixture-backed paper positions for exposure review. |
 | `create_paper_order_proposal` | draft-only | Build a recommendation readiness preflight, block unsafe or incomplete proposals before draft creation, or create a paper order proposal that enters the human approval queue with no fill. |
-| `approve_paper_order_simulation` | approval-required | Mark a paper order as human-approved for simulated fill processing only. |
-| `simulate_approved_paper_fill` | approval-required | Create a simulated paper fill only after approval and update paper positions. |
+| `simulate_approved_paper_fill` | approval-required | Create a simulated paper fill only after verified human approval and update paper positions. |
 | `list_paper_fills` | read-only | Return simulated paper fills without broker access. |
 | `get_paper_portfolio_accounting` | read-only | Summarize paper market value, unrealized PnL, order state, and fill counts. |
 | `get_approval_queue` | read-only | Return pending human approvals for paper-only actions. |
