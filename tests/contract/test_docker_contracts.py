@@ -19,6 +19,7 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     env_example = Path(".env.example").read_text()
 
     assert "LLM_PROVIDER=gemini" in env_example
+    assert "ENABLE_CLOUD_TELEMETRY=false" in env_example
     assert "MCP_TRANSPORT=streamable-http" in env_example
     assert "PAPER_LEDGER_DB_PATH=data/paper-ledger.db" in env_example
     assert "MARKET_DATA_DB_PATH=data/market-data.db" in env_example
@@ -69,6 +70,7 @@ def test_compose_mounts_paper_ledger_volume() -> None:
     compose = Path("docker-compose.yml").read_text()
 
     assert "PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}" in compose
+    assert "ENABLE_CLOUD_TELEMETRY: ${ENABLE_CLOUD_TELEMETRY:-false}" in compose
     assert "MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}" in compose
     assert "PROVIDER_CONFIG_DB_PATH: ${PROVIDER_CONFIG_DB_PATH:-/data/provider-config.db}" in compose
     assert "PORTFOLIO_MARKET_DATA_PROVIDER: ${PORTFOLIO_MARKET_DATA_PROVIDER:-fixture}" in compose
@@ -90,6 +92,12 @@ def test_compose_mounts_paper_ledger_volume() -> None:
     assert '"11434:11434"' not in compose
     assert "paper-ledger-data:/data" in compose
     assert "paper-ledger-data:" in compose
+
+
+def test_agent_service_image_includes_shared_model_provider_package() -> None:
+    dockerfile = Path("apps/agent-service/Dockerfile").read_text()
+
+    assert "COPY ./packages/model-provider ./packages/model-provider" in dockerfile
 
 
 def test_compose_exposes_web_console() -> None:

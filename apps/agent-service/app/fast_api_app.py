@@ -86,8 +86,15 @@ class PaperFillRequest(BaseModel):
     fill_price: float | None = Field(default=None, gt=0)
 
 
+def cloud_telemetry_enabled() -> bool:
+    enabled = os.getenv("ENABLE_CLOUD_TELEMETRY", "").strip().lower()
+    return enabled in {"1", "true", "yes", "y", "on"} and bool(
+        os.getenv("GOOGLE_CLOUD_PROJECT")
+    )
+
+
 def build_logger():
-    if not os.getenv("GOOGLE_CLOUD_PROJECT"):
+    if not cloud_telemetry_enabled():
         return LocalLogger()
     try:
         logging_client = google_cloud_logging.Client()
@@ -123,7 +130,7 @@ app: FastAPI = get_fast_api_app(
     artifact_service_uri=artifact_service_uri,
     allow_origins=allow_origins,
     session_service_uri=session_service_uri,
-    otel_to_cloud=bool(os.getenv("GOOGLE_CLOUD_PROJECT")),
+    otel_to_cloud=cloud_telemetry_enabled(),
 )
 app.title = "agent-service"
 app.description = "API for interacting with the Agent agent-service"
