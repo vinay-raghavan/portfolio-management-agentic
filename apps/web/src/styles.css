@@ -1638,7 +1638,15 @@ p {
   --signal: var(--accent-secondary);
   --signal-soft: color-mix(in srgb, var(--accent-secondary) 16%, transparent);
   --shadow: 0 22px 46px -34px rgba(236, 240, 245, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --radius: 4px;
+  --radius: 18px;
+  --radius-xs: 10px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+  --widget-radius: var(--radius-lg);
+  --control-radius: 14px;
+  --pill-radius: 999px;
   --focus-ring: 0 0 0 2px rgba(124, 173, 247, 0.34), 0 0 0 6px rgba(124, 173, 247, 0.16);
 
   font-family: var(--font-sans);
@@ -1752,7 +1760,7 @@ input:focus-visible {
   justify-content: center;
   height: 38px;
   padding: 0;
-  border-radius: 8px 0 0 8px;
+  border-radius: 16px;
   color: var(--base-text-weak-default);
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
@@ -1773,7 +1781,7 @@ input:focus-visible {
   bottom: 4px;
   left: 0;
   width: 3px;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 999px 999px 0;
   background: var(--accent-primary);
   box-shadow: 0 0 12px color-mix(in srgb, var(--accent-primary) 55%, transparent);
 }
@@ -1784,6 +1792,11 @@ input:focus-visible {
   padding: 10px;
   border-color: color-mix(in srgb, var(--danger) 26%, transparent);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.brand-icon,
+.safety-card {
+  border-radius: 16px;
 }
 
 .safety-card strong {
@@ -1914,6 +1927,11 @@ input:focus-visible {
   -webkit-backdrop-filter: blur(32px) saturate(180%);
 }
 
+.mission-band,
+.operating-model {
+  border-radius: var(--radius-xl);
+}
+
 .mission-band {
   display: grid;
   gap: 6px;
@@ -1967,7 +1985,7 @@ input:focus-visible {
   min-height: 74px;
   padding: 16px 20px;
   border: 1px solid var(--step-color, var(--accent-primary));
-  border-radius: 14px;
+  border-radius: 20px;
   background: color-mix(in srgb, var(--base-bg-medium-default) 48%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
@@ -2042,6 +2060,7 @@ input:focus-visible {
 .metric-tile {
   min-height: 136px;
   padding: 24px;
+  border-radius: var(--radius-lg);
 }
 
 .metric-tile::before,
@@ -2094,6 +2113,7 @@ input:focus-visible {
 
 .page-tab {
   min-height: 42px;
+  border-radius: 14px;
   border-color: color-mix(in srgb, var(--base-border-weak-default) 84%, transparent);
   color: var(--base-text-medium-default);
 }
@@ -2119,6 +2139,7 @@ input:focus-visible {
 
 .panel {
   padding: 20px;
+  border-radius: var(--radius-lg);
 }
 
 .workflow-panel {
@@ -2186,6 +2207,53 @@ input:focus-visible {
   background:
     linear-gradient(180deg, color-mix(in srgb, rgba(24, 31, 42, 0.9) 90%, transparent), color-mix(in srgb, rgba(11, 17, 24, 0.86) 94%, transparent)),
     color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.workflow-button,
+.index-strip div,
+.recommendation-card,
+.import-gate,
+.paper-preflight,
+.empty-state,
+.ledger-stats span,
+.report-stack > div:not(.paper-preflight),
+.readiness-summary div,
+.source-summary div,
+.template-summary div,
+.onboarding-summary div,
+.preview-summary div,
+.reconciliation-summary div,
+.workflow-summary div,
+.result-band {
+  border-radius: var(--radius-md);
+}
+
+.candidate-table,
+.template-row pre {
+  border-radius: var(--radius-md);
+}
+
+.segment-button,
+.command-button,
+.env-chip-list code {
+  border-radius: var(--control-radius);
+}
+
+.score-bar,
+.allowed-actions span,
+.status-pill,
+.theme-toggle {
+  border-radius: var(--pill-radius);
+}
+
+.table-row:first-child {
+  border-top-left-radius: var(--radius-md);
+  border-top-right-radius: var(--radius-md);
+}
+
+.table-row:last-child {
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
 }
 
 .workflow-button:hover,
