@@ -41,7 +41,11 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "PORTFOLIO_MACRO_PROVIDER=fixture" in env_example
     assert "# PORTFOLIO_MACRO_PROVIDER=json_file" in env_example
     assert "# PORTFOLIO_MACRO_JSON_PATH=data/macro.json" in env_example
-    assert "OLLAMA_BASE_URL=http://ollama:11434" in env_example
+    assert "# LLM_MODEL=llama3.1:8b" in env_example
+    assert "# OLLAMA_BASE_URL=http://host.containers.internal:11434" in env_example
+    assert "# OLLAMA_IMAGE_TAG=0.32.3" in env_example
+    assert "# OLLAMA_MODEL_DIGEST=sha256:<pinned-local-model-digest>" in env_example
+    assert "# MODEL_TUNING_CANDIDATES=llama3.1:8b,gemma:7b,gemma4:12b" in env_example
     assert "FYERS" not in env_example.upper()
 
 
@@ -79,6 +83,11 @@ def test_compose_mounts_paper_ledger_volume() -> None:
     assert "PORTFOLIO_VOLATILITY_JSON_PATH: ${PORTFOLIO_VOLATILITY_JSON_PATH:-}" in compose
     assert "PORTFOLIO_MACRO_PROVIDER: ${PORTFOLIO_MACRO_PROVIDER:-fixture}" in compose
     assert "PORTFOLIO_MACRO_JSON_PATH: ${PORTFOLIO_MACRO_JSON_PATH:-}" in compose
+    assert "OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.containers.internal:11434}" in compose
+    assert "image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.32.3}" in compose
+    assert "MODEL_CONTEXT_WINDOW_TOKENS: ${MODEL_CONTEXT_WINDOW_TOKENS:-8192}" in compose
+    assert "MODEL_TUNING_CANDIDATES: ${MODEL_TUNING_CANDIDATES:-llama3.1:8b,gemma:7b,gemma4:12b}" in compose
+    assert '"11434:11434"' not in compose
     assert "paper-ledger-data:/data" in compose
     assert "paper-ledger-data:" in compose
 

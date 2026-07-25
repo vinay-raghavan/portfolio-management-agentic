@@ -26,6 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 for relative_path in (
     "packages/policy",
     "packages/domain",
+    "packages/model-provider",
     "apps/mcp-server",
 ):
     package_path = str(REPO_ROOT / relative_path)
@@ -83,6 +84,10 @@ from portfolio_mcp.tools import (  # noqa: E402
     run_provider_refresh_schedule,
     validate_data_provider_imports,
 )
+from portfolio_model_provider import (  # noqa: E402
+    ModelProvider,
+    load_model_provider_config,
+)
 
 
 def configure_model_environment() -> None:
@@ -104,13 +109,12 @@ def build_model():
     Gemini is the default capstone provider. Other providers are routed through
     ADK's LiteLlm adapter when that optional dependency is installed.
     """
-    provider = os.getenv("LLM_PROVIDER", "gemini").lower()
-    model_name = os.getenv("LLM_MODEL", "gemini-flash-latest")
+    config = load_model_provider_config(os.environ)
 
-    if provider == "gemini":
+    if config.provider == ModelProvider.GEMINI:
         configure_model_environment()
         return Gemini(
-            model=model_name,
+            model=config.model,
             retry_options=types.HttpRetryOptions(attempts=3),
         )
 
@@ -121,14 +125,18 @@ def build_model():
             "Non-Gemini providers require ADK LiteLlm support and its optional dependencies."
         ) from exc
 
-    if provider == "ollama":
-        return LiteLlm(model=f"ollama_chat/{model_name}")
-    if provider == "claude":
-        return LiteLlm(model=f"anthropic/{model_name}")
-    if provider == "openai_compatible":
-        return LiteLlm(model=f"openai/{model_name}")
+    if config.provider == ModelProvider.OLLAMA:
+        if config.base_url:
+            os.environ.setdefault("OLLAMA_API_BASE", config.base_url)
+        return LiteLlm(model=f"ollama_chat/{config.model}")
+    if config.provider == ModelProvider.CLAUDE:
+        return LiteLlm(model=f"anthropic/{config.model}")
+    if config.provider == ModelProvider.OPENAI_COMPATIBLE:
+        if config.base_url:
+            os.environ.setdefault("OPENAI_API_BASE", config.base_url)
+        return LiteLlm(model=f"openai/{config.model}")
 
-    raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
+    raise ValueError(f"Unsupported LLM_PROVIDER: {config.provider.value}")
 
 
 WORKFLOW_ROUTING_GUIDE = """

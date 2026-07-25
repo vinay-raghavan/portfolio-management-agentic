@@ -225,11 +225,22 @@ sentiment, volatility, and macro records into structured SQLite tables when
 `MARKET_DATA_DB_PATH` is configured. They do not store raw provider payloads or
 resolved local paths.
 
-The optional Ollama service is profile-gated:
+The local Ollama runtime is model-profile driven. The first pilot model is
+`llama3.1:8b`; containers should use a private native host gateway unless a
+separate deployment profile says otherwise:
 
 ```bash
-podman compose --profile ollama up --build
+ollama pull llama3.1:8b
+LLM_PROVIDER=ollama \
+LLM_MODEL=llama3.1:8b \
+OLLAMA_BASE_URL=http://host.containers.internal:11434 \
+podman compose up --build
+curl http://localhost:8000/v1/models/ollama/status
 ```
+
+Prompt, routing, retrieval, and budget tuning are the initial optimization
+surface. Fine-tuning remains disabled until the eval harness has enough labeled
+examples and a repeatable residual failure class.
 
 ## CI/CD
 
