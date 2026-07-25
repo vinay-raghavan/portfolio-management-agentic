@@ -16,20 +16,27 @@ class CapstoneEvidenceConfig:
     repo_root: Path = Path(".")
     eval_summary: Path = Path("apps/agent-service/artifacts/evals/baseline-summary.json")
     triage_report: Path = Path("apps/agent-service/artifacts/evals/triage-report.json")
+    submission_deck: Path = Path(
+        "docs/capstone/TradePilot-Sentinel-Capstone.pptx"
+    )
+    submission_media_dir: Path = Path("docs/capstone/media/slides")
 
 
 @dataclass(frozen=True)
 class CapstoneEvidenceManifest:
     generated_at: str
     eval_baseline: dict[str, Any]
+    submission_assets: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": SCHEMA_VERSION,
             "generated_at": self.generated_at,
-            "purpose": "Repo-safe capstone evidence manifest for the agentic portfolio and paper-trading tool.",
+            "purpose": "Repo-safe capstone evidence manifest for TradePilot Sentinel.",
             "product_scope": {
-                "mode": "paper_trading_and_simulation_only",
+                "mode": "governed_trading_workflow_platform",
+                "capstone_execution_mode": "approval_gated_paper_simulation",
+                "live_execution_status": "disabled_until_explicit_production_controls",
                 "deployment_shape": "Docker or Podman Compose",
                 "default_data_mode": "offline_safe_fixtures",
                 "configured_data_mode": "read_only_provider_adapters",
@@ -76,6 +83,7 @@ class CapstoneEvidenceManifest:
             },
             "workflow_evidence": _workflow_evidence(),
             "eval_baseline": self.eval_baseline,
+            "submission_assets": self.submission_assets,
             "ci_cd_evidence": {
                 "ci_workflow": ".github/workflows/ci.yml",
                 "cd_workflow": ".github/workflows/cd.yml",
@@ -86,8 +94,13 @@ class CapstoneEvidenceManifest:
                 "apps/agent-service/artifacts/evals/baseline-summary.json",
                 "apps/agent-service/artifacts/evals/triage-report.json",
                 "artifacts/capstone/evidence-manifest.json",
+                "docs/capstone/evidence/eval-summary.json",
+                "docs/capstone/TradePilot-Sentinel-Capstone.pptx",
+                "docs/capstone/media/slides",
             ],
-            "remaining_gaps": _remaining_gaps(self.eval_baseline),
+            "remaining_gaps": _remaining_gaps(
+                self.eval_baseline, self.submission_assets
+            ),
         }
 
 
@@ -316,7 +329,34 @@ def _safe_string_list(value: Any) -> list[str]:
     return [str(item) for item in _safe_list(value)]
 
 
-def _remaining_gaps(eval_baseline: Mapping[str, Any]) -> list[dict[str, str]]:
+def _build_submission_assets(config: CapstoneEvidenceConfig) -> dict[str, Any]:
+    required_slides = [
+        "01-cover.png",
+        "03-system-architecture.png",
+        "05-agentic-workflow.png",
+        "06-safety-model.png",
+        "08-evaluation-deployability.png",
+    ]
+    deck_path = config.repo_root / config.submission_deck
+    media_dir = config.repo_root / config.submission_media_dir
+    missing = [
+        filename for filename in required_slides if not (media_dir / filename).is_file()
+    ]
+    if not deck_path.is_file():
+        missing.append(config.submission_deck.name)
+    return {
+        "status": "ready" if not missing else "incomplete",
+        "deck": config.submission_deck.as_posix(),
+        "media_directory": config.submission_media_dir.as_posix(),
+        "required_slides": required_slides,
+        "missing": missing,
+    }
+
+
+def _remaining_gaps(
+    eval_baseline: Mapping[str, Any],
+    submission_assets: Mapping[str, Any],
+) -> list[dict[str, str]]:
     gaps: list[dict[str, str]] = []
     readiness = _as_dict(eval_baseline.get("submission_readiness"))
     readiness_status = str(readiness.get("status") or "blocked")
@@ -360,13 +400,14 @@ def _remaining_gaps(eval_baseline: Mapping[str, Any]) -> list[dict[str, str]]:
                 "next_action": "Upload or review grade artifacts after the first credentialed baseline.",
             }
         )
-    gaps.append(
-        {
-            "id": "capstone_screenshots_or_video",
-            "status": "pending_final_submission_capture",
-            "next_action": "Capture web-console evidence after final workflow selection.",
-        }
-    )
+    if submission_assets.get("status") != "ready":
+        gaps.append(
+            {
+                "id": "capstone_media_package",
+                "status": "missing_repo_safe_submission_assets",
+                "next_action": "Create the capstone deck and required 16:9 media slides under docs/capstone.",
+            }
+        )
     return gaps
 
 
@@ -378,6 +419,7 @@ def build_capstone_evidence(
     return CapstoneEvidenceManifest(
         generated_at=generated_at or _utc_timestamp(),
         eval_baseline=_build_eval_baseline(resolved_config),
+        submission_assets=_build_submission_assets(resolved_config),
     )
 
 
