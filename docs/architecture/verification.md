@@ -38,7 +38,7 @@ Current coverage:
 - Web console contracts verify the Vite/React app, safe product surfaces, Compose wiring, `/console/overview`, focused `/console/workflows` pages, paper-order readiness preflight visibility, provider source setup visibility, guided onboarding, required env-key display, active adapter modes, setup-gap feedback, schema/template guidance, provider import validation feedback, provider profile/import-job settings, import-gate visibility on decision pages, full provider refresh controls, per-provider backoff state, and the paper-only action lifecycle.
 - Provider adapter contracts expose fixture defaults, provider health, import validation, fixture market snapshots, configured read-only JSON market snapshots, configured read-only JSON universes, configured read-only JSON fundamentals, configured read-only JSON sentiment, configured read-only JSON volatility, configured read-only JSON macro context, and universe membership without credentials or network requirements.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require readiness preflight before paper order proposals, block incomplete proposal evidence before draft creation, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
-- Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared.
+- Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared; Ollama runtime profiles include route budgets, 80% context-window caps, model digest pinning, capability readiness, usage-event schema, and a prompt/routing/retrieval-first tuning gate.
 - ADK, Codex, Claude Code, Gemini CLI, and generic MCP client profiles use the MCP policy boundary.
 
 ## ADK Scaffold Checks
@@ -169,10 +169,16 @@ normalized snapshots into
 `market_data_snapshots`, `provider_universe_members`, and
 `provider_factor_snapshots` when `MARKET_DATA_DB_PATH` is configured.
 
-The optional local LLM profile is disabled by default:
+The local LLM profile uses native private Ollama by default. The first pilot
+model is `llama3.1:8b`; the runtime contract remains model-independent:
 
 ```bash
-podman compose --profile ollama up --build
+ollama pull llama3.1:8b
+LLM_PROVIDER=ollama \
+LLM_MODEL=llama3.1:8b \
+OLLAMA_BASE_URL=http://host.containers.internal:11434 \
+podman compose up --build
+curl http://localhost:8000/v1/models/ollama/status
 ```
 
 ## GitHub Actions

@@ -22,6 +22,7 @@ COPY ./apps/agent-service/pyproject.toml ./apps/agent-service/README.md ./apps/a
 COPY ./apps/agent-service/app ./apps/agent-service/app
 COPY ./apps/mcp-server/portfolio_mcp ./apps/mcp-server/portfolio_mcp
 COPY ./packages/domain ./packages/domain
+COPY ./packages/model-provider ./packages/model-provider
 COPY ./packages/policy ./packages/policy
 
 WORKDIR /workspace/apps/agent-service

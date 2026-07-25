@@ -13,6 +13,8 @@
 # limitations under the License.
 import logging
 import os
+import sys
+from pathlib import Path
 
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
@@ -31,6 +33,17 @@ from app.console import (
     refresh_console_provider_profile,
     run_console_provider_refresh_schedule,
     simulate_console_paper_fill,
+)
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+model_provider_path = str(REPO_ROOT / "packages/model-provider")
+if model_provider_path not in sys.path:
+    sys.path.insert(0, model_provider_path)
+
+from portfolio_model_provider import (  # noqa: E402
+    ModelProvider,
+    build_model_capability_report,
+    load_model_runtime_profile,
 )
 
 setup_telemetry()
@@ -73,8 +86,15 @@ class PaperFillRequest(BaseModel):
     fill_price: float | None = Field(default=None, gt=0)
 
 
+def cloud_telemetry_enabled() -> bool:
+    enabled = os.getenv("ENABLE_CLOUD_TELEMETRY", "").strip().lower()
+    return enabled in {"1", "true", "yes", "y", "on"} and bool(
+        os.getenv("GOOGLE_CLOUD_PROJECT")
+    )
+
+
 def build_logger():
-    if not os.getenv("GOOGLE_CLOUD_PROJECT"):
+    if not cloud_telemetry_enabled():
         return LocalLogger()
     try:
         logging_client = google_cloud_logging.Client()
@@ -110,7 +130,7 @@ app: FastAPI = get_fast_api_app(
     artifact_service_uri=artifact_service_uri,
     allow_origins=allow_origins,
     session_service_uri=session_service_uri,
-    otel_to_cloud=bool(os.getenv("GOOGLE_CLOUD_PROJECT")),
+    otel_to_cloud=cloud_telemetry_enabled(),
 )
 app.title = "agent-service"
 app.description = "API for interacting with the Agent agent-service"
@@ -128,6 +148,56 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
     """
     logger.log_struct(feedback.model_dump(), severity="INFO")
     return {"status": "success"}
+
+
+def _configured_available_model_ids() -> set[str] | None:
+    raw_value = os.getenv("OLLAMA_AVAILABLE_MODELS")
+    if not raw_value:
+        return None
+    return {
+        model.strip()
+        for model in raw_value.split(",")
+        if model.strip()
+    }
+
+
+@app.get("/v1/models/ollama/status")
+def get_ollama_model_status() -> dict:
+    """Return redacted model runtime readiness and route-budget status."""
+    profile = load_model_runtime_profile(os.environ)
+    report = build_model_capability_report(
+        profile,
+        available_model_ids=_configured_available_model_ids(),
+        env=os.environ,
+    )
+    return {
+        "status": "ready" if report.startup_allowed else "blocked",
+        "provider": profile.provider.value,
+        "local": profile.local,
+        "model": profile.model,
+        "base_url": profile.base_url,
+        "model_digest_pinned": bool(profile.model_digest),
+        "context_window_tokens": profile.context_window_tokens,
+        "max_request_input_tokens": profile.max_request_input_tokens,
+        "queue": {
+            "max_active_requests": profile.queue_max_active_requests,
+            "max_depth": profile.queue_max_depth,
+        },
+        "route_budgets": {
+            route: {
+                "configured_input_tokens": budget.configured_input_tokens,
+                "effective_input_tokens": budget.effective_input_tokens,
+                "output_tokens": budget.output_tokens,
+                "tool_call_budget": budget.tool_call_budget,
+            }
+            for route, budget in sorted(profile.route_budgets.items())
+        },
+        "required_capabilities": report.required_capabilities,
+        "startup_allowed": report.startup_allowed,
+        "blocking_reasons": report.blocking_reasons,
+        "model_available": report.model_available,
+        "applies_to_active_provider": profile.provider == ModelProvider.OLLAMA,
+    }
 
 
 @app.get("/console/overview")
