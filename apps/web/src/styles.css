@@ -18,15 +18,16 @@
   --warning-soft: #fef3c7;
   --signal: #0891b2;
   --signal-soft: #cffafe;
-  --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-  --radius: 38px;
-  --radius-xs: 26px;
-  --radius-sm: 32px;
-  --radius-md: 40px;
-  --radius-lg: 52px;
-  --radius-xl: 72px;
+  --shadow: 0 20px 48px -28px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  --radius: 44px;
+  --radius-xs: 28px;
+  --radius-sm: 36px;
+  --radius-md: 48px;
+  --radius-lg: 64px;
+  --radius-xl: 84px;
   --widget-radius: var(--radius-lg);
-  --control-radius: 34px;
+  --widget-radius-soft: var(--radius-xl);
+  --control-radius: 36px;
   --pill-radius: 999px;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -275,7 +276,7 @@ p {
   min-height: 108px;
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--widget-radius);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -320,7 +321,7 @@ p {
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--widget-radius);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -1661,14 +1662,15 @@ p {
   --signal: var(--accent-secondary);
   --signal-soft: color-mix(in srgb, var(--accent-secondary) 16%, transparent);
   --shadow: 0 24px 54px -36px rgba(236, 240, 245, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --radius: 38px;
-  --radius-xs: 26px;
-  --radius-sm: 32px;
-  --radius-md: 40px;
-  --radius-lg: 52px;
-  --radius-xl: 72px;
+  --radius: 44px;
+  --radius-xs: 28px;
+  --radius-sm: 36px;
+  --radius-md: 48px;
+  --radius-lg: 64px;
+  --radius-xl: 84px;
   --widget-radius: var(--radius-lg);
-  --control-radius: 34px;
+  --widget-radius-soft: var(--radius-xl);
+  --control-radius: 36px;
   --pill-radius: 999px;
   --focus-ring: 0 0 0 2px rgba(124, 173, 247, 0.34), 0 0 0 6px rgba(124, 173, 247, 0.16);
 
@@ -1724,19 +1726,24 @@ input:focus-visible {
   top: 0;
   gap: 14px;
   min-height: 100vh;
+  margin: 12px 0 12px 12px;
+  min-height: calc(100vh - 24px);
   padding: 14px 8px;
-  border-right: 1px solid color-mix(in srgb, var(--base-border-weak-default) 74%, transparent);
+  border: 1px solid color-mix(in srgb, var(--base-border-weak-default) 78%, transparent);
+  border-radius: var(--radius-lg);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--base-bg-medium-default) 76%, var(--accent-primary) 10%), color-mix(in srgb, var(--base-bg-weak-default) 92%, transparent));
   color: var(--base-text-default);
-  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--accent-primary) 4%, transparent);
+  box-shadow:
+    0 24px 54px -40px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 color-mix(in srgb, var(--experimental-base-border-container, rgba(255, 255, 255, 0.06)) 82%, transparent);
 }
 
 .sidebar::after {
   content: "";
   position: absolute;
   top: 12px;
-  right: -3px;
+  right: -4px;
   width: 5px;
   height: calc(100% - 24px);
   border-radius: 999px;
@@ -1846,7 +1853,7 @@ input:focus-visible {
 }
 
 .workspace {
-  padding: 24px 28px 32px;
+  padding: 24px 28px 32px 34px;
 }
 
 .topbar {
@@ -1952,7 +1959,7 @@ input:focus-visible {
 
 .mission-band,
 .operating-model {
-  border-radius: var(--radius-xl);
+  border-radius: var(--widget-radius-soft);
 }
 
 .mission-band {
@@ -2087,7 +2094,7 @@ input:focus-visible {
 .metric-tile {
   min-height: 136px;
   padding: 24px;
-  border-radius: var(--widget-radius);
+  border-radius: var(--widget-radius-soft);
 }
 
 .metric-tile::before,
@@ -2167,8 +2174,8 @@ input:focus-visible {
 }
 
 .panel {
-  padding: 20px;
-  border-radius: var(--widget-radius);
+  padding: 22px;
+  border-radius: var(--widget-radius-soft);
 }
 
 .workflow-panel {
@@ -2759,7 +2766,7 @@ body:has(.app-shell[data-theme="light"]) {
 .panel,
 .metric-tile,
 .action-result {
-  border-radius: var(--radius-xl);
+  border-radius: var(--widget-radius-soft);
 }
 
 .page-tab,
@@ -2792,6 +2799,43 @@ body:has(.app-shell[data-theme="light"]) {
 .preview-row,
 .reconciliation-row {
   border-radius: var(--widget-radius);
+}
+
+.workflow-button,
+.recommendation-card,
+.import-gate,
+.paper-preflight,
+.empty-state,
+.ledger-stats span,
+.report-stack > div:not(.paper-preflight),
+.readiness-summary div,
+.source-summary div,
+.template-summary div,
+.onboarding-summary div,
+.preview-summary div,
+.reconciliation-summary div,
+.workflow-summary div,
+.result-band,
+.approval-card,
+.paper-order-card,
+.factor-card,
+.detail-row,
+.validation-row,
+.readiness-row,
+.profile-row,
+.provider-row,
+.source-row,
+.template-row,
+.onboarding-row,
+.preview-row,
+.reconciliation-row,
+.selected-workflow,
+.preflight-grid div,
+.preflight-policy,
+.preflight-blockers {
+  box-shadow:
+    0 16px 36px -34px color-mix(in srgb, var(--accent-primary) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--base-text-default) 5%, transparent);
 }
 
 .candidate-table {
@@ -2866,6 +2910,43 @@ body:has(.app-shell[data-theme="light"]) {
     color-mix(in srgb, var(--surface) 90%, transparent);
 }
 
+.app-shell[data-theme="light"] .workflow-button,
+.app-shell[data-theme="light"] .recommendation-card,
+.app-shell[data-theme="light"] .import-gate,
+.app-shell[data-theme="light"] .paper-preflight,
+.app-shell[data-theme="light"] .empty-state,
+.app-shell[data-theme="light"] .ledger-stats span,
+.app-shell[data-theme="light"] .report-stack > div:not(.paper-preflight),
+.app-shell[data-theme="light"] .readiness-summary div,
+.app-shell[data-theme="light"] .source-summary div,
+.app-shell[data-theme="light"] .template-summary div,
+.app-shell[data-theme="light"] .onboarding-summary div,
+.app-shell[data-theme="light"] .preview-summary div,
+.app-shell[data-theme="light"] .reconciliation-summary div,
+.app-shell[data-theme="light"] .workflow-summary div,
+.app-shell[data-theme="light"] .result-band,
+.app-shell[data-theme="light"] .approval-card,
+.app-shell[data-theme="light"] .paper-order-card,
+.app-shell[data-theme="light"] .factor-card,
+.app-shell[data-theme="light"] .detail-row,
+.app-shell[data-theme="light"] .validation-row,
+.app-shell[data-theme="light"] .readiness-row,
+.app-shell[data-theme="light"] .profile-row,
+.app-shell[data-theme="light"] .provider-row,
+.app-shell[data-theme="light"] .source-row,
+.app-shell[data-theme="light"] .template-row,
+.app-shell[data-theme="light"] .onboarding-row,
+.app-shell[data-theme="light"] .preview-row,
+.app-shell[data-theme="light"] .reconciliation-row,
+.app-shell[data-theme="light"] .selected-workflow,
+.app-shell[data-theme="light"] .preflight-grid div,
+.app-shell[data-theme="light"] .preflight-policy,
+.app-shell[data-theme="light"] .preflight-blockers {
+  box-shadow:
+    0 18px 40px -34px rgba(14, 56, 82, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
 .segment-button,
 .command-button,
 .env-chip-list code,
@@ -2922,7 +3003,9 @@ body:has(.app-shell[data-theme="light"]) {
     min-height: auto;
     width: 100%;
     max-width: 100%;
+    margin: 0;
     padding: 10px;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
 
   .sidebar::after {
