@@ -12,6 +12,10 @@ Use this capability for read-only provider status, normalized snapshot freshness
 - `get_data_provider_health`
 - `get_fyers_account_snapshot`
 - `get_fyers_connection_health`
+- `get_fyers_depth`
+- `get_fyers_instrument_metadata`
+- `get_fyers_ohlcv_history`
+- `get_fyers_option_chain`
 - `get_fyers_quote`
 - `get_market_data_snapshot`
 - `get_provider_refresh_readiness`

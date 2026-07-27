@@ -84,6 +84,10 @@ EXPOSED_TOOL_NAMES = {
     "run_provider_refresh_schedule",
     "get_fyers_connection_health",
     "get_fyers_quote",
+    "get_fyers_ohlcv_history",
+    "get_fyers_depth",
+    "get_fyers_instrument_metadata",
+    "get_fyers_option_chain",
     "get_fyers_account_snapshot",
     "get_market_data_snapshot",
     "list_market_data_snapshots",
@@ -269,6 +273,90 @@ def get_fyers_quote(symbol: str) -> dict[str, Any]:
         "status": "success",
         "policy": decision.to_dict(),
         "quote": quote.to_dict(),
+    }
+
+
+def get_fyers_ohlcv_history(symbol: str) -> dict[str, Any]:
+    """Read-only FYERS OHLCV history snapshot; no fallback source and no trading action."""
+    tool_name = "get_fyers_ohlcv_history"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name, {"symbol": symbol})
+    try:
+        history = get_fyers_readonly_connector().get_ohlcv_history(symbol)
+    except ValueError as exc:
+        return {
+            "status": "unavailable",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "history": history.to_dict(),
+    }
+
+
+def get_fyers_depth(symbol: str) -> dict[str, Any]:
+    """Read-only FYERS market-depth snapshot; no fallback source and no trading action."""
+    tool_name = "get_fyers_depth"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name, {"symbol": symbol})
+    try:
+        depth = get_fyers_readonly_connector().get_depth(symbol)
+    except ValueError as exc:
+        return {
+            "status": "unavailable",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "depth": depth.to_dict(),
+    }
+
+
+def get_fyers_instrument_metadata(symbol: str) -> dict[str, Any]:
+    """Read-only FYERS instrument metadata; no fallback source and no trading action."""
+    tool_name = "get_fyers_instrument_metadata"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name, {"symbol": symbol})
+    try:
+        metadata = get_fyers_readonly_connector().get_instrument_metadata(symbol)
+    except ValueError as exc:
+        return {
+            "status": "unavailable",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "metadata": metadata.to_dict(),
+    }
+
+
+def get_fyers_option_chain(symbol: str) -> dict[str, Any]:
+    """Read-only FYERS option-chain snapshot; no fallback source and no trading action."""
+    tool_name = "get_fyers_option_chain"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name, {"symbol": symbol})
+    try:
+        option_chain = get_fyers_readonly_connector().get_option_chain(symbol)
+    except ValueError as exc:
+        return {
+            "status": "unavailable",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "option_chain": option_chain.to_dict(),
     }
 
 

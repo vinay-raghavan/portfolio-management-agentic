@@ -15,6 +15,12 @@ explicit safety policy.
 - Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
 - Product data foundation adds fixture/configured universes, configured fundamentals, sentiment, volatility, macro/regime context, deterministic screener runs, provider refresh readiness and import-reconciliation evidence, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
 - Provider adapter contracts expose fixture defaults, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, provider catalog, health, import validation, market snapshot, and universe-member tools.
+- FYERS read-only MCP fixtures expose connection health, quotes, OHLCV history,
+  market depth, instrument metadata, option chains, and normalized account
+  snapshots with exchange-qualified symbols, explicit unavailable responses,
+  signed quantities, funds, and provenance while keeping OAuth, credentials,
+  provider administration, and broker mutations outside the model-visible
+  surface.
 - Recommendation explanations join screener/factor evidence, provider refresh readiness, import-reconciliation gates, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with readiness preflight review sections, redacted audit exports, paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require a ready recommendation preflight before paper order proposals enter approval, keep approval and simulated-fill mutation on protected human/API paths, update paper positions/accounting, expose approval queues, and emit redacted audit events with the readiness snapshot.
@@ -103,7 +109,7 @@ flowchart LR
     ROUTE --> MCP["MCP policy server<br/>route-scoped safe tools"]
     MCP --> DOMAIN["Deterministic domain services<br/>screeners, risk, recommendations,<br/>backtests, paper ledger"]
     DOMAIN --> DB["State stores<br/>Postgres production-like default<br/>SQLite local/offline fallback"]
-    DOMAIN --> PROVIDERS["Read-only provider adapters<br/>fixtures, JSON files,<br/>future FYERS data connector"]
+    DOMAIN --> PROVIDERS["Read-only provider adapters<br/>fixtures, JSON files,<br/>FYERS normalized data fixtures"]
     ROUTE --> AUDIT["Evaluator and audit evidence<br/>ContextPack, ResponseEvaluator,<br/>evals and CI artifacts"]
 
     MODEL -. "synthesis only" .-> ROUTE

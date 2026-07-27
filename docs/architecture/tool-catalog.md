@@ -33,6 +33,10 @@ repository `SKILL.md` workflow instructions.
 | `run_provider_refresh_schedule` | draft-only | Run one bounded configured-provider refresh cycle, record sanitized import jobs, and return readiness for review. |
 | `get_fyers_connection_health` | read-only | Return sanitized FYERS read-only connector health, fixture state, allowed read surfaces, and reconnect status without credential values. |
 | `get_fyers_quote` | read-only | Return one normalized FYERS quote snapshot for an exchange-qualified symbol, failing as unavailable when the fixture/source has no quote. |
+| `get_fyers_ohlcv_history` | read-only | Return normalized FYERS OHLCV history for an exchange-qualified symbol, failing as unavailable when the fixture/source has no history. |
+| `get_fyers_depth` | read-only | Return normalized FYERS market depth for an exchange-qualified symbol, failing as unavailable when the fixture/source has no depth. |
+| `get_fyers_instrument_metadata` | read-only | Return normalized FYERS instrument metadata for an exchange-qualified symbol, failing as unavailable when the fixture/source has no metadata. |
+| `get_fyers_option_chain` | read-only | Return normalized FYERS option-chain contracts for an exchange-qualified underlying, failing as unavailable when the fixture/source has no chain. |
 | `get_fyers_account_snapshot` | read-only | Return a normalized FYERS account snapshot with signed holdings/positions and funds while keeping provider data separate from the paper ledger. |
 | `get_market_data_snapshot` | read-only | Return fixture-backed or configured JSON OHLCV snapshot and metrics for one symbol, with optional local cache persistence. |
 | `list_market_data_snapshots` | read-only | Return cached market-data snapshots without exposing storage paths. |
