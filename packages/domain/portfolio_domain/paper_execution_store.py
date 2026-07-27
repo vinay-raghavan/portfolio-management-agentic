@@ -726,79 +726,25 @@ class PostgresPaperExecutionStore:
             "exposure_after": _json_safe(exposure_after),
             "now": _aware_utc(self._now()),
         }
+        capacity_delta = _grant_capacity_delta(order, decision)
+        params = {**params, **capacity_delta}
         _reject_secret_payload(params)
         with self._connection_factory() as connection:
             with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO paper_ledger_entries (
-                        tenant_id,
-                        grant_id,
-                        batch_request_id,
-                        idempotency_key,
-                        entry_type,
-                        symbol,
-                        side,
-                        quantity,
-                        price,
-                        notional,
-                        status,
-                        decision,
-                        fill,
-                        exposure_after,
-                        created_at
-                    ) VALUES (
-                        %(tenant_id)s,
-                        %(grant_id)s,
-                        %(batch_request_id)s,
-                        %(idempotency_key)s,
-                        %(entry_type)s,
-                        %(symbol)s,
-                        %(side)s,
-                        %(quantity)s,
-                        %(price)s,
-                        %(notional)s,
-                        %(status)s,
-                        %(decision)s,
-                        %(fill)s,
-                        %(exposure_after)s,
-                        %(now)s
-                    )
-                    ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
-                    RETURNING id
-                    """.strip(),
-                    params,
-                )
+                cursor.execute(_record_execution_decision_sql(decision), params)
                 row = _fetch_one_mapping(cursor)
-                if row is not None and decision.status == "accepted":
-                    cursor.execute(
-                        """
-                        UPDATE paper_execution_grants
-                        SET
-                            consumed_capacity = jsonb_build_object(
-                                'order_count',
-                                COALESCE((consumed_capacity->>'order_count')::numeric, 0)
-                                    + %(order_count_delta)s,
-                                'gross_notional',
-                                COALESCE((consumed_capacity->>'gross_notional')::numeric, 0)
-                                    + %(gross_notional_delta)s,
-                                'net_notional',
-                                COALESCE((consumed_capacity->>'net_notional')::numeric, 0)
-                                    + %(net_notional_delta)s
-                            ),
-                            updated_at = %(now)s
-                        WHERE tenant_id = %(tenant_id)s
-                          AND id = %(grant_id)s
-                          AND status = 'active'
-                        """.strip(),
-                        {
-                            **params,
-                            **_grant_capacity_delta(order, decision),
-                        },
-                    )
             connection.commit()
         if row is None:
             return _duplicate_idempotency_decision(decision)
+        if (
+            decision.status == "accepted"
+            and not _bool_row_value(row, "capacity_available")
+        ):
+            return _grant_capacity_exceeded_decision(decision)
+        if decision.status == "accepted" and row.get("ledger_id") is None:
+            return _duplicate_idempotency_decision(decision)
+        if decision.status == "accepted" and row.get("grant_update_id") is None:
+            return _grant_capacity_exceeded_decision(decision)
         return decision
 
     def _require_tenant(self, tenant_id: str) -> None:
@@ -834,6 +780,20 @@ def _duplicate_idempotency_decision(
     )
 
 
+def _grant_capacity_exceeded_decision(
+    decision: PaperExecutionDecision,
+) -> PaperExecutionDecision:
+    audit_event = dict(decision.audit_event)
+    audit_event["event_type"] = "paper_execution_rejected"
+    audit_event["reasons"] = ("grant_capacity_exceeded",)
+    return PaperExecutionDecision(
+        status="rejected",
+        reasons=("grant_capacity_exceeded",),
+        fill=None,
+        audit_event=audit_event,
+    )
+
+
 def _grant_capacity_delta(
     order: PaperExecutionOrder,
     decision: PaperExecutionDecision,
@@ -845,6 +805,151 @@ def _grant_capacity_delta(
         "gross_notional_delta": abs(notional),
         "net_notional_delta": net_notional,
     }
+
+
+def _record_execution_decision_sql(decision: PaperExecutionDecision) -> str:
+    if decision.status != "accepted":
+        return """
+            WITH ledger_insert AS (
+                INSERT INTO paper_ledger_entries (
+                    tenant_id,
+                    grant_id,
+                    batch_request_id,
+                    idempotency_key,
+                    entry_type,
+                    symbol,
+                    side,
+                    quantity,
+                    price,
+                    notional,
+                    status,
+                    decision,
+                    fill,
+                    exposure_after,
+                    created_at
+                ) VALUES (
+                    %(tenant_id)s,
+                    %(grant_id)s,
+                    %(batch_request_id)s,
+                    %(idempotency_key)s,
+                    %(entry_type)s,
+                    %(symbol)s,
+                    %(side)s,
+                    %(quantity)s,
+                    %(price)s,
+                    %(notional)s,
+                    %(status)s,
+                    %(decision)s,
+                    %(fill)s,
+                    %(exposure_after)s,
+                    %(now)s
+                )
+                ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+                RETURNING id
+            )
+            SELECT
+                true AS grant_locked,
+                true AS capacity_available,
+                (SELECT id FROM ledger_insert) AS ledger_id,
+                true AS grant_update_id
+            """.strip()
+
+    return """
+        WITH locked_grant AS (
+            SELECT
+                id,
+                reserved_capacity,
+                consumed_capacity
+            FROM paper_execution_grants
+            WHERE tenant_id = %(tenant_id)s
+              AND id = %(grant_id)s
+              AND status = 'active'
+            FOR UPDATE
+        ),
+        capacity_check AS (
+            SELECT id
+            FROM locked_grant
+            WHERE COALESCE((consumed_capacity->>'order_count')::numeric, 0)
+                    + %(order_count_delta)s
+                  <= COALESCE((reserved_capacity->>'order_count')::numeric, 0)
+              AND COALESCE((consumed_capacity->>'gross_notional')::numeric, 0)
+                    + %(gross_notional_delta)s
+                  <= COALESCE((reserved_capacity->>'max_gross_notional')::numeric, 0)
+              AND ABS(
+                    COALESCE((consumed_capacity->>'net_notional')::numeric, 0)
+                    + %(net_notional_delta)s
+                  )
+                  <= COALESCE((reserved_capacity->>'max_net_notional')::numeric, 0)
+        ),
+        ledger_insert AS (
+            INSERT INTO paper_ledger_entries (
+                tenant_id,
+                grant_id,
+                batch_request_id,
+                idempotency_key,
+                entry_type,
+                symbol,
+                side,
+                quantity,
+                price,
+                notional,
+                status,
+                decision,
+                fill,
+                exposure_after,
+                created_at
+            )
+            SELECT
+                %(tenant_id)s,
+                %(grant_id)s,
+                %(batch_request_id)s,
+                %(idempotency_key)s,
+                %(entry_type)s,
+                %(symbol)s,
+                %(side)s,
+                %(quantity)s,
+                %(price)s,
+                %(notional)s,
+                %(status)s,
+                %(decision)s,
+                %(fill)s,
+                %(exposure_after)s,
+                %(now)s
+            WHERE EXISTS (SELECT 1 FROM capacity_check)
+            ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+            RETURNING id
+        ),
+        capacity_update AS (
+            UPDATE paper_execution_grants
+            SET
+                consumed_capacity = jsonb_build_object(
+                    'order_count',
+                    COALESCE((consumed_capacity->>'order_count')::numeric, 0)
+                        + %(order_count_delta)s,
+                    'gross_notional',
+                    COALESCE((consumed_capacity->>'gross_notional')::numeric, 0)
+                        + %(gross_notional_delta)s,
+                    'net_notional',
+                    COALESCE((consumed_capacity->>'net_notional')::numeric, 0)
+                        + %(net_notional_delta)s
+                ),
+                updated_at = %(now)s
+            WHERE tenant_id = %(tenant_id)s
+              AND id = %(grant_id)s
+              AND status = 'active'
+              AND EXISTS (SELECT 1 FROM ledger_insert)
+            RETURNING id
+        )
+        SELECT
+            EXISTS(SELECT 1 FROM locked_grant) AS grant_locked,
+            EXISTS(SELECT 1 FROM capacity_check) AS capacity_available,
+            (SELECT id FROM ledger_insert) AS ledger_id,
+            (SELECT id FROM capacity_update) AS grant_update_id
+        """.strip()
+
+
+def _bool_row_value(row: Mapping[str, Any], key: str) -> bool:
+    return bool(row.get(key))
 
 
 def _fetch_one_mapping(cursor: Any) -> dict[str, Any] | None:
