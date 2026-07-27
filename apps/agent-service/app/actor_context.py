@@ -48,7 +48,9 @@ def build_actor_context(
     subject = (x_actor_sub or "").strip()
     if not subject:
         raise HTTPException(status_code=401, detail="actor_subject_required")
-    tenant_id = (x_tenant_id or "default").strip() or "default"
+    tenant_id = (x_tenant_id or "").strip()
+    if not tenant_id:
+        raise HTTPException(status_code=401, detail="actor_tenant_required")
     request_id = (x_request_id or "").strip()
     roles = frozenset(
         role.strip().lower()
