@@ -47,7 +47,7 @@ flowchart LR
 | Model provider adapter | Selects Gemini by default and supports alternate hosted or local providers | Provider choice does not change tool permissions |
 | MCP server | Publishes the least-privilege tool catalog | Forbidden tools are never registered |
 | Domain packages | Own typed evidence, screeners, recommendations, backtests, ledger, reports, and provider contracts | Deterministic and testable without model credentials |
-| SQLite stores | Persist paper ledger, market snapshots, provider profiles, and audit state | Contain no broker trading credentials |
+| Postgres/SQLite stores | Persist tenant-scoped production-like state, with SQLite retained for explicit offline compatibility | Contain no broker trading credentials |
 | Eval and delivery pipeline | Runs deterministic tests, Agents CLI evals, container checks, and image publishing | Cloud credentials are optional for deterministic CI |
 
 ## Agentic Workflow

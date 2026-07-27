@@ -61,7 +61,7 @@ model-visible MCP.
 - Screener and strategy drafting: synthetic momentum screener, fixture-backed deterministic screener, persisted paper strategy drafts, strategy history retrieval, and pending paper proposal.
 - Provider checks: read-only provider catalog, provider health, configured import validation, guided source onboarding, configured import dry-run previews, import reconciliation, sanitized source templates, sanitized provider profiles and import-job history, provider refresh readiness, scheduled configured-provider refresh cycles, configured market/context imports, fixture market snapshots, and fixture universe members.
 - FYERS integration API: protected human-facing `/v1/integrations/fyers/oauth/start`, `/callback`, `/status`, `/disconnect`, and `/v1/integrations/fyers/refresh` endpoints use `ActorContext`, return no provider tokens or PKCE verifier, keep token exchange disabled until the credential-vault worker is added, and refresh only read-only normalized fixture snapshots. OAuth, disconnect, and refresh are not model-visible MCP tools. When `PORTFOLIO_STORAGE_BACKEND=postgres`, sanitized `fyers_connections` metadata, optional opaque vault references, hashed single-use `fyers_oauth_sessions` state, protected `provider_refresh_jobs`, `provider_snapshot_envelopes`, and `broker_account_snapshots` are stored in tenant-scoped Postgres tables; token values, client secrets, trading tokens, PKCE verifiers, Yahoo fallbacks, and paper-ledger payloads are never persisted or returned.
-- Market-data storage: fixture/provider snapshots, provider context records, and screener runs are cached in the same JSON shape returned by tools when `MARKET_DATA_DB_PATH` is configured.
+- Market-data storage: fixture/provider snapshots and screener runs use tenant-scoped Postgres in production-like mode and keep the same JSON shape returned by tools; `MARKET_DATA_DB_PATH` remains the explicit SQLite offline fallback. Provider context records are still on the SQLite compatibility path while that store is ported.
 - Pattern, factor, and recommendation evidence: universe listing, pattern search, pattern playbook retrieval, strategy evidence citations, factor-stack explanations, and read-only recommendation explanations that join provider refresh readiness, import-reconciliation gates, history, risk, and ledger context.
 - Backtest, ledger, and report review: persisted simulated backtest requests, backtest history retrieval, deterministic results, readiness-gated paper order proposals, approval-gated simulated fills, paper positions, paper accounting, approval queue, readiness preflight report sections, redacted audit events, and read-only paper-trading reports.
 - Web console workflows: `/console/overview` summarizes safe state, while `/console/workflows` and its paper-only POST endpoints expose focused screeners, strategy/backtest review, paper order proposals, human approval, simulated fills, reports, and provider settings with guided configured-source onboarding, configured-source setup, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, import-gate visibility on decision pages, provider profiles, full refresh orchestration, per-provider backoff state, and import-job feedback. The approval endpoint uses server-created `ActorContext` identity and explicit tenant metadata from trusted request headers; request JSON may include an approval note only and cannot supply or spoof `approved_by`.
@@ -118,15 +118,19 @@ development. When
 tools use SQLite-backed state while individual stores are ported to Postgres.
 The repository Compose file mounts `/data/paper-ledger.db` on a named volume
 for local container runs.
-When `MARKET_DATA_DB_PATH` is configured, market snapshot, provider context,
-and screener-run tools use SQLite-backed state. The repository Compose file mounts
-`/data/market-data.db` on the same named volume for local container runs.
+When `PORTFOLIO_STORAGE_BACKEND=postgres`, `PORTFOLIO_DATABASE_URL`, and
+`PORTFOLIO_TENANT_ID` are configured, market snapshot and screener-run tools
+use tenant-scoped Postgres state. `MARKET_DATA_DB_PATH` remains the explicit
+SQLite fallback for offline market snapshots, provider context, and screener
+runs. The repository Compose file mounts `/data/market-data.db` on the same
+named volume for local fallback runs.
 When `PROVIDER_CONFIG_DB_PATH` is configured, provider profile and import-job
 tools use SQLite-backed metadata state. The repository Compose file mounts
 `/data/provider-config.db` on the same named volume for local container runs.
-Configured refreshes can import normalized market, universe, fundamentals,
-sentiment, volatility, and macro records into the market-data database while
-keeping job records free of resolved paths and raw provider payloads. Scheduled
+Configured refreshes can import normalized market records into Postgres in
+production-like mode or the SQLite fallback in offline mode. Universe,
+fundamentals, sentiment, volatility, and macro context records still use the
+provider-context compatibility store while that path is ported. Scheduled
 refresh orchestration reports ready, stale, retry-due, and backoff state for the
 configured providers. Dry-run import previews report normalized counts, target
 stores, sample identifiers, warnings, and would-write status before those
