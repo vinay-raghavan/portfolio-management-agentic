@@ -357,6 +357,18 @@ def _reject_if_model_route_kill_switch_active() -> None:
         raise HTTPException(status_code=503, detail="model_route_kill_switch_active")
 
 
+def _research_refresh_kill_switch_active() -> bool:
+    return env_flag_enabled(
+        "RESEARCH_REFRESH_KILL_SWITCH",
+        "PORTFOLIO_RESEARCH_REFRESH_KILL_SWITCH",
+    )
+
+
+def _reject_if_research_refresh_kill_switch_active() -> None:
+    if _research_refresh_kill_switch_active():
+        raise HTTPException(status_code=503, detail="research_refresh_kill_switch_active")
+
+
 def build_logger():
     if not cloud_telemetry_enabled():
         return LocalLogger()
@@ -564,6 +576,7 @@ def post_research_refresh(
 ) -> dict:
     """Queue a refresh intent by registered source id and normalized query only."""
     _require_any_role(actor, {"analyst", "admin"})
+    _reject_if_research_refresh_kill_switch_active()
     source = _research_source_by_id(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="research_source_not_registered")

@@ -28,6 +28,7 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "FYERS_CONNECTOR_KILL_SWITCH=false" in env_example
     assert "MODEL_ROUTE_KILL_SWITCH=false" in env_example
     assert "PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH=false" in env_example
+    assert "RESEARCH_REFRESH_KILL_SWITCH=false" in env_example
     assert "MARKET_DATA_DB_PATH=data/market-data.db" in env_example
     assert "PROVIDER_CONFIG_DB_PATH=data/provider-config.db" in env_example
     assert "PORTFOLIO_MARKET_DATA_PROVIDER=fixture" in env_example
@@ -97,6 +98,7 @@ def test_compose_mounts_paper_ledger_volume() -> None:
         )
         >= 2
     )
+    assert "RESEARCH_REFRESH_KILL_SWITCH: ${RESEARCH_REFRESH_KILL_SWITCH:-false}" in compose
     assert "ENABLE_CLOUD_TELEMETRY: ${ENABLE_CLOUD_TELEMETRY:-false}" in compose
     assert "MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}" in compose
     assert "PROVIDER_CONFIG_DB_PATH: ${PROVIDER_CONFIG_DB_PATH:-/data/provider-config.db}" in compose
