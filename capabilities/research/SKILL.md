@@ -12,6 +12,7 @@ Use this capability for public-safe research synthesis, pattern explanations, an
 - `cite_strategy_evidence`
 - `get_pattern_playbook`
 - `get_research_digest`
+- `search_curated_research`
 - `search_pattern_library`
 
 ## Context contract

@@ -148,12 +148,14 @@ from .providers import (
 from .product_data import (
     PATTERN_CARDS,
     PATTERN_STORE,
+    RESEARCH_STORE,
     build_factor_stack_explanation,
     build_strategy_evidence_pack,
     get_pattern_card,
     list_fixture_universes,
     run_fixture_screener,
     search_pattern_cards,
+    search_research_documents,
 )
 from .recommendations import (
     build_paper_order_readiness_preflight,
@@ -161,13 +163,17 @@ from .recommendations import (
 )
 from .reports import build_paper_trading_report
 from .research_store import (
+    BUILTIN_RESEARCH_SOURCES,
     FileBackedPatternStore,
     FileBackedResearchStore,
     PatternStore,
+    PostgresResearchSearchPlan,
     ResearchDocument,
     ResearchSource,
     ResearchStore,
     RetrievalHit,
+    build_postgres_research_search_query,
+    normalize_research_query,
     pattern_card_to_research_document,
 )
 
@@ -178,6 +184,7 @@ __all__ = [
     "BacktestResult",
     "BacktestTrade",
     "BrokerAccountSnapshot",
+    "BUILTIN_RESEARCH_SOURCES",
     "FactorStackExplanation",
     "FileBackedPatternStore",
     "FileBackedResearchStore",
@@ -206,6 +213,7 @@ __all__ = [
     "PATTERN_CARDS",
     "PATTERN_STORE",
     "PatternStore",
+    "PostgresResearchSearchPlan",
     "PortfolioSummary",
     "PreMarketBriefing",
     "ProviderDescriptor",
@@ -218,6 +226,7 @@ __all__ = [
     "RecommendationExplanation",
     "ResearchDigest",
     "ResearchDocument",
+    "RESEARCH_STORE",
     "ResearchSource",
     "ResearchStore",
     "RetrievalHit",
@@ -258,6 +267,7 @@ __all__ = [
     "build_paper_ledger_store",
     "build_paper_trading_report",
     "build_provider_data_store",
+    "build_postgres_research_search_query",
     "count_stored_factor_snapshots",
     "count_stored_market_snapshots",
     "count_stored_universe_members",
@@ -309,6 +319,7 @@ __all__ = [
     "list_stored_market_snapshots",
     "list_stored_screener_runs",
     "normalize_fyers_symbol",
+    "normalize_research_query",
     "parse_fyers_symbol",
     "pattern_card_to_research_document",
     "record_market_data_snapshot",
@@ -316,6 +327,7 @@ __all__ = [
     "run_fixture_screener",
     "run_demo_momentum_screener",
     "search_pattern_cards",
+    "search_research_documents",
     "refresh_provider_import_profile_metadata",
     "run_provider_refresh_schedule",
     "simulate_fixture_approved_paper_fill",

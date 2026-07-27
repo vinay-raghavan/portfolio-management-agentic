@@ -48,6 +48,7 @@ def test_draft_and_read_only_tools_are_allowed_without_approval() -> None:
         "run_screener",
         "explain_candidate_evidence",
         "search_pattern_library",
+        "search_curated_research",
         "get_pattern_playbook",
         "cite_strategy_evidence",
         "explain_factor_stack",
