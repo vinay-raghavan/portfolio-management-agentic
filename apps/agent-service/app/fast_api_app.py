@@ -55,10 +55,13 @@ if model_provider_path not in sys.path:
     sys.path.insert(0, model_provider_path)
 
 from portfolio_domain import (  # noqa: E402
+    DatabaseBackend,
     PaperBatchRequest,
+    PaperExecutionDecision,
     PaperExecutionGrant,
     PaperExecutionOrder,
     PaperExecutionPolicyCeiling,
+    PostgresPaperExecutionStore,
     evaluate_database_runtime_readiness,
     evaluate_paper_execution_order,
     issue_paper_execution_grant,
@@ -435,6 +438,167 @@ def _grant_key(actor: ActorContext, grant_id: str) -> tuple[str, str]:
     return (actor.tenant_id, grant_id)
 
 
+def _paper_execution_store_for_actor(
+    actor: ActorContext,
+) -> PostgresPaperExecutionStore | None:
+    profile = load_database_runtime_profile(os.environ)
+    if profile.backend != DatabaseBackend.POSTGRES:
+        return None
+    if not profile.database_url:
+        raise HTTPException(status_code=503, detail="paper_postgres_not_configured")
+    return _build_postgres_paper_execution_store(
+        tenant_id=actor.tenant_id,
+        database_url=profile.database_url,
+    )
+
+
+def _build_postgres_paper_execution_store(
+    *,
+    tenant_id: str,
+    database_url: str,
+) -> PostgresPaperExecutionStore:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+
+        return psycopg.connect(connection_url)
+
+    return PostgresPaperExecutionStore(
+        tenant_id=tenant_id,
+        connection_factory=connection_factory,
+    )
+
+
+def _psycopg_database_url(database_url: str) -> str:
+    stripped = database_url.strip()
+    if stripped.startswith("postgresql+psycopg://"):
+        return "postgresql://" + stripped.removeprefix("postgresql+psycopg://")
+    return stripped
+
+
+def _store_paper_policy(
+    actor: ActorContext,
+    policy: PaperExecutionPolicyCeiling,
+) -> PaperExecutionPolicyCeiling:
+    store = _paper_execution_store_for_actor(actor)
+    if store is not None:
+        return store.upsert_policy_ceiling(policy)
+    _PAPER_POLICIES[_policy_key(actor, policy.policy_id)] = policy
+    return policy
+
+
+def _get_paper_policy(
+    actor: ActorContext,
+    policy_id: str,
+) -> PaperExecutionPolicyCeiling | None:
+    store = _paper_execution_store_for_actor(actor)
+    if store is not None:
+        return store.get_policy_ceiling(policy_id)
+    return _PAPER_POLICIES.get(_policy_key(actor, policy_id))
+
+
+def _store_paper_batch(
+    actor: ActorContext,
+    batch: PaperBatchRequest,
+) -> PaperBatchRequest:
+    store = _paper_execution_store_for_actor(actor)
+    if store is not None:
+        return store.create_batch_request(batch)
+    _PAPER_BATCHES[_batch_key(actor, batch.batch_request_id)] = batch
+    return batch
+
+
+def _get_paper_batch(
+    actor: ActorContext,
+    batch_id: str,
+) -> PaperBatchRequest | None:
+    store = _paper_execution_store_for_actor(actor)
+    if store is not None:
+        return store.get_batch_request(batch_id)
+    return _PAPER_BATCHES.get(_batch_key(actor, batch_id))
+
+
+def _issue_paper_grant(
+    actor: ActorContext,
+    *,
+    policy: PaperExecutionPolicyCeiling,
+    batch: PaperBatchRequest,
+    expires_at: datetime,
+) -> PaperExecutionGrant:
+    store = _paper_execution_store_for_actor(actor)
+    if store is not None:
+        return store.issue_grant(
+            policy=policy,
+            batch_request=batch,
+            approved_by_actor_id=actor.audit_actor,
+            expires_at=expires_at,
+        )
+    grant = issue_paper_execution_grant(
+        policy=policy,
+        batch_request=batch,
+        approved_by_actor_id=actor.audit_actor,
+        expires_at=expires_at,
+        now=datetime.now(UTC),
+        grant_id=str(uuid4()),
+    )
+    _PAPER_GRANTS[_grant_key(actor, grant.grant_id)] = grant
+    return grant
+
+
+def _get_paper_grant(
+    actor: ActorContext,
+    grant_id: str,
+) -> PaperExecutionGrant | None:
+    store = _paper_execution_store_for_actor(actor)
+    if store is not None:
+        return store.get_grant(grant_id)
+    return _PAPER_GRANTS.get(_grant_key(actor, grant_id))
+
+
+def _revoke_paper_grant(
+    actor: ActorContext,
+    *,
+    batch_id: str,
+    grant_id: str,
+) -> PaperExecutionGrant | None:
+    store = _paper_execution_store_for_actor(actor)
+    if store is not None:
+        grant = store.get_grant(grant_id)
+        if grant is None or grant.batch_request_id != batch_id:
+            return None
+        return store.revoke_grant(grant_id)
+    grant = _PAPER_GRANTS.get(_grant_key(actor, grant_id))
+    if grant is None or grant.batch_request_id != batch_id:
+        return None
+    revoked = replace(grant, status="revoked")
+    _PAPER_GRANTS[_grant_key(actor, revoked.grant_id)] = revoked
+    return revoked
+
+
+def _record_paper_execution_decision(
+    actor: ActorContext,
+    *,
+    grant: PaperExecutionGrant,
+    batch: PaperBatchRequest,
+    order: PaperExecutionOrder,
+    decision: PaperExecutionDecision,
+    fill_price: float,
+    exposure_after: Mapping[str, object],
+) -> None:
+    store = _paper_execution_store_for_actor(actor)
+    if store is None:
+        return
+    store.record_execution_decision(
+        grant=grant,
+        batch_request=batch,
+        order=order,
+        decision=decision,
+        fill_price=fill_price,
+        exposure_after=exposure_after,
+    )
+
+
 def _paper_order_from_route(
     actor: ActorContext,
     order_id: str,
@@ -442,7 +606,7 @@ def _paper_order_from_route(
     batch_id, separator, index_value = order_id.partition(":")
     if not separator:
         raise HTTPException(status_code=404, detail="paper_order_not_found")
-    batch = _PAPER_BATCHES.get(_batch_key(actor, batch_id))
+    batch = _get_paper_batch(actor, batch_id)
     if batch is None:
         raise HTTPException(status_code=404, detail="paper_batch_not_found")
     try:
@@ -486,7 +650,7 @@ def post_paper_policy(
         valid_from=request.valid_from,
         valid_until=request.valid_until,
     )
-    _PAPER_POLICIES[_policy_key(actor, policy.policy_id)] = policy
+    policy = _store_paper_policy(actor, policy)
     return {
         "status": "success",
         "policy": policy.to_dict(),
@@ -521,7 +685,7 @@ def post_paper_batch(
         context_refs=tuple(request.context_refs),
         risk_summary=request.risk_summary,
     )
-    _PAPER_BATCHES[_batch_key(actor, batch.batch_request_id)] = batch
+    batch = _store_paper_batch(actor, batch)
     return {
         "status": "success",
         "batch_request": batch.to_dict(),
@@ -537,24 +701,21 @@ def post_paper_batch_approval(
 ) -> dict:
     """Issue a bounded grant from verified human approver context."""
     actor.require_approver()
-    policy = _PAPER_POLICIES.get(_policy_key(actor, request.policy_id))
-    batch = _PAPER_BATCHES.get(_batch_key(actor, batch_id))
+    policy = _get_paper_policy(actor, request.policy_id)
+    batch = _get_paper_batch(actor, batch_id)
     if policy is None:
         raise HTTPException(status_code=404, detail="paper_policy_not_found")
     if batch is None:
         raise HTTPException(status_code=404, detail="paper_batch_not_found")
     try:
-        grant = issue_paper_execution_grant(
+        grant = _issue_paper_grant(
+            actor,
             policy=policy,
-            batch_request=batch,
-            approved_by_actor_id=actor.audit_actor,
+            batch=batch,
             expires_at=request.expires_at,
-            now=datetime.now(UTC),
-            grant_id=str(uuid4()),
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    _PAPER_GRANTS[_grant_key(actor, grant.grant_id)] = grant
     return {
         "status": "success",
         "grant": grant.to_dict(),
@@ -570,11 +731,13 @@ def post_paper_batch_revoke(
 ) -> dict:
     """Revoke a bounded paper execution grant from verified approver context."""
     actor.require_approver()
-    grant = _PAPER_GRANTS.get(_grant_key(actor, request.grant_id))
-    if grant is None or grant.batch_request_id != batch_id:
+    revoked = _revoke_paper_grant(
+        actor,
+        batch_id=batch_id,
+        grant_id=request.grant_id,
+    )
+    if revoked is None:
         raise HTTPException(status_code=404, detail="paper_grant_not_found")
-    revoked = replace(grant, status="revoked")
-    _PAPER_GRANTS[_grant_key(actor, revoked.grant_id)] = revoked
     return {
         "status": "success",
         "grant": revoked.to_dict(),
@@ -591,11 +754,11 @@ def post_paper_order_execute(
     """Evaluate a paper order under a bounded grant; no live broker execution."""
     _require_any_role(actor, {"analyst", "approver", "admin"})
     _reject_sensitive_paper_payload(request.model_dump())
-    grant = _PAPER_GRANTS.get(_grant_key(actor, request.grant_id))
+    grant = _get_paper_grant(actor, request.grant_id)
     if grant is None:
         raise HTTPException(status_code=404, detail="paper_grant_not_found")
     batch, order = _paper_order_from_route(actor, order_id)
-    policy = _PAPER_POLICIES.get(_policy_key(actor, grant.policy_ceiling_id))
+    policy = _get_paper_policy(actor, grant.policy_ceiling_id)
     if policy is None:
         raise HTTPException(status_code=404, detail="paper_policy_not_found")
     used_keys = _PAPER_IDEMPOTENCY_KEYS.setdefault(actor.tenant_id, set())
@@ -625,6 +788,18 @@ def post_paper_order_execute(
                 "mode": "paper_only",
             },
         )
+    _record_paper_execution_decision(
+        actor,
+        grant=grant,
+        batch=batch,
+        order=order,
+        decision=decision,
+        fill_price=request.quote_price,
+        exposure_after={
+            "gross_notional": request.current_gross_notional,
+            "net_notional": request.current_net_notional,
+        },
+    )
     return {
         "status": "accepted",
         "decision": decision.to_dict(),
