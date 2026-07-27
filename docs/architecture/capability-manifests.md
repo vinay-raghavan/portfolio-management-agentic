@@ -10,6 +10,8 @@ slice. Each capability lives under `capabilities/<name>/` with:
 The parity test in `tests/contract/test_capability_manifests.py` ensures every
 manifest has matching skill documentation, references only exposed and
 policy-classified tools, and preserves the paper-only safety boundary.
+`DeterministicRouter.tool_bundle_for(...)` consumes these manifests to build
+the current `RouteToolBundle` contract used by route-scoped model calls.
 
 ## Current capabilities
 
@@ -38,12 +40,13 @@ policy-classified tools, and preserves the paper-only safety boundary.
 
 ## Router integration path
 
-These manifests are not yet the full router. They are the audited contract the
-router should consume next:
+These manifests are the audited contract the router consumes for
+least-privilege model-visible tool bundles:
 
 1. Deterministically route forbidden, FYERS refresh, approval, and paper
    execution intents before model classification.
 2. Select exactly one `CapabilityManifest`.
-3. Build a context pack from the manifest's context sources.
-4. Expose only the manifest's allowed tools for that route.
+3. Build a `RouteToolBundle` with only the manifest's allowed tools for that
+   route.
+4. Build a context pack from the manifest's context sources.
 5. Validate the response against the manifest's response schema and eval cases.

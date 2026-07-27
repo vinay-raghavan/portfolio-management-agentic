@@ -1,6 +1,6 @@
 from .context import ContextEvaluation, ContextEvaluator, ContextItem, ContextPack
 from .response import ResponseEvaluator, ResponseSchema, ValidatedResponse
-from .routing import DeterministicRouter, RouteDecision, RouteDecisionType
+from .routing import DeterministicRouter, RouteDecision, RouteDecisionType, RouteToolBundle
 
 __all__ = [
     "ContextEvaluation",
@@ -12,5 +12,6 @@ __all__ = [
     "ResponseSchema",
     "RouteDecision",
     "RouteDecisionType",
+    "RouteToolBundle",
     "ValidatedResponse",
 ]
