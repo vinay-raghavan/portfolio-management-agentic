@@ -2793,6 +2793,7 @@ body:has(.app-shell[data-theme="light"]) {
 }
 
 .page-tab,
+.index-strip div,
 .workflow-button,
 .recommendation-card,
 .import-gate,
@@ -2831,6 +2832,7 @@ body:has(.app-shell[data-theme="light"]) {
   border-left-width: 1px;
 }
 
+.index-strip div,
 .workflow-button,
 .recommendation-card,
 .import-gate,
@@ -2966,6 +2968,7 @@ body:has(.app-shell[data-theme="light"]) {
 }
 
 .app-shell[data-theme="light"] .workflow-button,
+.app-shell[data-theme="light"] .index-strip div,
 .app-shell[data-theme="light"] .recommendation-card,
 .app-shell[data-theme="light"] .import-gate,
 .app-shell[data-theme="light"] .paper-preflight,

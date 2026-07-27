@@ -187,6 +187,39 @@ def test_web_console_uses_rounded_widget_design_contract() -> None:
     assert "border-radius: 0 0" not in rounded_refinement
 
 
+def test_web_console_uses_uniform_widget_rounding_for_rows_and_controls() -> None:
+    styles = (WEB_ROOT / "src" / "styles.css").read_text()
+    rounded_refinement = styles.split("/* Rounded widget refinement", 1)[1]
+
+    soft_widget_selectors = (
+        ".index-strip div",
+        ".table-row",
+        ".preflight-grid div",
+        ".preflight-policy",
+        ".preflight-blockers",
+        ".selected-workflow",
+        ".action-chip-list span",
+        ".setup-gap-list span",
+    )
+    control_selectors = (
+        ".segment-button",
+        ".command-button",
+        ".env-chip-list code",
+        ".template-row pre",
+    )
+
+    for selector in soft_widget_selectors:
+        assert selector in rounded_refinement
+    for selector in control_selectors:
+        assert selector in rounded_refinement
+
+    assert ".index-strip div,\n.workflow-button" in rounded_refinement
+    assert ".app-shell[data-theme=\"light\"] .index-strip div" in rounded_refinement
+    assert ".table-row {\n  grid-template-columns" in rounded_refinement
+    assert ".metric-tile.good,\n.metric-tile.warn" in rounded_refinement
+    assert "border-left-width: 1px;" in rounded_refinement
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 
