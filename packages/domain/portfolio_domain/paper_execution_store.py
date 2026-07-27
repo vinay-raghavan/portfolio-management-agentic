@@ -12,6 +12,7 @@ from .paper_execution import (
     PaperExecutionGrant,
     PaperExecutionOrder,
     PaperExecutionPolicyCeiling,
+    PaperExecutionWorkItem,
     issue_paper_execution_grant,
 )
 
@@ -426,6 +427,197 @@ class PostgresPaperExecutionStore:
                 row = _fetch_one_mapping(cursor)
         return bool(row and row.get("exists"))
 
+    def enqueue_execution_work_item(
+        self,
+        work_item: PaperExecutionWorkItem,
+    ) -> PaperExecutionWorkItem:
+        self._require_tenant(work_item.tenant_id)
+        if work_item.status != "queued":
+            raise ValueError("Paper execution work items must be queued before enqueue")
+        params = _work_item_params(work_item)
+        params["tenant_id"] = self._tenant_id
+        _reject_secret_payload(params)
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO paper_execution_work_items (
+                        id,
+                        tenant_id,
+                        batch_request_id,
+                        grant_id,
+                        order_id,
+                        requested_by_actor_id,
+                        idempotency_key,
+                        status,
+                        payload,
+                        decision,
+                        attempt_count,
+                        available_at,
+                        claimed_by,
+                        claimed_at,
+                        completed_at,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        %(work_item_id)s,
+                        %(tenant_id)s,
+                        %(batch_request_id)s,
+                        %(grant_id)s,
+                        %(order_id)s,
+                        %(requested_by_actor_id)s,
+                        %(idempotency_key)s,
+                        %(status)s,
+                        %(payload)s,
+                        %(decision)s,
+                        %(attempt_count)s,
+                        %(available_at)s,
+                        %(claimed_by)s,
+                        %(claimed_at)s,
+                        %(completed_at)s,
+                        %(created_at)s,
+                        %(updated_at)s
+                    )
+                    ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+                    """.strip(),
+                    params,
+                )
+            connection.commit()
+        return work_item
+
+    def claim_next_execution_work_item(
+        self,
+        *,
+        worker_id: str,
+        now: datetime | None = None,
+    ) -> PaperExecutionWorkItem | None:
+        clean_worker_id = worker_id.strip()
+        if not clean_worker_id:
+            raise ValueError("worker_id is required")
+        current_time = _aware_utc(now or self._now())
+        params = {
+            "tenant_id": self._tenant_id,
+            "worker_id": clean_worker_id,
+            "now": current_time,
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    WITH next_work_item AS (
+                        SELECT id
+                        FROM paper_execution_work_items
+                        WHERE tenant_id = %(tenant_id)s
+                          AND status = 'queued'
+                          AND available_at <= %(now)s
+                        ORDER BY available_at ASC, created_at ASC
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    )
+                    UPDATE paper_execution_work_items
+                    SET
+                        status = 'claimed',
+                        claimed_by = %(worker_id)s,
+                        claimed_at = %(now)s,
+                        attempt_count = paper_execution_work_items.attempt_count + 1,
+                        updated_at = %(now)s
+                    FROM next_work_item
+                    WHERE paper_execution_work_items.id = next_work_item.id
+                      AND paper_execution_work_items.tenant_id = %(tenant_id)s
+                    RETURNING
+                        paper_execution_work_items.id,
+                        paper_execution_work_items.tenant_id,
+                        paper_execution_work_items.batch_request_id,
+                        paper_execution_work_items.grant_id,
+                        paper_execution_work_items.order_id,
+                        paper_execution_work_items.requested_by_actor_id,
+                        paper_execution_work_items.idempotency_key,
+                        paper_execution_work_items.status,
+                        paper_execution_work_items.payload,
+                        paper_execution_work_items.decision,
+                        paper_execution_work_items.attempt_count,
+                        paper_execution_work_items.available_at,
+                        paper_execution_work_items.claimed_by,
+                        paper_execution_work_items.claimed_at,
+                        paper_execution_work_items.completed_at,
+                        paper_execution_work_items.created_at,
+                        paper_execution_work_items.updated_at
+                    """.strip(),
+                    params,
+                )
+                row = _fetch_one_mapping(cursor)
+            connection.commit()
+        if row is None:
+            return None
+        work_item = _work_item_from_row(row)
+        self._require_tenant(work_item.tenant_id)
+        _reject_secret_payload(work_item.to_dict())
+        return work_item
+
+    def complete_execution_work_item(
+        self,
+        *,
+        work_item_id: str,
+        decision: PaperExecutionDecision,
+        now: datetime | None = None,
+    ) -> PaperExecutionWorkItem | None:
+        clean_work_item_id = work_item_id.strip()
+        if not clean_work_item_id:
+            raise ValueError("work_item_id is required")
+        current_time = _aware_utc(now or self._now())
+        decision_payload = decision.to_dict()
+        status = "completed" if decision.status == "accepted" else "failed"
+        params = {
+            "tenant_id": self._tenant_id,
+            "work_item_id": clean_work_item_id,
+            "status": status,
+            "decision": _json_safe(decision_payload),
+            "now": current_time,
+        }
+        _reject_secret_payload(params)
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE paper_execution_work_items
+                    SET
+                        status = %(status)s,
+                        decision = %(decision)s,
+                        completed_at = %(now)s,
+                        updated_at = %(now)s
+                    WHERE tenant_id = %(tenant_id)s
+                      AND id = %(work_item_id)s
+                      AND status = 'claimed'
+                    RETURNING
+                        id,
+                        tenant_id,
+                        batch_request_id,
+                        grant_id,
+                        order_id,
+                        requested_by_actor_id,
+                        idempotency_key,
+                        status,
+                        payload,
+                        decision,
+                        attempt_count,
+                        available_at,
+                        claimed_by,
+                        claimed_at,
+                        completed_at,
+                        created_at,
+                        updated_at
+                    """.strip(),
+                    params,
+                )
+                row = _fetch_one_mapping(cursor)
+            connection.commit()
+        if row is None:
+            return None
+        work_item = _work_item_from_row(row)
+        self._require_tenant(work_item.tenant_id)
+        _reject_secret_payload(work_item.to_dict())
+        return work_item
+
     def record_execution_decision(
         self,
         *,
@@ -662,6 +854,50 @@ def _grant_from_row(row: Mapping[str, Any]) -> PaperExecutionGrant:
     )
 
 
+def _work_item_params(work_item: PaperExecutionWorkItem) -> dict[str, Any]:
+    return {
+        "work_item_id": work_item.work_item_id,
+        "tenant_id": work_item.tenant_id,
+        "batch_request_id": work_item.batch_request_id,
+        "grant_id": work_item.grant_id,
+        "order_id": work_item.order_id,
+        "requested_by_actor_id": work_item.requested_by_actor_id,
+        "idempotency_key": work_item.idempotency_key,
+        "status": work_item.status,
+        "payload": _json_safe(work_item.payload),
+        "decision": _json_safe(work_item.decision) if work_item.decision is not None else None,
+        "attempt_count": work_item.attempt_count,
+        "available_at": _aware_utc(work_item.available_at),
+        "claimed_by": work_item.claimed_by,
+        "claimed_at": _optional_aware_utc(work_item.claimed_at),
+        "completed_at": _optional_aware_utc(work_item.completed_at),
+        "created_at": _aware_utc(work_item.created_at),
+        "updated_at": _aware_utc(work_item.updated_at),
+    }
+
+
+def _work_item_from_row(row: Mapping[str, Any]) -> PaperExecutionWorkItem:
+    return PaperExecutionWorkItem(
+        work_item_id=str(row.get("id", "")),
+        tenant_id=str(row.get("tenant_id", "")),
+        batch_request_id=str(row.get("batch_request_id", "")),
+        grant_id=str(row.get("grant_id", "")),
+        order_id=str(row.get("order_id", "")),
+        requested_by_actor_id=str(row.get("requested_by_actor_id") or ""),
+        idempotency_key=str(row.get("idempotency_key", "")),
+        status=str(row.get("status", "")),
+        payload=_mapping_value(row.get("payload")),
+        decision=_optional_mapping_value(row.get("decision")),
+        attempt_count=int(row.get("attempt_count", 0)),
+        available_at=_required_datetime(row.get("available_at")),
+        claimed_by=str(row.get("claimed_by")) if row.get("claimed_by") is not None else None,
+        claimed_at=_optional_datetime(row.get("claimed_at")),
+        completed_at=_optional_datetime(row.get("completed_at")),
+        created_at=_required_datetime(row.get("created_at")),
+        updated_at=_required_datetime(row.get("updated_at")),
+    )
+
+
 def _mapping_value(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
@@ -670,6 +906,12 @@ def _mapping_value(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ValueError("Expected mapping payload from paper execution store")
     return {str(key): _json_safe(item) for key, item in value.items()}
+
+
+def _optional_mapping_value(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return _mapping_value(value)
 
 
 def _list_value(value: Any) -> list[Any]:
