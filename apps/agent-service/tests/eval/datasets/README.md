@@ -7,8 +7,12 @@ safety workflows:
 
 - Pre-market briefing with portfolio, watchlist, signal, research, and risk context.
 - Momentum screener to draft paper strategy.
-- Simulated backtest to pending paper order proposal, approval queue, and audit trail.
-- Approval-gated simulated fill with paper-position accounting and audit evidence.
+- Simulated backtest to recommendation explanation, pending paper order
+  proposal, approval queue, and audit trail.
+- Read-only post-approval paper-state inspection that starts with approval
+  queue and paper order status, then paper fills, positions, accounting, and
+  audit evidence; approval/fill mutation remains outside the model-visible
+  bundle.
 - Persisted strategy draft and backtest request history review.
 - Recommendation explanation with factor evidence, history, risk gates, ledger context, citations, and paper-only next actions.
 - Paper-trading report with redacted audit export.

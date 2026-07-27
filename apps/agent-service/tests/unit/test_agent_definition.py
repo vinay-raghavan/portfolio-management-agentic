@@ -46,7 +46,6 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "list_paper_fills" in tool_names
     assert "get_paper_portfolio_accounting" in tool_names
     assert "create_paper_order_proposal" in tool_names
-    assert "simulate_approved_paper_fill" in tool_names
     assert "get_approval_queue" in tool_names
     assert "get_audit_events" in tool_names
     assert "draft_paper_strategy" in tool_names
@@ -78,6 +77,7 @@ def test_agent_instruction_has_eval_aligned_workflow_routes() -> None:
         "Candidate explanation": (
             "run_screener",
             "explain_candidate_evidence",
+            "pattern evidence, source grounding, citations, or relevant pattern sources",
             "search_pattern_library",
             "search_curated_research",
             "cite_strategy_evidence",
@@ -93,7 +93,9 @@ def test_agent_instruction_has_eval_aligned_workflow_routes() -> None:
         ),
         "Approval-gated simulated fill": (
             "verified human approval API",
-            "simulate_approved_paper_fill",
+            "protected paper-execution worker",
+            "first call get_approval_queue and list_paper_orders",
+            "list_paper_fills",
             "get_paper_portfolio_accounting",
         ),
         "Paper-trading report": (
@@ -117,6 +119,7 @@ def test_agent_does_not_expose_human_approval_tool_to_model() -> None:
     }
 
     assert "approve_paper_order_simulation" not in tool_names
+    assert "simulate_approved_paper_fill" not in tool_names
     assert "verified human approval API" in root_agent.instruction
 
 

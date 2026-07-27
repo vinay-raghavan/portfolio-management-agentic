@@ -14,7 +14,8 @@ TIER_DESCRIPTION_PHRASES = {
 WORKFLOW_DESCRIPTION_REQUIREMENTS = {
     "list_data_providers": (
         "provider-readiness",
-        "before claiming configured data is available",
+        "always follow with get_data_provider_health",
+        "before availability claims",
     ),
     "get_data_provider_health": (
         "provider-readiness",
@@ -36,16 +37,27 @@ WORKFLOW_DESCRIPTION_REQUIREMENTS = {
     "run_screener": (
         "candidate-discovery",
         "hard gates",
+        "call explain_candidate_evidence or explain_factor_stack before explaining a candidate",
         "does not draft or place orders",
     ),
     "explain_candidate_evidence": (
         "candidate-explanation",
         "after a screener candidate",
+        "call cite_strategy_evidence when pattern sources are requested",
         "does not create strategies or orders",
+    ),
+    "cite_strategy_evidence": (
+        "source-grounded candidate",
+        "paper-strategy explanation",
+    ),
+    "explain_factor_stack": (
+        "deterministic factors",
+        "follow with cite_strategy_evidence for source-grounded pattern citations",
+        "paper-only next actions",
     ),
     "get_recommendation_explanation": (
         "recommendation-to-paper-order",
-        "before any paper order proposal",
+        "must precede any paper order proposal",
     ),
     "create_backtest_request": (
         "recommendation-to-paper-order",
@@ -53,8 +65,30 @@ WORKFLOW_DESCRIPTION_REQUIREMENTS = {
     ),
     "create_paper_order_proposal": (
         "recommendation-to-paper-order",
+        "call get_recommendation_explanation first",
         "requires a ready recommendation preflight",
         "does not fill",
+    ),
+    "draft_paper_strategy": (
+        "draft-only",
+        "infer rationale from screener/backtest evidence",
+        "without executing any trade",
+    ),
+    "get_approval_queue": (
+        "first step before paper order",
+        "post-approval inspection",
+    ),
+    "list_paper_orders": (
+        "after get_approval_queue",
+        "before fills/accounting",
+        "without executing or filling",
+    ),
+    "list_paper_fills": (
+        "after approval queue and paper order status inspection",
+        "without touching any broker provider",
+    ),
+    "get_paper_portfolio_accounting": (
+        "after simulated fills and paper order status inspection",
     ),
     "generate_paper_trading_report": (
         "paper-trading-report",

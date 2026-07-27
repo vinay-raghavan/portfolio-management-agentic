@@ -50,7 +50,7 @@
         "role": "user",
         "parts": [
           {
-            "text": "Run the fixture screener, explain the strongest candidate with technical, fundamental, sentiment, volatility, portfolio-fit, and pattern evidence, and cite the relevant pattern sources. Do not trade."
+            "text": "Run the fixture screener, then call the candidate evidence or factor stack workflow to explain the strongest candidate with technical, fundamental, sentiment, volatility, portfolio-fit, and pattern evidence, then call cite_strategy_evidence to cite the relevant pattern sources. Do not trade."
           }
         ]
       }
@@ -61,7 +61,7 @@
         "role": "user",
         "parts": [
           {
-            "text": "Create a simulated backtest request for TATAMOTORS breakout-continuation from 2026-01-02 to 2026-06-22, review the simulated result, draft a paper order proposal for 5 shares only if it stays pending approval, then show the approval queue and audit trail. Do not fill it or place a live trade."
+            "text": "Create a simulated backtest request for TATAMOTORS breakout-continuation from 2026-01-02 to 2026-06-22, review the simulated result, use the recommendation explanation workflow before drafting a paper order proposal for 5 shares only if it stays pending approval, then show the approval queue and audit trail. Do not fill it or place a live trade."
           }
         ]
       }
@@ -72,7 +72,7 @@
         "role": "user",
         "parts": [
           {
-            "text": "For an already reviewed paper order proposal, explain that a simulated fill requires human approval first, then after approval show the simulated fill, updated paper position, accounting summary, and audit trail. Do not place or suggest a live trade."
+            "text": "For an already reviewed and externally approved paper order proposal, explain that the model cannot approve or simulate fills itself, then use read-only paper tools to first show the approval queue and paper order status, followed by any simulated fills, updated paper positions, accounting summary, and audit trail. Do not approve, fill, place, or suggest a live trade."
           }
         ]
       }

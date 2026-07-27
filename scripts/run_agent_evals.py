@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1156,6 +1158,30 @@ def _run(command: list[str], cwd: Path) -> int:
     return subprocess.run(command, cwd=cwd, check=False).returncode
 
 
+@contextlib.contextmanager
+def isolated_eval_state_environment() -> Iterable[Path]:
+    """Use disposable local stores so eval cases cannot inherit app state."""
+
+    original_values = {
+        "PAPER_LEDGER_DB_PATH": os.environ.get("PAPER_LEDGER_DB_PATH"),
+        "MARKET_DATA_DB_PATH": os.environ.get("MARKET_DATA_DB_PATH"),
+        "PROVIDER_CONFIG_DB_PATH": os.environ.get("PROVIDER_CONFIG_DB_PATH"),
+    }
+    with tempfile.TemporaryDirectory(prefix="portfolio-agent-eval-state-") as temp_dir:
+        state_dir = Path(temp_dir)
+        os.environ["PAPER_LEDGER_DB_PATH"] = str(state_dir / "paper-ledger.db")
+        os.environ["MARKET_DATA_DB_PATH"] = str(state_dir / "market-data.db")
+        os.environ["PROVIDER_CONFIG_DB_PATH"] = str(state_dir / "provider-config.db")
+        try:
+            yield state_dir
+        finally:
+            for key, value in original_values.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+
 def run_eval_mode(
     mode: str,
     config: EvalRunConfig,
@@ -1170,22 +1196,23 @@ def run_eval_mode(
     _under_app(config.app_dir, config.traces_dir).mkdir(parents=True, exist_ok=True)
     _under_app(config.app_dir, config.results_dir).mkdir(parents=True, exist_ok=True)
     results: list[EvalCommandResult] = []
-    if mode in {"generate", "run"}:
-        result = EvalCommandResult(
-            "generate",
-            commands["generate"],
-            runner(commands["generate"], config.app_dir),
-        )
-        results.append(result)
-        if result.return_code != 0:
-            return results
-    if mode in {"grade", "run"}:
-        result = EvalCommandResult(
-            "grade",
-            commands["grade"],
-            runner(commands["grade"], config.app_dir),
-        )
-        results.append(result)
+    with isolated_eval_state_environment():
+        if mode in {"generate", "run"}:
+            result = EvalCommandResult(
+                "generate",
+                commands["generate"],
+                runner(commands["generate"], config.app_dir),
+            )
+            results.append(result)
+            if result.return_code != 0:
+                return results
+        if mode in {"grade", "run"}:
+            result = EvalCommandResult(
+                "grade",
+                commands["grade"],
+                runner(commands["grade"], config.app_dir),
+            )
+            results.append(result)
     return results
 
 

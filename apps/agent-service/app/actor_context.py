@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from fastapi import Header, HTTPException
 
-
 VALID_ROLES = frozenset({"viewer", "analyst", "approver", "admin"})
 
 
