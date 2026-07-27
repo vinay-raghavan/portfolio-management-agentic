@@ -140,6 +140,34 @@ def test_context_evaluator_blocks_tenant_stale_duplicate_injection_secret_and_bu
     assert all("fyers-secret-token" not in finding.message for finding in evaluation.findings)
 
 
+def test_context_evaluator_blocks_client_secret_and_invalid_token_sizes() -> None:
+    pack = ContextPack(
+        tenant_id="tenant-a",
+        user_id="user-1",
+        route="fyers_data",
+        request_id="req-client-secret",
+        max_input_tokens=500,
+        items=(
+            _item(
+                source_id="provider:fyers:oauth",
+                content="FYERS OAuth client_secret=super-secret-value",
+                token_count=0,
+                checksum="sha256:oauth-secret",
+            ),
+        ),
+    )
+
+    evaluation = ContextEvaluator(now=NOW).evaluate(pack)
+    codes = {finding.code for finding in evaluation.findings}
+    serialized_item = pack.to_dict()["items"][0]
+
+    assert evaluation.valid is False
+    assert "context_secret_leakage" in codes
+    assert "context_invalid_token_size" in codes
+    assert "super-secret-value" not in serialized_item["content"]
+    assert "client_secret=[REDACTED]" in serialized_item["content"]
+
+
 def test_response_evaluator_accepts_schema_citations_tool_agreement_and_policy() -> None:
     pack = ContextPack(
         tenant_id="tenant-a",

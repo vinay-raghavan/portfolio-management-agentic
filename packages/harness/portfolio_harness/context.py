@@ -21,11 +21,11 @@ PROMPT_INJECTION_PATTERNS = (
 )
 
 SECRET_PATTERNS = (
-    re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|broker[_-]?token|fyers[_-]?token)\b\s*[:=]"),
+    re.compile(r"(?i)\b(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|broker[_-]?token|fyers[_-]?token)\b\s*[:=]"),
     re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{12,}"),
 )
 SECRET_VALUE_PATTERN = re.compile(
-    r"(?i)\b(api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|broker[_-]?token|fyers[_-]?token)\b\s*[:=]\s*[^,\s]+"
+    r"(?i)\b(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password|broker[_-]?token|fyers[_-]?token)\b\s*[:=]\s*[^,\s]+"
 )
 
 
@@ -159,6 +159,15 @@ class ContextEvaluator:
         item: ContextItem,
     ) -> list[EvaluationFinding]:
         findings: list[EvaluationFinding] = []
+        if item.token_count <= 0:
+            findings.append(
+                EvaluationFinding(
+                    code="context_invalid_token_size",
+                    severity="error",
+                    message="Context item token count must be positive.",
+                    source_id=item.source_id,
+                )
+            )
         if item.tenant_id != pack.tenant_id:
             findings.append(
                 EvaluationFinding(

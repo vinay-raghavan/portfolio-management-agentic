@@ -97,9 +97,9 @@ Current coverage:
 - ADK, Codex, Claude Code, Gemini CLI, and generic MCP client profiles use the MCP policy boundary.
 - Harness evaluator contracts define `ContextPack`, `ContextEvaluator`, and
   `ResponseEvaluator` checks for tenant isolation, freshness, relevance,
-  duplication, prompt injection, secret leakage, budget, schema validity,
-  citation existence, tool-output agreement, policy statements, uncertainty,
-  and one structured repair attempt.
+  duplication, prompt injection, client-secret/provider-token leakage, positive
+  token sizes, budget, schema validity, citation existence, tool-output
+  agreement, policy statements, uncertainty, and one structured repair attempt.
 - Harness route-decision contracts deterministically route forbidden live
   trading, FYERS refresh, human approval, and draft-only paper proposal intents
   before model classification.

@@ -24,7 +24,8 @@ Context items are untrusted until `ContextEvaluator` accepts them.
 - low relevance;
 - duplicate checksums;
 - prompt-injection language;
-- secret-looking content;
+- secret-looking content, including OAuth client secrets and provider tokens;
+- invalid non-positive token counts;
 - input-token budget overflow.
 
 Findings are redaction-safe and do not echo secret values.
