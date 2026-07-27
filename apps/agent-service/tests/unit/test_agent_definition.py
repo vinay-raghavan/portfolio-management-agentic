@@ -31,6 +31,7 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "run_screener" in tool_names
     assert "list_screener_runs" in tool_names
     assert "search_pattern_library" in tool_names
+    assert "search_curated_research" in tool_names
     assert "get_pattern_playbook" in tool_names
     assert "cite_strategy_evidence" in tool_names
     assert "explain_factor_stack" in tool_names
@@ -78,6 +79,7 @@ def test_agent_instruction_has_eval_aligned_workflow_routes() -> None:
             "run_screener",
             "explain_candidate_evidence",
             "search_pattern_library",
+            "search_curated_research",
             "cite_strategy_evidence",
             "explain_factor_stack",
         ),
