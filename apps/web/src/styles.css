@@ -19,7 +19,15 @@
   --signal: #0891b2;
   --signal-soft: #cffafe;
   --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-  --radius: 8px;
+  --radius: 18px;
+  --radius-xs: 10px;
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-xl: 36px;
+  --widget-radius: var(--radius-lg);
+  --control-radius: 18px;
+  --pill-radius: 999px;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -1638,14 +1646,14 @@ p {
   --signal: var(--accent-secondary);
   --signal-soft: color-mix(in srgb, var(--accent-secondary) 16%, transparent);
   --shadow: 0 22px 46px -34px rgba(236, 240, 245, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --radius: 18px;
+  --radius: 22px;
   --radius-xs: 10px;
-  --radius-sm: 12px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
-  --radius-xl: 28px;
+  --radius-sm: 16px;
+  --radius-md: 22px;
+  --radius-lg: 30px;
+  --radius-xl: 40px;
   --widget-radius: var(--radius-lg);
-  --control-radius: 14px;
+  --control-radius: 18px;
   --pill-radius: 999px;
   --focus-ring: 0 0 0 2px rgba(124, 173, 247, 0.34), 0 0 0 6px rgba(124, 173, 247, 0.16);
 
@@ -1806,7 +1814,7 @@ input:focus-visible {
   max-width: 220px;
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--danger) 26%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--base-text-default);
   background: var(--surface-strong);
   box-shadow: var(--shadow);
@@ -2201,7 +2209,20 @@ input:focus-visible {
 .segment-button,
 .command-button,
 .env-chip-list code,
-.template-row pre {
+.template-row pre,
+.approval-card,
+.paper-order-card,
+.factor-card,
+.detail-row,
+.validation-row,
+.readiness-row,
+.profile-row,
+.provider-row,
+.source-row,
+.template-row,
+.onboarding-row,
+.preview-row,
+.reconciliation-row {
   border-color: color-mix(in srgb, var(--base-border-weak-default) 88%, transparent);
   color: var(--base-text-default);
   background:
@@ -2224,7 +2245,20 @@ input:focus-visible {
 .preview-summary div,
 .reconciliation-summary div,
 .workflow-summary div,
-.result-band {
+.result-band,
+.approval-card,
+.paper-order-card,
+.factor-card,
+.detail-row,
+.validation-row,
+.readiness-row,
+.profile-row,
+.provider-row,
+.source-row,
+.template-row,
+.onboarding-row,
+.preview-row,
+.reconciliation-row {
   border-radius: var(--radius-md);
 }
 
@@ -2314,6 +2348,88 @@ input:focus-visible {
 
 .selected-workflow {
   border-top-color: var(--border);
+}
+
+.detail-list,
+.source-list,
+.template-list,
+.onboarding-list,
+.preview-list,
+.reconciliation-list {
+  gap: 10px;
+}
+
+.approval-card,
+.paper-order-card,
+.factor-card,
+.detail-row,
+.validation-row,
+.readiness-row,
+.profile-row,
+.provider-row,
+.source-row,
+.template-row,
+.onboarding-row,
+.preview-row,
+.reconciliation-row {
+  border: 1px solid color-mix(in srgb, var(--base-border-weak-default) 88%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.approval-card,
+.paper-order-card,
+.factor-card,
+.detail-row,
+.validation-row,
+.readiness-row,
+.profile-row,
+.provider-row {
+  padding: 12px;
+}
+
+.source-row,
+.template-row,
+.onboarding-row,
+.preview-row,
+.reconciliation-row {
+  padding: 14px;
+}
+
+.approval-card:first-child,
+.paper-order-card:first-child,
+.factor-card:first-child,
+.detail-row:first-child,
+.validation-row:first-child,
+.readiness-row:first-child,
+.profile-row:first-child,
+.provider-row:first-child,
+.source-row:first-child,
+.template-row:first-child,
+.onboarding-row:first-child,
+.preview-row:first-child,
+.reconciliation-row:first-child {
+  border: 1px solid color-mix(in srgb, var(--base-border-weak-default) 88%, transparent);
+  padding: 12px;
+}
+
+.source-row:first-child,
+.template-row:first-child,
+.onboarding-row:first-child,
+.preview-row:first-child,
+.reconciliation-row:first-child {
+  padding: 14px;
+}
+
+.approval-card .approval-row,
+.paper-order-card .detail-row {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.paper-order-card .detail-row {
+  padding: 0;
 }
 
 .table-row {
@@ -2564,11 +2680,29 @@ body:has(.app-shell[data-theme="light"]) {
 .app-shell[data-theme="light"] .segment-button,
 .app-shell[data-theme="light"] .command-button,
 .app-shell[data-theme="light"] .env-chip-list code,
-.app-shell[data-theme="light"] .template-row pre {
+.app-shell[data-theme="light"] .template-row pre,
+.app-shell[data-theme="light"] .approval-card,
+.app-shell[data-theme="light"] .paper-order-card,
+.app-shell[data-theme="light"] .factor-card,
+.app-shell[data-theme="light"] .detail-row,
+.app-shell[data-theme="light"] .validation-row,
+.app-shell[data-theme="light"] .readiness-row,
+.app-shell[data-theme="light"] .profile-row,
+.app-shell[data-theme="light"] .provider-row,
+.app-shell[data-theme="light"] .source-row,
+.app-shell[data-theme="light"] .template-row,
+.app-shell[data-theme="light"] .onboarding-row,
+.app-shell[data-theme="light"] .preview-row,
+.app-shell[data-theme="light"] .reconciliation-row {
   color: var(--base-text-default);
   background:
     linear-gradient(180deg, color-mix(in srgb, rgba(255, 255, 255, 0.92) 90%, transparent), color-mix(in srgb, rgba(232, 242, 250, 0.86) 94%, transparent)),
     color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.app-shell[data-theme="light"] .approval-card .approval-row,
+.app-shell[data-theme="light"] .paper-order-card .detail-row {
+  background: transparent;
 }
 
 .app-shell[data-theme="light"] .workflow-button:hover,
@@ -2659,7 +2793,7 @@ body:has(.app-shell[data-theme="light"]) {
     min-width: max-content;
     gap: 8px;
     padding: 0 10px;
-    border-radius: 8px;
+    border-radius: var(--control-radius);
   }
 
   .safety-card {
