@@ -42,7 +42,7 @@ repository `SKILL.md` workflow instructions.
 | `list_screener_runs` | read-only | Return cached screener runs without exposing storage paths. |
 | `explain_candidate_evidence` | read-only | Explain technical, fundamental, sentiment, volatility, market-regime, portfolio-fit, and missing-data evidence for a candidate. |
 | `search_pattern_library` | read-only | Search public-safe pattern cards and playbooks. |
-| `search_curated_research` | read-only | Search curated allowlisted research documents through the repository research-store boundary; current runtime payloads are fixture-backed lexical hits and future Postgres runtime retrieval uses tenant-scoped full-text search. |
+| `search_curated_research` | read-only | Search curated allowlisted research documents through the repository research-store boundary; current MCP payloads are fixture-backed lexical hits, and the runtime `PostgresResearchStore` contract executes tenant-scoped full-text search for production wiring. |
 | `get_pattern_playbook` | read-only | Retrieve one versioned pattern card with citation metadata. |
 | `cite_strategy_evidence` | read-only | Return citation-backed evidence for a strategy explanation or draft paper proposal. |
 | `explain_factor_stack` | read-only | Compose deterministic factor evidence, retrieved citations, counterevidence, and paper-only next actions. |
