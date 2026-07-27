@@ -31,7 +31,12 @@ Retrieved pattern memory must not:
 
 The first implementation slice should expose only read-only MCP tools such as `search_pattern_library`, `get_pattern_playbook`, `cite_strategy_evidence`, and `explain_factor_stack`. Pattern cards should be versioned, public-safe, citation-backed, and testable.
 
-For a functioning product, RAG starts as a curated pattern and reference layer, not as an afterthought. The first store should be file-backed through a `PatternStore` interface. Add ChromaDB only after the corpus is large enough that semantic retrieval materially improves search quality.
+For a functioning product, RAG starts as a curated pattern and reference layer,
+not as an afterthought. The first store is file-backed through `PatternStore`
+and `ResearchStore` interfaces. Runtime retrieval should use Postgres
+full-text search over versioned, provenance-aware documents. Vector retrieval
+stays deferred until a labeled retrieval benchmark proves a material quality
+gain without weakening citation precision, recall, or latency.
 
 ## Consequences
 
@@ -40,10 +45,13 @@ For a functioning product, RAG starts as a curated pattern and reference layer, 
 - Provider-neutral and platform-neutral safety still lives in MCP policy and tests.
 - Future corpus ingestion requires redaction, provenance, retention, and quality checks.
 - Price candles, paper orders, simulated fills, approvals, and audit logs remain in structured stores, not vector memory.
+- FYERS market/account data remains structured provider data and must not be embedded.
 
 ## Verification
 
 - Policy tests classify RAG tools as read-only.
 - Contract tests assert citation payloads include source identifiers and version metadata.
+- Store contract tests assert pattern cards seed file-backed stores through the
+  same document/provenance contract used by future runtime retrieval.
 - Eval cases check that pattern-grounded answers cite retrieved context and still refuse live trading.
 - Security tests prove retrieval tools cannot expose secrets, local-only notes, or broker credentials.
