@@ -335,10 +335,11 @@ Protected FYERS connection state is Postgres-backed when
 `PORTFOLIO_STORAGE_BACKEND=postgres`: the API stores sanitized
 `fyers_connections` rows plus hashed, single-use `fyers_oauth_sessions` rows.
 The persisted records include provider, user hash, read-only scopes, status,
-daily auth expiry, PKCE challenge, and timestamps only; credential references
-remain null until the credential-vault worker lands, and tokens/verifiers are
-rejected from the storage contract. Local/offline mode keeps the process-local
-fallback so fixture-only API tests remain credential-free.
+daily auth expiry, PKCE challenge, timestamps, and an optional opaque
+`credential_ref` only; tokens/verifiers are rejected from the storage contract.
+API responses expose only `credential_ref_configured`, never the reference value
+or vault payload. Local/offline mode keeps the process-local fallback so
+fixture-only API tests remain credential-free.
 
 Credential-vault readiness is exposed through the protected admin-only
 `/v1/credentials/vault/status` endpoint. `CREDENTIAL_VAULT_BACKEND` defaults to
@@ -348,7 +349,9 @@ Credential-vault readiness is exposed through the protected admin-only
 Status payloads report only configured/not-configured booleans and blocking
 reasons, never provider secrets, access tokens, refresh tokens, or client
 secrets. FYERS OAuth callback responses include the same redacted readiness and
-continue to return `token_exchange_not_configured` until the vault is ready.
+continue to return `token_exchange_not_configured` until the token-exchange
+worker is enabled. Vault references are internal storage pointers, not model or
+API-visible credentials.
 
 FYERS refresh results use the same Postgres backend in production-like mode.
 The protected refresh endpoint records `provider_refresh_jobs`,

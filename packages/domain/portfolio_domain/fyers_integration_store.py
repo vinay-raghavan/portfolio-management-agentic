@@ -40,6 +40,7 @@ class PostgresFyersIntegrationStore:
                         tenant_id,
                         provider,
                         fyers_user_hash,
+                        credential_ref,
                         status,
                         daily_auth_expires_at,
                         disconnected_at,
@@ -77,7 +78,7 @@ class PostgresFyersIntegrationStore:
             "tenant_id": self._tenant_id,
             "provider": "fyers",
             "fyers_user_hash": connection_state.user_id_hash,
-            "credential_ref": None,
+            "credential_ref": connection_state.credential_ref,
             "scopes": ["data:read", "account:read"],
             "status": connection_state.status,
             "daily_auth_expires_at": _optional_aware_utc(connection_state.expires_at),
@@ -119,7 +120,7 @@ class PostgresFyersIntegrationStore:
                     )
                     ON CONFLICT (id) DO UPDATE SET
                         fyers_user_hash = EXCLUDED.fyers_user_hash,
-                        credential_ref = NULL,
+                        credential_ref = EXCLUDED.credential_ref,
                         scopes = EXCLUDED.scopes,
                         status = EXCLUDED.status,
                         daily_auth_expires_at = EXCLUDED.daily_auth_expires_at,
@@ -367,6 +368,7 @@ def _row_to_connection(row: Mapping[str, Any]) -> FyersConnection:
         user_id_hash=str(row.get("fyers_user_hash") or ""),
         status=str(row.get("status") or "disconnected"),
         credential_status=str(metadata.get("credential_status") or "not_loaded"),
+        credential_ref=row.get("credential_ref"),
         data_app_mode=str(metadata.get("data_app_mode") or "read_only"),
         daily_auth_required=bool(metadata.get("daily_auth_required", True)),
         created_at=_aware_utc(row["created_at"]),

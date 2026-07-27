@@ -23,6 +23,7 @@ class FyersConnection:
     user_id_hash: str
     status: str
     credential_status: str
+    credential_ref: str | None
     data_app_mode: str
     daily_auth_required: bool
     created_at: datetime
@@ -48,6 +49,7 @@ class FyersConnection:
             user_id_hash=actor_hash(tenant_id=tenant_id, user_id=user_id),
             status="disconnected",
             credential_status="not_loaded",
+            credential_ref=None,
             data_app_mode="read_only",
             daily_auth_required=True,
             created_at=timestamp,
@@ -84,6 +86,7 @@ class FyersConnection:
             self,
             status="reconnect_required",
             credential_status="token_exchange_not_configured",
+            credential_ref=None,
             updated_at=now or utc_now(),
             notes=(
                 "Authorization callback was received.",
@@ -97,12 +100,35 @@ class FyersConnection:
             self,
             status="disconnected",
             credential_status="not_loaded",
+            credential_ref=None,
             updated_at=timestamp,
             expires_at=None,
             disconnected_at=timestamp,
             notes=(
                 "Connection disconnected by authenticated human-facing API request.",
                 "No provider token or live-order capability is retained here.",
+            ),
+        )
+
+    def with_credential_ref(
+        self,
+        *,
+        credential_ref: str,
+        expires_at: datetime | None = None,
+        now: datetime | None = None,
+    ) -> FyersConnection:
+        return replace(
+            self,
+            status="connected",
+            credential_status="vault_reference_configured",
+            credential_ref=credential_ref,
+            updated_at=now or utc_now(),
+            expires_at=expires_at or self.expires_at,
+            disconnected_at=None,
+            notes=(
+                "FYERS token material is stored in the configured credential vault.",
+                "Only an opaque vault reference is persisted in Postgres.",
+                "The connection remains read-only and data-app scoped.",
             ),
         )
 
@@ -114,6 +140,7 @@ class FyersConnection:
             "user_id_hash": self.user_id_hash,
             "status": self.status,
             "credential_status": self.credential_status,
+            "credential_ref_configured": self.credential_ref is not None,
             "data_app_mode": self.data_app_mode,
             "daily_auth_required": self.daily_auth_required,
             "created_at": self.created_at.isoformat(),

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from portfolio_domain import (
     CredentialVaultBackend,
+    FyersConnection,
+    build_credential_vault_ref,
     evaluate_credential_vault_readiness,
     load_credential_vault_profile,
 )
@@ -25,6 +29,45 @@ def test_unknown_credential_vault_backend_fails_closed() -> None:
     assert profile.backend == CredentialVaultBackend.UNKNOWN
     assert readiness.ready is False
     assert "credential_vault_backend_unknown" in readiness.blocking_reasons
+
+
+def test_credential_vault_refs_are_scoped_and_redacted_from_connection_payloads() -> None:
+    credential_ref = build_credential_vault_ref(
+        tenant_id="tenant-1",
+        provider="fyers",
+        purpose="data_access_token",
+        subject_hash="sha256:user",
+        backend=CredentialVaultBackend.MACOS_KEYCHAIN,
+    )
+    connection = FyersConnection.disconnected(
+        tenant_id="tenant-1",
+        user_id="user-1",
+        connection_id="fyers-connection-1",
+    ).with_credential_ref(credential_ref=credential_ref)
+
+    payload = connection.to_dict()
+    serialized = str(payload).lower()
+
+    assert credential_ref.startswith("credential-vault://macos_keychain/fyers/")
+    assert "data_access_token" not in credential_ref
+    assert connection.credential_ref == credential_ref
+    assert payload["credential_ref_configured"] is True
+    assert "credential_ref" not in payload
+    assert credential_ref not in serialized
+    assert "access_token" not in serialized
+    assert "refresh_token" not in serialized
+    assert "client_secret" not in serialized
+
+
+def test_credential_vault_refs_require_real_vault_backend() -> None:
+    with pytest.raises(ValueError, match="vault backend"):
+        build_credential_vault_ref(
+            tenant_id="tenant-1",
+            provider="fyers",
+            purpose="data_access_token",
+            subject_hash="sha256:user",
+            backend=CredentialVaultBackend.DISABLED,
+        )
 
 
 def test_macos_keychain_vault_requires_service_name_and_local_runtime() -> None:
