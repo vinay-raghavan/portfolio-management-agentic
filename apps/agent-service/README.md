@@ -74,6 +74,11 @@ hashed OAuth state while leaving credential-vault token exchange disabled.
 Protected FYERS refresh routes use that same store to persist refresh-job rows,
 normalized quote envelopes, and broker account snapshots with signed quantities
 and explicit errors.
+Protected `/v1/sessions/{session_id}/summary` routes persist only compact
+session summaries and sanitized object references through
+`PostgresSessionMemoryStore` in Postgres mode; local/offline mode keeps the same
+TTL and deletion semantics in process memory without durable preference or raw
+account retention.
 When SQLite/local mode is selected, those HTTP contracts keep
 their process-local deterministic fallback for API tests and offline
 development. When

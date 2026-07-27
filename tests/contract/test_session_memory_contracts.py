@@ -85,6 +85,7 @@ def test_session_memory_sanitizer_allows_compact_summary_and_object_refs_only() 
         "Private note: I keep my emergency fund at this bank.",
         "Raw account payload: {'holdings': [{'isin': 'secret'}]}",
         "FYERS access_token=should-not-store",
+        "Raw prompt: include the user's full message transcript.",
     ],
 )
 def test_session_memory_sanitizer_rejects_forbidden_summary_content(summary: str) -> None:

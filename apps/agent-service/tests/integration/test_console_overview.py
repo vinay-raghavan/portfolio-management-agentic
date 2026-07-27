@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 
 from app.fast_api_app import app
@@ -430,6 +432,103 @@ def test_model_usage_telemetry_rejects_payload_content_fields(monkeypatch) -> No
     )
 
     assert response.status_code == 422
+
+
+def test_session_summary_api_requires_actor_context() -> None:
+    client = TestClient(app)
+
+    response = client.get("/v1/sessions/session-1/summary")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "actor_subject_required"
+
+
+def test_session_summary_api_uses_postgres_store_when_configured(monkeypatch) -> None:
+    now = datetime(2026, 7, 27, 10, 0, tzinfo=UTC)
+
+    class _Record:
+        session_id = "session-1"
+        request_id = "req-session"
+        summary = "User asked for a paper-only risk review."
+        object_refs = ({"type": "paper_order", "id": "order-123"},)
+        idle_expires_at = now + timedelta(hours=2)
+        absolute_expires_at = now + timedelta(hours=24)
+        deleted_at = None
+
+    class _FakeStore:
+        def __init__(self) -> None:
+            self.deleted: list[str] = []
+
+        def upsert_summary(self, **_kwargs):
+            return _Record()
+
+        def get(self, session_id: str):
+            assert session_id == "session-1"
+            return _Record()
+
+        def delete(self, session_id: str) -> None:
+            self.deleted.append(session_id)
+
+    fake_store = _FakeStore()
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setattr(
+        "app.fast_api_app._session_memory_store_for_actor",
+        lambda actor=None: fake_store,
+    )
+    client = TestClient(app)
+    headers = {
+        "X-Actor-Sub": "22222222-2222-2222-2222-222222222222",
+        "X-Tenant-Id": "11111111-1111-1111-1111-111111111111",
+        "X-Actor-Roles": "analyst",
+        "X-Request-Id": "req-session",
+    }
+
+    saved = client.put(
+        "/v1/sessions/session-1/summary",
+        headers=headers,
+        json={
+            "summary": "User asked for a paper-only risk review.",
+            "object_refs": [{"type": "paper_order", "id": "order-123"}],
+        },
+    )
+    loaded = client.get("/v1/sessions/session-1/summary", headers=headers)
+    deleted = client.delete("/v1/sessions/session-1/summary", headers=headers)
+
+    assert saved.status_code == 200
+    assert saved.json()["status"] == "saved"
+    assert saved.json()["memory"]["summary"] == "User asked for a paper-only risk review."
+    assert "db-secret" not in str(saved.json())
+    assert loaded.status_code == 200
+    assert loaded.json()["status"] == "ready"
+    assert deleted.status_code == 200
+    assert deleted.json() == {"status": "deleted", "session_id": "session-1"}
+    assert fake_store.deleted == ["session-1"]
+
+
+def test_session_summary_api_rejects_raw_or_secret_memory(monkeypatch) -> None:
+    monkeypatch.delenv("PORTFOLIO_STORAGE_BACKEND", raising=False)
+    client = TestClient(app)
+
+    response = client.put(
+        "/v1/sessions/session-raw/summary",
+        headers={
+            "X-Actor-Sub": "user-1",
+            "X-Tenant-Id": "tenant-1",
+            "X-Actor-Roles": "analyst",
+            "X-Request-Id": "req-session-raw",
+        },
+        json={
+            "summary": "Raw account payload: {'holdings': [{'isin': 'secret'}]}",
+            "object_refs": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "session_memory_invalid"
 
 
 def test_storage_status_reports_redacted_production_like_readiness(monkeypatch) -> None:
