@@ -184,6 +184,14 @@ from .research_store import (
     normalize_research_query,
     pattern_card_to_research_document,
 )
+from .session_memory import (
+    PostgresSessionMemoryStore,
+    SessionMemoryPayload,
+    SessionMemoryPolicy,
+    SessionMemoryRecord,
+    SessionMemoryValidationError,
+    sanitize_session_memory_payload,
+)
 
 __all__ = [
     "ApprovalRequest",
@@ -226,6 +234,7 @@ __all__ = [
     "PatternStore",
     "PostgresResearchSearchPlan",
     "PostgresResearchStore",
+    "PostgresSessionMemoryStore",
     "PortfolioSummary",
     "PreMarketBriefing",
     "ProviderDescriptor",
@@ -247,6 +256,10 @@ __all__ = [
     "ScreenerRunResult",
     "ScoreComponent",
     "SentimentSnapshot",
+    "SessionMemoryPayload",
+    "SessionMemoryPolicy",
+    "SessionMemoryRecord",
+    "SessionMemoryValidationError",
     "SignalSummary",
     "StrategyEvidencePack",
     "StrategyDraft",
@@ -344,6 +357,7 @@ __all__ = [
     "search_research_documents",
     "refresh_provider_import_profile_metadata",
     "run_provider_refresh_schedule",
+    "sanitize_session_memory_payload",
     "simulate_fixture_approved_paper_fill",
     "SQLitePaperLedgerStore",
     "ProviderProfileStore",
