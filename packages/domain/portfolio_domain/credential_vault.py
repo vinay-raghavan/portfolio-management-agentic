@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
+from hashlib import sha256
 
 
 class CredentialVaultBackend(str, Enum):
@@ -42,6 +43,25 @@ class CredentialVaultReadiness:
             "blocking_reasons": list(self.blocking_reasons),
             "token_exchange_allowed": self.token_exchange_allowed,
         }
+
+
+def build_credential_vault_ref(
+    *,
+    tenant_id: str,
+    provider: str,
+    purpose: str,
+    subject_hash: str,
+    backend: CredentialVaultBackend,
+) -> str:
+    """Build an opaque, non-secret reference for token material stored elsewhere."""
+    if backend not in {CredentialVaultBackend.MACOS_KEYCHAIN, CredentialVaultBackend.KMS}:
+        raise ValueError("credential vault reference requires a real vault backend")
+    normalized_provider = _safe_ref_part(provider)
+    normalized_backend = backend.value
+    digest = sha256(
+        f"{tenant_id}:{normalized_provider}:{purpose}:{subject_hash}".encode("utf-8")
+    ).hexdigest()
+    return f"credential-vault://{normalized_backend}/{normalized_provider}/{digest[:32]}"
 
 
 def load_credential_vault_profile(
@@ -97,3 +117,10 @@ def _blank_to_none(value: str | None) -> str | None:
 
 def _truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _safe_ref_part(value: str) -> str:
+    normalized = value.strip().lower().replace("_", "-")
+    if not normalized or not all(character.isalnum() or character == "-" for character in normalized):
+        raise ValueError("credential vault reference parts must be non-empty slugs")
+    return normalized

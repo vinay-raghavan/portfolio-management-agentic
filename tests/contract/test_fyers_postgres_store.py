@@ -4,11 +4,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from portfolio_domain import (
+    CredentialVaultBackend,
     FyersConnection,
     FyersOAuthSession,
     PostgresFyersIntegrationStore,
     ProviderRefreshJob,
     actor_hash,
+    build_credential_vault_ref,
     get_fyers_readonly_connector,
 )
 
@@ -116,6 +118,69 @@ def test_postgres_fyers_store_upserts_connection_without_credentials_or_verifier
     assert stored.connection_id == CONNECTION_ID
     assert connection.committed is True
     assert "code_verifier" not in serialized
+    assert "access_token" not in serialized
+    assert "refresh_token" not in serialized
+    assert "client_secret" not in serialized
+    assert "trading_token" not in serialized
+
+
+def test_postgres_fyers_store_round_trips_vault_ref_without_token_payload() -> None:
+    credential_ref = build_credential_vault_ref(
+        tenant_id=TENANT_ID,
+        provider="fyers",
+        purpose="data_access_token",
+        subject_hash=actor_hash(tenant_id=TENANT_ID, user_id=USER_ID),
+        backend=CredentialVaultBackend.MACOS_KEYCHAIN,
+    )
+    cursor = _FakeCursor(
+        rows=[
+            {
+                "id": CONNECTION_ID,
+                "tenant_id": TENANT_ID,
+                "provider": "fyers",
+                "fyers_user_hash": actor_hash(tenant_id=TENANT_ID, user_id=USER_ID),
+                "credential_ref": credential_ref,
+                "status": "connected",
+                "daily_auth_expires_at": NOW + timedelta(hours=8),
+                "disconnected_at": None,
+                "metadata": {
+                    "credential_status": "vault_reference_configured",
+                    "data_app_mode": "read_only",
+                    "daily_auth_required": True,
+                    "notes": ["Credential material is stored outside Postgres."],
+                },
+                "created_at": NOW,
+                "updated_at": NOW,
+            }
+        ]
+    )
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+
+    stored = store.upsert_connection(
+        _connection().with_credential_ref(
+            credential_ref=credential_ref,
+            expires_at=NOW + timedelta(hours=8),
+            now=NOW,
+        )
+    )
+    loaded = store.get_connection(
+        user_id_hash=actor_hash(tenant_id=TENANT_ID, user_id=USER_ID)
+    )
+
+    upsert_sql, upsert_params = cursor.executed[0]
+    select_sql, _select_params = cursor.executed[1]
+    serialized = f"{cursor.executed} {stored.to_dict()} {loaded.to_dict()}".lower()
+    assert "credential_ref = EXCLUDED.credential_ref" in upsert_sql
+    assert upsert_params["credential_ref"] == credential_ref
+    assert upsert_params["metadata"]["credential_status"] == "vault_reference_configured"
+    assert stored.credential_ref == credential_ref
+    assert stored.status == "connected"
+    assert "credential_ref" in select_sql
+    assert loaded is not None
+    assert loaded.credential_ref == credential_ref
+    assert loaded.to_dict()["credential_ref_configured"] is True
+    assert credential_ref not in str(loaded.to_dict())
     assert "access_token" not in serialized
     assert "refresh_token" not in serialized
     assert "client_secret" not in serialized

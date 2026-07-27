@@ -94,6 +94,7 @@ from .credential_vault import (
     CredentialVaultBackend,
     CredentialVaultProfile,
     CredentialVaultReadiness,
+    build_credential_vault_ref,
     evaluate_credential_vault_readiness,
     load_credential_vault_profile,
 )
@@ -393,6 +394,7 @@ __all__ = [
     "create_fixture_backtest_request",
     "create_fixture_paper_order_proposal",
     "create_fixture_strategy_draft",
+    "build_credential_vault_ref",
     "draft_strategy",
     "evaluate_database_runtime_readiness",
     "evaluate_credential_vault_readiness",
