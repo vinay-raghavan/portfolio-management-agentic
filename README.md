@@ -340,6 +340,16 @@ remain null until the credential-vault worker lands, and tokens/verifiers are
 rejected from the storage contract. Local/offline mode keeps the process-local
 fallback so fixture-only API tests remain credential-free.
 
+Credential-vault readiness is exposed through the protected admin-only
+`/v1/credentials/vault/status` endpoint. `CREDENTIAL_VAULT_BACKEND` defaults to
+`disabled`; `macos_keychain` requires `CREDENTIAL_VAULT_SERVICE` and
+`CREDENTIAL_VAULT_LOCAL_RUNTIME=true`, while `kms` requires
+`CREDENTIAL_VAULT_KMS_KEY_URI` and `CREDENTIAL_VAULT_HOSTED_RUNTIME=true`.
+Status payloads report only configured/not-configured booleans and blocking
+reasons, never provider secrets, access tokens, refresh tokens, or client
+secrets. FYERS OAuth callback responses include the same redacted readiness and
+continue to return `token_exchange_not_configured` until the vault is ready.
+
 FYERS refresh results use the same Postgres backend in production-like mode.
 The protected refresh endpoint records `provider_refresh_jobs`,
 `provider_snapshot_envelopes`, and `broker_account_snapshots` with source,

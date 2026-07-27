@@ -85,10 +85,12 @@ from portfolio_domain import (  # noqa: E402
     SessionMemoryRecord,
     SessionMemoryValidationError,
     actor_hash,
+    evaluate_credential_vault_readiness,
     evaluate_database_runtime_readiness,
     get_fyers_readonly_connector,
     hash_oauth_state,
     issue_paper_execution_grant,
+    load_credential_vault_profile,
     load_database_runtime_profile,
     sanitize_session_memory_payload,
 )
@@ -724,6 +726,21 @@ def get_storage_status(require_production_like: bool = False) -> dict:
     }
 
 
+@app.get("/v1/credentials/vault/status")
+def get_credential_vault_status(
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Return redacted credential-vault readiness for protected integrations."""
+    _require_any_role(actor, {"admin"})
+    profile = load_credential_vault_profile(os.environ)
+    readiness = evaluate_credential_vault_readiness(profile)
+    return {
+        "status": "ready" if readiness.ready else "blocked",
+        "profile": profile.to_dict(),
+        "readiness": readiness.to_dict(),
+    }
+
+
 @app.post("/v1/integrations/fyers/oauth/start")
 def post_fyers_oauth_start(
     actor: Annotated[ActorContext, Depends(actor_context_dependency)],
@@ -773,9 +790,11 @@ def post_fyers_oauth_callback(
         raise HTTPException(status_code=409, detail="fyers_oauth_state_unknown_or_expired")
     connection = _get_or_create_fyers_connection(actor).callback_recorded()
     _store_fyers_connection(actor, connection)
+    credential_vault = _credential_vault_readiness_payload()
     return {
         "status": "reconnect_required",
         "connection": connection.to_dict(),
+        "credential_vault": credential_vault,
         "next_step": "configure_credential_vault_token_exchange",
         "mode": "human_api_only",
     }
@@ -864,6 +883,13 @@ def post_fyers_refresh(
 def _require_any_role(actor: ActorContext, allowed_roles: set[str]) -> None:
     if not actor.roles & allowed_roles:
         raise HTTPException(status_code=403, detail="role_required")
+
+
+def _credential_vault_readiness_payload() -> dict:
+    readiness = evaluate_credential_vault_readiness(
+        load_credential_vault_profile(os.environ),
+    )
+    return readiness.to_dict()
 
 
 def _reject_sensitive_paper_payload(payload: object) -> None:
