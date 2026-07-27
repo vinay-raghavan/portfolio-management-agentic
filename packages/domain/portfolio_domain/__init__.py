@@ -130,6 +130,11 @@ from .paper_execution_queue_processor import (
     PaperExecutionQueueProcessorResult,
 )
 from .paper_execution_store import PostgresPaperExecutionStore
+from .paper_execution_worker_runner import (
+    PaperExecutionQueueRunner,
+    PaperExecutionQueueRunnerSummary,
+    build_postgres_paper_execution_worker,
+)
 from .provider_profiles import (
     PROVIDER_CONFIG_DB_ENV,
     ProviderProfileStore,
@@ -247,6 +252,8 @@ __all__ = [
     "PaperExecutionPolicyCeiling",
     "PaperExecutionQueueProcessor",
     "PaperExecutionQueueProcessorResult",
+    "PaperExecutionQueueRunner",
+    "PaperExecutionQueueRunnerSummary",
     "PaperExecutionWorkItem",
     "PaperExecutionWorkerRequest",
     "PaperFill",
@@ -320,6 +327,7 @@ __all__ = [
     "build_paper_ledger_store",
     "build_paper_trading_report",
     "build_provider_data_store",
+    "build_postgres_paper_execution_worker",
     "build_postgres_research_search_query",
     "count_stored_factor_snapshots",
     "count_stored_market_snapshots",

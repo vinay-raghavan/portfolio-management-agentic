@@ -50,9 +50,10 @@ This slice establishes the safe contract between research, simulation, and the f
   authoritative policy/grant/batch/order context, rejects malformed or
   credential-contaminated payloads, executes the deterministic worker, records
   accepted ledger decisions, and completes the work item. In Postgres mode, the
-  protected API invokes this standalone processor synchronously today; later
-  async routing can call the same boundary without giving the model or MCP
-  layer execution authority.
+  protected API invokes this standalone processor synchronously today, and the
+  `paper-execution-worker` deployment service invokes the same boundary as a
+  background queue loop without giving the model or MCP layer execution
+  authority.
 - `PostgresPaperExecutionStore` persists and reads protected policy ceilings,
   batch requests, execution grants, durable execution work items, and
   idempotent ledger decision rows through tenant-scoped Postgres tables created
@@ -104,9 +105,10 @@ grant `consumed_capacity`, not request-body `current_gross_notional` or
 capacity. In Postgres mode, `/v1/paper/orders/{id}/execute` now creates a
 `PaperExecutionWorkItem` and processes it through
 `PaperExecutionQueueProcessor` as `paper-execution-api`, completing the item as
-`completed` or `failed`. The next production hardening step is adding the
-standalone asynchronous runner around this processor and serializing
-grant-capacity reservation inside that path.
+`completed` or `failed`. Compose also deploys `paper-execution-worker`, a
+bounded Postgres-only queue loop around the same processor for background
+processing. The next production hardening step is serializing grant-capacity
+reservation inside the worker path and adding fair scheduling across tenants.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.

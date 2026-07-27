@@ -18,8 +18,8 @@ def test_ci_workflow_runs_required_deterministic_checks() -> None:
     assert "npm run typecheck" in ci
     assert "npm run build" in ci
     assert "docker compose config --quiet" in ci
-    assert "docker compose build agent-service mcp-server web" in ci
-    assert "docker compose up -d agent-service mcp-server web" in ci
+    assert "docker compose build agent-service paper-execution-worker mcp-server web" in ci
+    assert "docker compose up -d agent-service paper-execution-worker mcp-server web" in ci
     assert "http://127.0.0.1:3000" in ci
     assert "streamable_http_client" in ci
     assert "from portfolio_mcp.tools import EXPOSED_TOOL_NAMES" in ci

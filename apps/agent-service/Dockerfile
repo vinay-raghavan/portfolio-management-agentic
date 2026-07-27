@@ -24,6 +24,7 @@ COPY ./apps/mcp-server/portfolio_mcp ./apps/mcp-server/portfolio_mcp
 COPY ./packages/domain ./packages/domain
 COPY ./packages/model-provider ./packages/model-provider
 COPY ./packages/policy ./packages/policy
+COPY ./scripts/process_paper_execution_queue.py ./scripts/process_paper_execution_queue.py
 
 WORKDIR /workspace/apps/agent-service
 
