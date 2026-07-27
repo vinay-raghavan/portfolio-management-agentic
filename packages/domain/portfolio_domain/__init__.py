@@ -113,6 +113,15 @@ from .paper_ledger import (
     list_fixture_strategy_drafts,
     simulate_fixture_approved_paper_fill,
 )
+from .paper_execution import (
+    PaperBatchRequest,
+    PaperExecutionDecision,
+    PaperExecutionGrant,
+    PaperExecutionOrder,
+    PaperExecutionPolicyCeiling,
+    evaluate_paper_execution_order,
+    issue_paper_execution_grant,
+)
 from .provider_profiles import (
     PROVIDER_CONFIG_DB_ENV,
     ProviderProfileStore,
@@ -222,6 +231,11 @@ __all__ = [
     "MarketSignal",
     "OHLCVBar",
     "PaperAuditExport",
+    "PaperBatchRequest",
+    "PaperExecutionDecision",
+    "PaperExecutionGrant",
+    "PaperExecutionOrder",
+    "PaperExecutionPolicyCeiling",
     "PaperFill",
     "PaperOrder",
     "PaperPortfolioAccounting",
@@ -306,6 +320,7 @@ __all__ = [
     "create_fixture_strategy_draft",
     "draft_strategy",
     "evaluate_database_runtime_readiness",
+    "evaluate_paper_execution_order",
     "get_fixture_backtest_request",
     "get_fixture_backtest_result",
     "get_fixture_paper_portfolio_accounting",
@@ -318,6 +333,7 @@ __all__ = [
     "get_demo_watchlist_snapshot",
     "get_fyers_readonly_connector",
     "get_data_provider_registry",
+    "issue_paper_execution_grant",
     "load_database_runtime_profile",
     "list_configured_fundamentals_snapshots",
     "list_configured_macro_snapshots",

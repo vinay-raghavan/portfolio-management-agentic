@@ -39,6 +39,12 @@ Current coverage:
 - Configured-provider import reconciliation contracts compare preview counts, latest refresh-job counts, and structured store row counts, including pending-refresh, in-sync, source-changed, store-mismatch, and needs-attention states, without leaking source paths, database paths, raw payloads, or credential-like values.
 - Recommendation explanation contracts join factor evidence, strategy history, backtest metrics, risk gates, ledger context, citations, and paper-only next actions without creating orders.
 - Paper-trading report contracts return read-only review summaries with readiness preflight sections, JSON-ready redacted audit exports, and no file writes.
+- Paper-execution grant contracts verify policy ceilings are disabled until fully
+  configured, grants are human-bound and no broader than both request and
+  policy, self-approval is rejected by default, revoked or expired grants,
+  duplicate idempotency keys, stale quotes, kill-switch activation, and
+  quantity/notional violations reject without mutation, and accepted fills are
+  paper-only with no FYERS/live/credential fields.
 - Capstone evidence manifest contracts build a repo-safe submission evidence summary without local paths, broker/provider secrets, real account data, or raw provider payloads.
 - Model-backed eval checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, write a redacted baseline summary, produce deterministic failure triage, expose a manual credentialed baseline workflow, and never print secret values.
 - Eval dataset contracts verify the selected metrics include the LLM response-quality rubric plus deterministic forbidden-action and workflow-tool-trajectory code metrics, and execute representative trajectory-policy examples directly from `eval_config.yaml`.

@@ -14,6 +14,9 @@ This slice establishes the safe contract between research, simulation, and the f
 - Block paper order proposals before draft creation when strategy history, backtest history, provider refresh readiness, import reconciliation, or recommendation gates are not ready.
 - Approve a paper order for simulated execution through an approval-required tool.
 - Simulate a paper fill only after approval.
+- Define bounded batch paper-execution policy ceilings, paper batch requests,
+  human-bound execution grants, and deterministic paper execution decisions as
+  domain contracts for protected server-side workers.
 - List paper order proposals, simulated fills, and accounting summaries.
 - List fixture-backed paper positions for exposure review.
 - Show pending human approvals.
@@ -28,6 +31,18 @@ This slice establishes the safe contract between research, simulation, and the f
 - Paper order proposals do not create fills by themselves.
 - Paper order proposals require a ready `paper-order-readiness-preflight/v1` snapshot before they can enter the approval queue.
 - Human approval is required before simulated execution.
+- Batch paper execution is disabled until an admin-created
+  `PaperExecutionPolicyCeiling` explicitly sets every required strategy,
+  symbol, side, order-type, quantity, notional, loss, drawdown, slippage,
+  freshness, and validity limit.
+- A `PaperExecutionGrant` is issued only from a proposed `PaperBatchRequest`,
+  is bound to the authenticated human approver actor, cannot outlive the
+  policy ceiling, cannot exceed either the request or the ceiling, and rejects
+  requester self-approval unless the ceiling explicitly permits it.
+- The deterministic paper executor rejects expired or revoked grants, duplicate
+  idempotency keys, stale quotes, inactive policies, kill-switch activation,
+  tenant/scope mismatches, insufficient paper cash, and quantity/notional
+  ceiling violations before returning any fill payload.
 - Simulated fills update only the paper ledger and paper positions.
 - Approval cannot authorize live trading.
 - Broker trading-token access and live order placement remain forbidden.
