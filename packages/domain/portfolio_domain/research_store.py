@@ -171,7 +171,8 @@ class FileBackedResearchStore:
         )
 
     def search(self, query: str, *, limit: int = 5) -> list[RetrievalHit]:
-        terms = _terms(query)
+        normalized_query = normalize_research_query(query)
+        terms = _terms(normalized_query)
         scored: list[tuple[int, str, ResearchDocument]] = []
         for document in self._documents.values():
             haystack = " ".join(
