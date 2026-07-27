@@ -60,9 +60,14 @@ The agent exposes only policy-classified tools:
 
 Forbidden live-order and broker-token functions are not exposed to the agent.
 
-When `PAPER_LEDGER_DB_PATH` is configured, strategy, backtest, and paper-ledger
-tools use SQLite-backed state. The repository Compose file mounts
-`/data/paper-ledger.db` on a named volume for local container runs.
+Set `PORTFOLIO_STORAGE_BACKEND=postgres` with `PORTFOLIO_DATABASE_URL` for
+production-like container runs; the repository Compose file runs Alembic
+migrations before the agent service starts. Set
+`PORTFOLIO_STORAGE_BACKEND=sqlite` for local/offline compatibility. When
+`PAPER_LEDGER_DB_PATH` is configured, strategy, backtest, and paper-ledger
+tools use SQLite-backed state while individual stores are ported to Postgres.
+The repository Compose file mounts `/data/paper-ledger.db` on a named volume
+for local container runs.
 When `MARKET_DATA_DB_PATH` is configured, market snapshot, provider context,
 and screener-run tools use SQLite-backed state. The repository Compose file mounts
 `/data/market-data.db` on the same named volume for local container runs.
