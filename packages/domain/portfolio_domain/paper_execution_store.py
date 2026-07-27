@@ -499,10 +499,14 @@ class PostgresPaperExecutionStore:
                         %(now)s
                     )
                     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+                    RETURNING id
                     """.strip(),
                     params,
                 )
+                row = _fetch_one_mapping(cursor)
             connection.commit()
+        if row is None:
+            return _duplicate_idempotency_decision(decision)
         return decision
 
     def _require_tenant(self, tenant_id: str) -> None:
@@ -522,6 +526,20 @@ def _policy_limits(policy: PaperExecutionPolicyCeiling) -> dict[str, Any]:
         "slippage_bps": policy.slippage_bps,
         "market_hours_only": policy.market_hours_only,
     }
+
+
+def _duplicate_idempotency_decision(
+    decision: PaperExecutionDecision,
+) -> PaperExecutionDecision:
+    audit_event = dict(decision.audit_event)
+    audit_event["event_type"] = "paper_execution_rejected"
+    audit_event["reasons"] = ("duplicate_idempotency_key",)
+    return PaperExecutionDecision(
+        status="rejected",
+        reasons=("duplicate_idempotency_key",),
+        fill=None,
+        audit_event=audit_event,
+    )
 
 
 def _fetch_one_mapping(cursor: Any) -> dict[str, Any] | None:

@@ -231,7 +231,7 @@ def test_store_issues_human_bound_grant_and_persists_scope_under_ceiling() -> No
 
 
 def test_store_records_execution_decision_as_idempotent_paper_ledger_entry() -> None:
-    cursor = _FakeCursor()
+    cursor = _FakeCursor(columns=["id"], rows=[("ledger-1",)])
     connection = _FakeConnection(cursor)
     store = _store(cursor, connection)
     policy = _policy()
@@ -268,6 +268,7 @@ def test_store_records_execution_decision_as_idempotent_paper_ledger_entry() -> 
     sql, params = cursor.executed[0]
     assert "INSERT INTO paper_ledger_entries" in sql
     assert "ON CONFLICT (tenant_id, idempotency_key) DO NOTHING" in sql
+    assert "RETURNING id" in sql
     assert params["tenant_id"] == TENANT_ID
     assert params["grant_id"] == grant.grant_id
     assert params["batch_request_id"] == batch.batch_request_id
@@ -279,6 +280,53 @@ def test_store_records_execution_decision_as_idempotent_paper_ledger_entry() -> 
     assert "live" not in str(params["fill"]).lower()
     assert "fyers" not in str(params).lower()
     assert "token" not in str(params).lower()
+    assert connection.committed is True
+
+
+def test_store_returns_duplicate_rejection_when_ledger_insert_conflicts() -> None:
+    cursor = _FakeCursor(columns=["id"])
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+    policy = _policy()
+    batch = _batch()
+    grant = store.issue_grant(
+        policy=policy,
+        batch_request=batch,
+        approved_by_actor_id=APPROVER_ID,
+        expires_at=NOW + timedelta(minutes=10),
+    )
+    cursor.executed.clear()
+    order = batch.orders[0]
+    accepted = evaluate_paper_execution_order(
+        policy=policy,
+        grant=grant,
+        batch_request=batch,
+        order=order,
+        idempotency_key="idem-race",
+        quote_price=980.0,
+        quote_as_of=NOW - timedelta(seconds=10),
+        now=NOW,
+        available_cash=100_000,
+    )
+
+    decision = store.record_execution_decision(
+        grant=grant,
+        batch_request=batch,
+        order=order,
+        decision=accepted,
+        fill_price=980.0,
+        exposure_after={"gross_notional": 4_900.0, "net_notional": 4_900.0},
+    )
+
+    sql, params = cursor.executed[0]
+    assert "ON CONFLICT (tenant_id, idempotency_key) DO NOTHING" in sql
+    assert "RETURNING id" in sql
+    assert params["idempotency_key"] == "idem-race"
+    assert decision.status == "rejected"
+    assert decision.fill is None
+    assert decision.reasons == ("duplicate_idempotency_key",)
+    assert decision.audit_event["event_type"] == "paper_execution_rejected"
+    assert decision.audit_event["idempotency_key"] == "idem-race"
     assert connection.committed is True
 
 
