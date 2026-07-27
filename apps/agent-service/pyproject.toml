@@ -13,6 +13,7 @@ dependencies = [
     "opentelemetry-instrumentation-google-genai>=0.1.0,<1.0.0",
     "gcsfs>=2024.11.0",
     "google-cloud-logging>=3.12.0,<4.0.0",
+    "authlib>=1.7.2,<2.0.0",
     "psycopg[binary]>=3.2,<4",
     "redis>=6.2,<9",
 ]
@@ -96,4 +97,3 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app","frontend"]
-

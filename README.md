@@ -51,9 +51,9 @@ explicit safety policy.
 - Protected paper-execution HTTP contracts are available under `/v1/paper/*`
   for API validation and production-like Postgres runtimes: admin policy
   creation, analyst batch proposals, approver-bound grants/revocation, and
-  execution-under-grant decisions derive identity and explicit tenant scope from
-  trusted `ActorContext` headers, reject body-spoofed approver fields, and use
-  the tenant-scoped Postgres paper execution store when
+  execution-under-grant decisions derive identity and explicit tenant scope
+  from server-created `ActorContext`, reject body-spoofed approver fields, and
+  use the tenant-scoped Postgres paper execution store when
   `PORTFOLIO_STORAGE_BACKEND=postgres`. The Postgres path
   enqueues durable `PaperExecutionWorkItem` records and processes them through
   the standalone deterministic `PaperExecutionQueueProcessor`, giving the API
@@ -314,6 +314,16 @@ paper policies, grants, ledger entries, model-usage telemetry, and immutable
 audit events. SQLite remains useful for offline capstone mode and fast
 deterministic tests while Postgres-backed contract tests are introduced
 feature-by-feature.
+
+Protected API identity is derived by `ActorContext`. Local/offline mode still
+accepts trusted `X-Actor-Sub`, `X-Tenant-Id`, `X-Actor-Roles`, and
+`X-Request-Id` headers so deterministic tests and fixture demos stay
+credential-free. Production-like mode can set `OIDC_AUTH_ENABLED=true` with
+`OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_JSON`, `OIDC_TENANT_CLAIM`, and
+`OIDC_ROLES_CLAIM`; protected endpoints then require a signed Bearer token,
+verify issuer, audience, signature, expiry, subject, tenant claim, roles, and
+optional `X-OIDC-Nonce`, and derive immutable user identity from `sub`.
+OIDC authorization callback state is validated with constant-time comparison.
 
 Protected FYERS connection state is Postgres-backed when
 `PORTFOLIO_STORAGE_BACKEND=postgres`: the API stores sanitized
