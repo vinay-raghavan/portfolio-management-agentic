@@ -101,8 +101,8 @@ Current coverage:
   token sizes, budget, schema validity, citation existence, tool-output
   agreement, policy statements, uncertainty, and one structured repair attempt.
 - Harness route-decision contracts deterministically route forbidden live
-  trading, FYERS refresh, human approval, and draft-only paper proposal intents
-  before model classification.
+  trading, FYERS refresh, human approval, pre-market briefing, and draft-only
+  paper proposal intents before model classification.
 
 ## ADK Scaffold Checks
 

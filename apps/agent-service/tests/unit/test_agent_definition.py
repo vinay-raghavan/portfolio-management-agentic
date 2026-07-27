@@ -230,7 +230,29 @@ def test_before_tool_callback_blocks_out_of_route_tool_calls() -> None:
     assert allowed is None
 
 
-def test_before_tool_callback_leaves_legacy_ambiguous_workflows_unblocked() -> None:
+def test_before_model_and_tool_callbacks_route_scope_pre_market_briefing() -> None:
+    pre_market_tools = {
+        tool_name: object()
+        for tool_name in ROUTER.manifests["pre_market_briefing"].allowed_tools
+    }
+    request = _FakeRequest(
+        {
+            **pre_market_tools,
+            "create_paper_order_proposal": object(),
+            "get_fyers_account_snapshot": object(),
+        }
+    )
+
+    response = _route_scope_model_request(
+        _FakeContext("Build my pre-market briefing."),
+        request,
+    )
+
+    assert response is None
+    assert set(request.tools_dict) == set(pre_market_tools)
+    assert "create_pre_market_briefing" in request.tools_dict
+    assert "create_paper_order_proposal" not in request.tools_dict
+    assert "get_fyers_account_snapshot" not in request.tools_dict
     assert (
         _route_scope_tool_call(
             _FakeTool("create_pre_market_briefing"),

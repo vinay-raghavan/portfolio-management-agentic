@@ -10,6 +10,7 @@ EXPECTED_CAPABILITY_NAMES = {
     "research",
     "technical_analysis",
     "fyers_data",
+    "pre_market_briefing",
     "provider_readiness",
     "risk_review",
     "paper_proposal_execution",

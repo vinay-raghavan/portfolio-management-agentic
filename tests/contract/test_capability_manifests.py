@@ -71,6 +71,7 @@ def test_read_only_capabilities_cannot_include_draft_or_approval_tools() -> None
         "research",
         "technical_analysis",
         "fyers_data",
+        "pre_market_briefing",
         "provider_readiness",
         "risk_review",
         "reporting",

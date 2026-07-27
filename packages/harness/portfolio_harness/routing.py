@@ -116,6 +116,13 @@ class DeterministicRouter:
                 confidence=1.0,
                 human_api="/v1/paper/batches/{id}/approve",
             )
+        if _contains_any(text, PRE_MARKET_BRIEFING_TERMS):
+            return RouteDecision.from_manifest(
+                decision_type=RouteDecisionType.CAPABILITY,
+                manifest=self.manifests["pre_market_briefing"],
+                reason="Pre-market briefing request routes to read-only briefing capability.",
+                confidence=1.0,
+            )
         if _contains_all(text, ("paper", "proposal")) or _contains_any(
             text, PAPER_PROPOSAL_TERMS
         ):
@@ -265,6 +272,14 @@ APPROVAL_TERMS = (
     "approve order",
     "approve batch",
     "approved by me",
+)
+
+PRE_MARKET_BRIEFING_TERMS = (
+    "pre-market briefing",
+    "premarket briefing",
+    "pre market briefing",
+    "morning briefing",
+    "market briefing",
 )
 
 PAPER_PROPOSAL_TERMS = (

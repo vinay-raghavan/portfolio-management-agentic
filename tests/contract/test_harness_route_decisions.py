@@ -64,6 +64,27 @@ def test_paper_proposal_routes_to_draft_only_capability() -> None:
     assert "approve_paper_order_simulation" not in decision.allowed_tools
 
 
+def test_pre_market_briefing_routes_to_read_only_briefing_capability() -> None:
+    router = DeterministicRouter()
+    decision = router.route("Build my pre-market briefing for today.")
+
+    bundle = router.tool_bundle_for(decision, exposed_tool_names=EXPOSED_TOOL_NAMES)
+
+    assert decision.decision_type == RouteDecisionType.CAPABILITY
+    assert decision.capability_name == "pre_market_briefing"
+    assert decision.model_classification_allowed is False
+    assert bundle.model_visible is True
+    assert bundle.tool_names == (
+        "create_pre_market_briefing",
+        "get_portfolio_summary",
+        "get_research_digest",
+        "get_risk_review",
+        "get_signal_summary",
+        "get_watchlist_snapshot",
+    )
+    assert "create_paper_order_proposal" not in bundle.tool_names
+
+
 def test_paper_proposal_tool_bundle_is_route_scoped_not_monolithic() -> None:
     router = DeterministicRouter()
     decision = router.route(
