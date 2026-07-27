@@ -2761,12 +2761,35 @@ body:has(.app-shell[data-theme="light"]) {
 
 /* Rounded widget refinement: keep the CapacityForecast glass/cockpit palette,
    but make every data cell read as a soft widget rather than a square block. */
+.topbar,
 .mission-band,
 .operating-model,
 .panel,
 .metric-tile,
+.page-strip,
 .action-result {
   border-radius: var(--widget-radius-soft);
+}
+
+.topbar,
+.page-strip {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 14%, var(--border));
+  background:
+    linear-gradient(145deg, color-mix(in srgb, rgba(24, 31, 42, 0.82) 88%, transparent), color-mix(in srgb, var(--accent-secondary) 4%, transparent)),
+    color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+}
+
+.topbar {
+  padding: 24px 30px;
+}
+
+.page-strip {
+  padding: 10px;
 }
 
 .page-tab,
@@ -2801,6 +2824,13 @@ body:has(.app-shell[data-theme="light"]) {
   border-radius: var(--widget-radius);
 }
 
+.metric-tile.good,
+.metric-tile.warn,
+.metric-tile.danger,
+.metric-tile.info {
+  border-left-width: 1px;
+}
+
 .workflow-button,
 .recommendation-card,
 .import-gate,
@@ -2832,7 +2862,9 @@ body:has(.app-shell[data-theme="light"]) {
 .selected-workflow,
 .preflight-grid div,
 .preflight-policy,
-.preflight-blockers {
+.preflight-blockers,
+.action-chip-list span,
+.setup-gap-list span {
   box-shadow:
     0 16px 36px -34px color-mix(in srgb, var(--accent-primary) 28%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--base-text-default) 5%, transparent);
@@ -2895,6 +2927,22 @@ body:has(.app-shell[data-theme="light"]) {
   padding: 2px 4px;
 }
 
+.action-chip-list span,
+.setup-gap-list span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--base-border-weak-default) 78%, transparent);
+  border-radius: var(--control-radius);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, rgba(24, 31, 42, 0.88) 90%, transparent), color-mix(in srgb, rgba(11, 17, 24, 0.78) 94%, transparent)),
+    color-mix(in srgb, var(--surface) 86%, transparent);
+  color: var(--base-text-medium-default);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .selected-workflow {
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--base-border-weak-default) 72%, transparent);
@@ -2902,6 +2950,13 @@ body:has(.app-shell[data-theme="light"]) {
   background:
     linear-gradient(180deg, color-mix(in srgb, rgba(24, 31, 42, 0.9) 90%, transparent), color-mix(in srgb, rgba(11, 17, 24, 0.86) 94%, transparent)),
     color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.app-shell[data-theme="light"] .topbar,
+.app-shell[data-theme="light"] .page-strip {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, rgba(255, 255, 255, 0.92) 88%, transparent), color-mix(in srgb, var(--accent-secondary) 4%, transparent)),
+    color-mix(in srgb, var(--surface) 78%, transparent);
 }
 
 .app-shell[data-theme="light"] .selected-workflow {
@@ -2941,7 +2996,9 @@ body:has(.app-shell[data-theme="light"]) {
 .app-shell[data-theme="light"] .selected-workflow,
 .app-shell[data-theme="light"] .preflight-grid div,
 .app-shell[data-theme="light"] .preflight-policy,
-.app-shell[data-theme="light"] .preflight-blockers {
+.app-shell[data-theme="light"] .preflight-blockers,
+.app-shell[data-theme="light"] .action-chip-list span,
+.app-shell[data-theme="light"] .setup-gap-list span {
   box-shadow:
     0 18px 40px -34px rgba(14, 56, 82, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
@@ -2977,6 +3034,14 @@ body:has(.app-shell[data-theme="light"]) {
   background: color-mix(in srgb, #ffffff 70%, var(--surface-muted));
 }
 
+.app-shell[data-theme="light"] .action-chip-list span,
+.app-shell[data-theme="light"] .setup-gap-list span {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, rgba(255, 255, 255, 0.92) 90%, transparent), color-mix(in srgb, rgba(232, 242, 250, 0.84) 94%, transparent)),
+    color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--base-text-medium-default);
+}
+
 @media (max-width: 1180px) {
   .operating-model__flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3001,11 +3066,11 @@ body:has(.app-shell[data-theme="light"]) {
     flex-direction: row;
     align-items: center;
     min-height: auto;
-    width: 100%;
-    max-width: 100%;
-    margin: 0;
+    width: calc(100% - 20px);
+    max-width: calc(100% - 20px);
+    margin: 10px;
     padding: 10px;
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border-radius: var(--radius-lg);
   }
 
   .sidebar::after {

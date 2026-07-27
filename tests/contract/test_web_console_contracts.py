@@ -178,9 +178,13 @@ def test_web_console_uses_rounded_widget_design_contract() -> None:
     assert ".flow-step i::after" in styles
     assert "border-radius: var(--widget-radius);" in rounded_refinement
     assert ".app-shell[data-theme=\"light\"] .selected-workflow" in rounded_refinement
+    assert ".topbar," in rounded_refinement
+    assert ".page-strip" in rounded_refinement
+    assert "border-left-width: 1px;" in rounded_refinement
+    assert ".action-chip-list span" in rounded_refinement
     assert "border-left: 9px solid" not in styles
     assert ".selected-workflow" in rounded_refinement
-    assert "border-radius: 0 0" in rounded_refinement
+    assert "border-radius: 0 0" not in rounded_refinement
 
 
 def test_compose_exposes_web_console_without_secrets() -> None:
