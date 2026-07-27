@@ -3181,11 +3181,180 @@ body:has(.app-shell[data-theme="light"]) {
     inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
+/* Soft-widget deviation: keep CapacityForecast colors, but intentionally move
+   the portfolio console away from square cockpit blocks into rounded widgets. */
+.app-shell {
+  --widget-radius: 72px;
+  --widget-radius-soft: 96px;
+  --widget-inset-radius: 54px;
+  --widget-tray-radius: 58px;
+  --control-radius: 42px;
+}
+
+.sidebar {
+  border-radius: var(--widget-tray-radius);
+  overflow: hidden;
+}
+
+.brand-icon,
+.nav-item,
+.safety-card {
+  border-radius: var(--control-radius);
+}
+
+.workflow-list,
+.provider-list,
+.validation-stack,
+.readiness-stack,
+.source-setup-stack,
+.template-guidance-stack,
+.onboarding-stack,
+.detail-list,
+.source-list,
+.template-list,
+.preview-list,
+.reconciliation-list,
+.report-stack,
+.candidate-table {
+  border-radius: var(--widget-tray-radius);
+}
+
+.table-row,
+.table-head,
+.workflow-button,
+.provider-row,
+.validation-row,
+.readiness-row,
+.profile-row,
+.source-row,
+.template-row,
+.onboarding-row,
+.preview-row,
+.reconciliation-row,
+.factor-card,
+.detail-row,
+.approval-card,
+.paper-order-card,
+.paper-preflight,
+.selected-workflow,
+.import-gate,
+.recommendation-card,
+.empty-state,
+.result-band,
+.workflow-summary div,
+.readiness-summary div,
+.source-summary div,
+.template-summary div,
+.onboarding-summary div,
+.preview-summary div,
+.reconciliation-summary div,
+.ledger-stats span,
+.report-stack > div:not(.paper-preflight),
+.preflight-grid div,
+.preflight-policy,
+.preflight-blockers {
+  border-radius: var(--widget-inset-radius);
+}
+
+.template-row pre,
+.env-chip-list code,
+.segment-button,
+.command-button,
+.page-tab,
+.theme-toggle,
+.status-pill,
+.score-bar,
+.allowed-actions span,
+.action-chip-list span,
+.setup-gap-list span {
+  border-radius: var(--pill-radius);
+}
+
+.template-row pre,
+.candidate-table,
+.workflow-list,
+.provider-list,
+.validation-stack,
+.readiness-stack,
+.source-setup-stack,
+.template-guidance-stack,
+.onboarding-stack,
+.detail-list,
+.source-list,
+.template-list,
+.preview-list,
+.reconciliation-list,
+.report-stack {
+  scrollbar-color: color-mix(in srgb, var(--accent-secondary) 34%, transparent) transparent;
+}
+
+.template-row pre::-webkit-scrollbar,
+.candidate-table::-webkit-scrollbar,
+.workflow-list::-webkit-scrollbar,
+.provider-list::-webkit-scrollbar,
+.validation-stack::-webkit-scrollbar,
+.readiness-stack::-webkit-scrollbar,
+.source-setup-stack::-webkit-scrollbar,
+.template-guidance-stack::-webkit-scrollbar,
+.onboarding-stack::-webkit-scrollbar,
+.detail-list::-webkit-scrollbar,
+.source-list::-webkit-scrollbar,
+.template-list::-webkit-scrollbar,
+.preview-list::-webkit-scrollbar,
+.reconciliation-list::-webkit-scrollbar,
+.report-stack::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.template-row pre::-webkit-scrollbar-thumb,
+.candidate-table::-webkit-scrollbar-thumb,
+.workflow-list::-webkit-scrollbar-thumb,
+.provider-list::-webkit-scrollbar-thumb,
+.validation-stack::-webkit-scrollbar-thumb,
+.readiness-stack::-webkit-scrollbar-thumb,
+.source-setup-stack::-webkit-scrollbar-thumb,
+.template-guidance-stack::-webkit-scrollbar-thumb,
+.onboarding-stack::-webkit-scrollbar-thumb,
+.detail-list::-webkit-scrollbar-thumb,
+.source-list::-webkit-scrollbar-thumb,
+.template-list::-webkit-scrollbar-thumb,
+.preview-list::-webkit-scrollbar-thumb,
+.reconciliation-list::-webkit-scrollbar-thumb,
+.report-stack::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--pill-radius);
+  background-clip: padding-box;
+  background-color: color-mix(in srgb, var(--accent-secondary) 34%, transparent);
+}
+
+.app-shell[data-theme="light"] .sidebar,
+.app-shell[data-theme="light"] .workflow-list,
+.app-shell[data-theme="light"] .provider-list,
+.app-shell[data-theme="light"] .validation-stack,
+.app-shell[data-theme="light"] .readiness-stack,
+.app-shell[data-theme="light"] .source-setup-stack,
+.app-shell[data-theme="light"] .template-guidance-stack,
+.app-shell[data-theme="light"] .onboarding-stack,
+.app-shell[data-theme="light"] .detail-list,
+.app-shell[data-theme="light"] .source-list,
+.app-shell[data-theme="light"] .template-list,
+.app-shell[data-theme="light"] .preview-list,
+.app-shell[data-theme="light"] .reconciliation-list,
+.app-shell[data-theme="light"] .report-stack,
+.app-shell[data-theme="light"] .candidate-table {
+  box-shadow:
+    0 22px 48px -42px rgba(14, 56, 82, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
 @media (max-width: 760px) {
   .app-shell {
     --widget-radius: 36px;
     --widget-radius-soft: 46px;
-    --widget-inset-radius: 28px;
+    --widget-inset-radius: 30px;
+    --widget-tray-radius: 38px;
+    --control-radius: 32px;
   }
 
   .workflow-list,

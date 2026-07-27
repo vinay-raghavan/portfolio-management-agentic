@@ -244,6 +244,32 @@ def test_web_console_uses_pillowed_widget_polish_for_both_themes() -> None:
     assert "border-radius: 0" not in polish
 
 
+def test_web_console_soft_widget_deviation_avoids_square_ui_blocks() -> None:
+    styles = (WEB_ROOT / "src" / "styles.css").read_text()
+    deviation = styles.split("/* Soft-widget deviation", 1)[1]
+
+    for expected in (
+        "--widget-tray-radius",
+        ".sidebar",
+        ".candidate-table",
+        ".table-row",
+        ".template-row pre::-webkit-scrollbar-thumb",
+        ".app-shell[data-theme=\"light\"] .sidebar",
+        "--widget-radius: 72px;",
+        "--widget-radius-soft: 96px;",
+        "--widget-inset-radius: 54px;",
+        "--control-radius: 42px;",
+    ):
+        assert expected in deviation
+
+    assert ".table-row,\n.table-head,\n.workflow-button" in deviation
+    assert ".template-row pre,\n.env-chip-list code" in deviation
+    assert "border-radius: var(--pill-radius);" in deviation
+    assert "border-radius: 4px" not in deviation
+    assert "border-radius: 8px" not in deviation
+    assert "border-radius: 0" not in deviation
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 
