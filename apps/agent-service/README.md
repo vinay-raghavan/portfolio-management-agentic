@@ -48,7 +48,14 @@ You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`
 
 ## Safe Tool Surface
 
-The agent exposes only policy-classified tools:
+The agent exposes only policy-classified tools. Local/unit imports use the
+in-process adapter unless `AGENT_TOOL_TRANSPORT=mcp` is set. Production-like
+Compose sets `AGENT_TOOL_TRANSPORT=mcp` and
+`AGENT_MCP_URL=http://mcp-server:8081/mcp`, so ADK builds an MCP client
+toolset filtered to the repository `EXPOSED_TOOL_NAMES` safe catalog. Public
+MCP URLs are rejected by the agent tool factory; OAuth, approval, revocation,
+and fill mutation endpoints remain protected human/API surfaces outside
+model-visible MCP.
 
 - Pre-market briefing: portfolio summary, watchlist snapshot, signal summary, research digest, risk review, and composed briefing.
 - Screener and strategy drafting: synthetic momentum screener, fixture-backed deterministic screener, persisted paper strategy drafts, strategy history retrieval, and pending paper proposal.

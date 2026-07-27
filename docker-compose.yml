@@ -64,6 +64,8 @@ services:
       MODEL_TUNING_CANDIDATES: ${MODEL_TUNING_CANDIDATES:-llama3.1:8b,gemma:7b,gemma4:12b}
       MODEL_TUNING_DEV_SET: ${MODEL_TUNING_DEV_SET:-agent-service-dev}
       MODEL_TUNING_HOLDOUT_SET: ${MODEL_TUNING_HOLDOUT_SET:-agent-service-sealed}
+      AGENT_TOOL_TRANSPORT: ${AGENT_TOOL_TRANSPORT:-mcp}
+      AGENT_MCP_URL: ${AGENT_MCP_URL:-http://mcp-server:8081/mcp}
       PORTFOLIO_STORAGE_BACKEND: ${PORTFOLIO_STORAGE_BACKEND:-postgres}
       PORTFOLIO_DATABASE_URL: ${PORTFOLIO_DATABASE_URL:-postgresql+psycopg://portfolio:portfolio-dev-password@postgres:5432/portfolio_agentic}
       PORTFOLIO_RESEARCH_STORE_BACKEND: ${PORTFOLIO_RESEARCH_STORE_BACKEND:-fixture}

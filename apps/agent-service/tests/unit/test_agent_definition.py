@@ -1,11 +1,13 @@
 from google.genai import types
 
 from app.agent import (
+    EXPOSED_TOOL_NAMES,
     ROUTER,
     WORKFLOW_ROUTING_GUIDE,
     _extract_text_from_content,
     _route_scope_model_request,
     _route_scope_tool_call,
+    build_agent_tools,
     root_agent,
 )
 
@@ -77,6 +79,48 @@ def test_agent_exposes_only_safe_portfolio_tools() -> None:
     assert "get_strategy_draft" in tool_names
     assert "place_live_order" not in tool_names
     assert "get_broker_trading_token" not in tool_names
+
+
+def test_agent_tool_factory_defaults_to_in_process_adapter() -> None:
+    tools = build_agent_tools({"AGENT_TOOL_TRANSPORT": "in_process"})
+    tool_names = {getattr(tool, "name", getattr(tool, "__name__", "")) for tool in tools}
+
+    assert "get_portfolio_summary" in tool_names
+    assert "create_paper_order_proposal" in tool_names
+    assert "approve_paper_order_simulation" not in tool_names
+    assert "place_live_order" not in tool_names
+
+
+def test_agent_tool_factory_builds_private_mcp_toolset_for_mcp_transport() -> None:
+    tools = build_agent_tools(
+        {
+            "AGENT_TOOL_TRANSPORT": "mcp",
+            "AGENT_MCP_URL": "http://mcp-server:8081/mcp",
+        }
+    )
+
+    assert len(tools) == 1
+    toolset = tools[0]
+    assert type(toolset).__name__ == "McpToolset"
+    assert toolset._connection_params.url == "http://mcp-server:8081/mcp"
+    assert set(toolset.tool_filter) == EXPOSED_TOOL_NAMES
+    assert "approve_paper_order_simulation" not in toolset.tool_filter
+    assert "simulate_approved_paper_fill" not in toolset.tool_filter
+    assert "place_live_order" not in toolset.tool_filter
+
+
+def test_agent_tool_factory_rejects_public_mcp_url() -> None:
+    try:
+        build_agent_tools(
+            {
+                "AGENT_TOOL_TRANSPORT": "mcp",
+                "AGENT_MCP_URL": "https://public.example.com/mcp",
+            }
+        )
+    except RuntimeError as exc:
+        assert "agent_mcp_url_not_private" in str(exc)
+    else:  # pragma: no cover - assertion branch
+        raise AssertionError("public MCP URL should be rejected")
 
 
 def test_agent_instruction_has_eval_aligned_workflow_routes() -> None:
