@@ -44,9 +44,11 @@ the current `RouteToolBundle` contract used by route-scoped model calls.
 These manifests are the audited contract the router consumes for
 least-privilege model-visible tool bundles:
 
-1. Deterministically route forbidden, FYERS refresh, approval, and paper
-   execution intents before model classification.
-2. Select exactly one `CapabilityManifest`.
+1. Deterministically route forbidden, FYERS refresh, approval, pre-market
+   briefing, and paper execution intents before model classification.
+2. Select exactly one `CapabilityManifest`; ambiguous read-only requests must
+   resolve through the schema-constrained classifier or fail closed to
+   clarification.
 3. Build a `RouteToolBundle` with only the manifest's allowed tools for that
    route.
 4. Build a context pack from the manifest's context sources.

@@ -102,7 +102,9 @@ Current coverage:
   agreement, policy statements, uncertainty, and one structured repair attempt.
 - Harness route-decision contracts deterministically route forbidden live
   trading, FYERS refresh, human approval, pre-market briefing, and draft-only
-  paper proposal intents before model classification.
+  paper proposal intents before model classification; ambiguous read-only
+  requests either resolve to exactly one read-only manifest bundle or fail
+  closed to clarification with no model-visible tools.
 
 ## ADK Scaffold Checks
 

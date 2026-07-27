@@ -179,6 +179,8 @@ def _route_scope_model_request(context: Any, llm_request: Any) -> LlmResponse | 
     """Filter model-visible tools to the deterministic route bundle."""
     user_text = _extract_text_from_content(getattr(context, "user_content", None))
     decision = ROUTER.route(user_text)
+    if decision.decision_type == RouteDecisionType.NEEDS_CLASSIFICATION:
+        decision = ROUTER.classify_read_only_request(user_text)
     tools_dict = getattr(llm_request, "tools_dict", {}) or {}
     bundle = ROUTER.tool_bundle_for(decision, exposed_tool_names=set(tools_dict))
 
@@ -205,6 +207,19 @@ def _route_scope_model_request(context: Any, llm_request: Any) -> LlmResponse | 
             metadata=bundle.to_dict(),
         )
 
+    if decision.decision_type == RouteDecisionType.CLARIFICATION_REQUIRED:
+        llm_request.tools_dict = {}
+        return _safe_route_response(
+            error_code="portfolio_route_clarification_required",
+            message=(
+                "Please clarify whether you want research, technical analysis, "
+                "provider readiness, FYERS read-only data, risk review, or "
+                "paper-trading reporting. I won’t expose tools until the route "
+                "is clear."
+            ),
+            metadata=bundle.to_dict(),
+        )
+
     if decision.decision_type == RouteDecisionType.CAPABILITY:
         if not bundle.model_visible:
             llm_request.tools_dict = {}
@@ -226,10 +241,10 @@ def _route_scope_tool_call(tool: Any, args: dict[str, Any], context: Any) -> dic
     del args
     user_text = _extract_text_from_content(getattr(context, "user_content", None))
     decision = ROUTER.route(user_text)
+    if decision.decision_type == RouteDecisionType.NEEDS_CLASSIFICATION:
+        decision = ROUTER.classify_read_only_request(user_text)
     tool_name = getattr(tool, "name", getattr(tool, "__name__", ""))
 
-    if decision.decision_type == RouteDecisionType.NEEDS_CLASSIFICATION:
-        return None
     if decision.decision_type != RouteDecisionType.CAPABILITY:
         return {
             "error": "tool_not_allowed_for_route",

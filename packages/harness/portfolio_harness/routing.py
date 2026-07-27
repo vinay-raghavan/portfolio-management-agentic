@@ -9,6 +9,7 @@ from portfolio_policy import ActionTier, classify_tool
 
 class RouteDecisionType(StrEnum):
     CAPABILITY = "capability"
+    CLARIFICATION_REQUIRED = "clarification_required"
     FORBIDDEN = "forbidden"
     HUMAN_API_REQUIRED = "human_api_required"
     NEEDS_CLASSIFICATION = "needs_classification"
@@ -85,6 +86,8 @@ class RouteToolBundle:
 
 
 class DeterministicRouter:
+    min_classification_confidence = 0.7
+
     def __init__(
         self,
         manifests: dict[str, CapabilityManifest] | None = None,
@@ -151,31 +154,28 @@ class DeterministicRouter:
         confidence: float,
         reason: str,
     ) -> RouteDecision:
+        if confidence < self.min_classification_confidence:
+            return self._clarification_decision(
+                reason=(
+                    "Schema-constrained read-only classification confidence "
+                    f"{confidence:.2f} is below threshold "
+                    f"{self.min_classification_confidence:.2f}."
+                ),
+                confidence=confidence,
+            )
         manifest = self.manifests.get(capability_name)
         if manifest is None:
-            return RouteDecision(
-                decision_type=RouteDecisionType.NEEDS_CLASSIFICATION,
-                capability_name=None,
+            return self._clarification_decision(
                 reason=f"Unknown classified capability: {capability_name}.",
                 confidence=0.0,
-                allowed_tools=(),
-                response_schema=None,
-                token_budget=None,
-                model_classification_allowed=True,
             )
         if manifest.max_action_tier != ActionTier.READ_ONLY.value:
-            return RouteDecision(
-                decision_type=RouteDecisionType.NEEDS_CLASSIFICATION,
-                capability_name=None,
+            return self._clarification_decision(
                 reason=(
                     "Schema-constrained classification may resolve only "
                     f"read-only capabilities; got {capability_name}."
                 ),
                 confidence=0.0,
-                allowed_tools=(),
-                response_schema=None,
-                token_budget=None,
-                model_classification_allowed=True,
             )
         return RouteDecision.from_manifest(
             decision_type=RouteDecisionType.CAPABILITY,
@@ -183,6 +183,60 @@ class DeterministicRouter:
             reason=reason,
             confidence=confidence,
             model_classification_allowed=True,
+        )
+
+    def classify_read_only_request(self, user_text: str) -> RouteDecision:
+        """Resolve ambiguous read-only intent into one manifest or clarification.
+
+        This deterministic classifier mirrors the schema-constrained contract a
+        small local model will produce later: exactly one read-only capability,
+        confidence, and reason. Invalid, tied, unknown, low-confidence, or
+        non-read-only outputs fail closed to clarification.
+        """
+        text = _normalize(user_text)
+        scores = {
+            capability_name: _term_score(text, terms)
+            for capability_name, terms in READ_ONLY_CLASSIFICATION_TERMS.items()
+        }
+        top_score = max(scores.values(), default=0)
+        if top_score <= 0:
+            return self._clarification_decision(
+                reason="Read-only classifier found no matching capability.",
+                confidence=0.0,
+            )
+
+        winners = tuple(
+            capability_name
+            for capability_name, score in scores.items()
+            if score == top_score
+        )
+        if len(winners) != 1:
+            return self._clarification_decision(
+                reason="Read-only classifier found multiple equally likely capabilities.",
+                confidence=0.0,
+            )
+
+        capability_name = winners[0]
+        confidence = min(0.95, 0.65 + (top_score * 0.08))
+        return self.resolve_classified_capability(
+            capability_name,
+            confidence=confidence,
+            reason=(
+                "Schema-constrained read-only classifier selected "
+                f"{capability_name} from deterministic intent terms."
+            ),
+        )
+
+    def _clarification_decision(self, *, reason: str, confidence: float) -> RouteDecision:
+        return RouteDecision(
+            decision_type=RouteDecisionType.CLARIFICATION_REQUIRED,
+            capability_name=None,
+            reason=reason,
+            confidence=confidence,
+            allowed_tools=(),
+            response_schema=None,
+            token_budget=None,
+            model_classification_allowed=False,
         )
 
     def tool_bundle_for(
@@ -290,6 +344,62 @@ PAPER_PROPOSAL_TERMS = (
     "backtest and risk",
 )
 
+READ_ONLY_CLASSIFICATION_TERMS = {
+    "fyers_data": (
+        "fyers quote",
+        "fyers quotes",
+        "fyers depth",
+        "fyers option chain",
+        "fyers positions",
+        "fyers funds",
+        "fyers account snapshot",
+        "broker snapshot",
+    ),
+    "provider_readiness": (
+        "provider readiness",
+        "configured data",
+        "data health",
+        "provider health",
+        "import reconciliation",
+        "import preview",
+        "source onboarding",
+        "refresh readiness",
+    ),
+    "reporting": (
+        "paper trading report",
+        "audit report",
+        "fills report",
+        "accounting report",
+        "approval status",
+        "audit trail",
+    ),
+    "research": (
+        "curated research",
+        "research citations",
+        "pattern citations",
+        "pattern playbook",
+        "source grounding",
+        "research digest",
+    ),
+    "risk_review": (
+        "risk review",
+        "risk state",
+        "exposure",
+        "concentration",
+        "drawdown",
+        "safety switch",
+    ),
+    "technical_analysis": (
+        "technical analysis",
+        "technical setup",
+        "screener candidates",
+        "factor stack",
+        "momentum screener",
+        "candidate evidence",
+        "chart setup",
+    ),
+}
+
 
 def _normalize(value: str) -> str:
     return " ".join(value.lower().split())
@@ -301,6 +411,10 @@ def _contains_any(value: str, terms: tuple[str, ...]) -> bool:
 
 def _contains_all(value: str, terms: tuple[str, ...]) -> bool:
     return all(term in value for term in terms)
+
+
+def _term_score(value: str, terms: tuple[str, ...]) -> int:
+    return sum(1 for term in terms if term in value)
 
 
 _TIER_RANK = {
