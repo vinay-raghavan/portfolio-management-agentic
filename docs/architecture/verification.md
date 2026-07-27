@@ -266,8 +266,9 @@ Compose config also validates the shared `paper-ledger-data` volume and
 `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db`,
 `MARKET_DATA_DB_PATH=/data/market-data.db`, and
 `PROVIDER_CONFIG_DB_PATH=/data/provider-config.db` defaults for durable local
-compatibility state. Market snapshots and screener runs use tenant-scoped
-Postgres when production-like storage is selected. Compose also passes
+compatibility state. Market snapshots, screener runs, provider context,
+provider configuration profiles, and provider import-refresh jobs use
+tenant-scoped Postgres when production-like storage is selected. Compose also passes
 `PORTFOLIO_MARKET_DATA_PROVIDER`,
 `PORTFOLIO_MARKET_DATA_JSON_PATH`, `PORTFOLIO_UNIVERSE_PROVIDER`,
 `PORTFOLIO_UNIVERSE_JSON_PATH`, `PORTFOLIO_FUNDAMENTALS_PROVIDER`,

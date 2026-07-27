@@ -4,12 +4,17 @@ import json
 import os
 import re
 import sqlite3
+from collections.abc import Callable
 from collections.abc import Mapping
+from collections.abc import Sequence
+from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
+from .database_runtime import DatabaseBackend
+from .database_runtime import load_database_runtime_profile
 from .models import (
     FundamentalsSnapshot,
     MacroSnapshot,
@@ -888,10 +893,196 @@ class SQLiteProviderProfileStore(ProviderProfileStore):
             connection.commit()
 
 
+class PostgresProviderProfileStore(ProviderProfileStore):
+    """Tenant-scoped Postgres provider profile and import-job metadata store."""
+
+    def __init__(
+        self,
+        *,
+        tenant_id: str,
+        connection_factory: Callable[[], Any],
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        if not tenant_id.strip():
+            raise ValueError("tenant_id is required for Postgres provider profile storage")
+        self._tenant_id = tenant_id.strip()
+        self._connection_factory = connection_factory
+        self._now = now or (lambda: datetime.now(UTC))
+
+    def storage_status(self) -> dict[str, Any]:
+        return {
+            "status": "persisted",
+            "backend": "postgres",
+            "configured": True,
+            "tenant_scoped": True,
+        }
+
+    def upsert_profile(
+        self,
+        profile: ProviderConfigurationProfile,
+    ) -> ProviderConfigurationProfile:
+        params = {
+            "tenant_id": self._tenant_id,
+            "profile_id": profile.profile_id,
+            "provider_id": profile.provider_id,
+            "kind": profile.kind,
+            "source_label": profile.source_label,
+            "payload": profile.to_dict(),
+            "updated_at": profile.updated_at,
+            "recorded_at": _aware_utc(self._now()),
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    INSERT INTO provider_configuration_profiles (
+                        tenant_id,
+                        profile_id,
+                        provider_id,
+                        kind,
+                        source_label,
+                        payload,
+                        updated_at,
+                        recorded_at
+                    ) VALUES (
+                        %(tenant_id)s,
+                        %(profile_id)s,
+                        %(provider_id)s,
+                        %(kind)s,
+                        %(source_label)s,
+                        %(payload)s,
+                        %(updated_at)s,
+                        %(recorded_at)s
+                    )
+                    ON CONFLICT (tenant_id, profile_id)
+                    DO UPDATE SET
+                        provider_id = EXCLUDED.provider_id,
+                        kind = EXCLUDED.kind,
+                        source_label = EXCLUDED.source_label,
+                        payload = EXCLUDED.payload,
+                        updated_at = EXCLUDED.updated_at,
+                        recorded_at = EXCLUDED.recorded_at
+                    """.strip(),
+                    params,
+                )
+            connection.commit()
+        return profile
+
+    def list_profiles(self, limit: int = 20) -> list[ProviderConfigurationProfile]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    SELECT payload
+                    FROM provider_configuration_profiles
+                    WHERE tenant_id = %(tenant_id)s
+                    ORDER BY profile_id
+                    LIMIT %(limit)s
+                    """.strip(),
+                    {"tenant_id": self._tenant_id, "limit": max(0, limit)},
+                )
+                rows = _cursor_rows(cursor)
+        return [_profile_from_dict(_payload_from_row(row)) for row in rows]
+
+    def record_import_job(self, job: ProviderImportJob) -> ProviderImportJob:
+        params = {
+            "tenant_id": self._tenant_id,
+            "job_id": job.job_id,
+            "profile_id": job.profile_id,
+            "provider_id": job.provider_id,
+            "kind": job.kind,
+            "status": job.status,
+            "source_label": job.source_label,
+            "payload": job.to_dict(),
+            "completed_at": job.completed_at,
+            "recorded_at": _aware_utc(self._now()),
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    INSERT INTO provider_import_jobs (
+                        tenant_id,
+                        job_id,
+                        profile_id,
+                        provider_id,
+                        kind,
+                        status,
+                        source_label,
+                        payload,
+                        completed_at,
+                        recorded_at
+                    ) VALUES (
+                        %(tenant_id)s,
+                        %(job_id)s,
+                        %(profile_id)s,
+                        %(provider_id)s,
+                        %(kind)s,
+                        %(status)s,
+                        %(source_label)s,
+                        %(payload)s,
+                        %(completed_at)s,
+                        %(recorded_at)s
+                    )
+                    ON CONFLICT (tenant_id, job_id)
+                    DO UPDATE SET
+                        profile_id = EXCLUDED.profile_id,
+                        provider_id = EXCLUDED.provider_id,
+                        kind = EXCLUDED.kind,
+                        status = EXCLUDED.status,
+                        source_label = EXCLUDED.source_label,
+                        payload = EXCLUDED.payload,
+                        completed_at = EXCLUDED.completed_at,
+                        recorded_at = EXCLUDED.recorded_at
+                    """.strip(),
+                    params,
+                )
+            connection.commit()
+        return job
+
+    def list_import_jobs(self, limit: int = 20) -> list[ProviderImportJob]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    SELECT payload
+                    FROM provider_import_jobs
+                    WHERE tenant_id = %(tenant_id)s
+                    ORDER BY completed_at DESC, job_id DESC
+                    LIMIT %(limit)s
+                    """.strip(),
+                    {"tenant_id": self._tenant_id, "limit": max(0, limit)},
+                )
+                rows = _cursor_rows(cursor)
+        return [_job_from_dict(_payload_from_row(row)) for row in rows]
+
+    def _set_tenant_context(self, cursor: Any) -> None:
+        cursor.execute(
+            "SELECT set_config('app.tenant_id', %(tenant_id)s, true)",
+            {"tenant_id": self._tenant_id},
+        )
+
+
 def build_provider_profile_store(
     env: Mapping[str, str] | None = None,
 ) -> ProviderProfileStore:
     config = env if env is not None else os.environ
+    profile = load_database_runtime_profile(config)
+    if profile.backend == DatabaseBackend.POSTGRES:
+        database_url = profile.database_url
+        tenant_id = config.get("PORTFOLIO_TENANT_ID", "").strip()
+        if not database_url:
+            raise ValueError("PORTFOLIO_DATABASE_URL is required for Postgres provider profile storage")
+        if not tenant_id:
+            raise ValueError("PORTFOLIO_TENANT_ID is required for Postgres provider profile storage")
+        return PostgresProviderProfileStore(
+            tenant_id=tenant_id,
+            connection_factory=_postgres_connection_factory(database_url),
+        )
     db_path = str(config.get(PROVIDER_CONFIG_DB_ENV, "")).strip()
     if db_path:
         return SQLiteProviderProfileStore(db_path)
@@ -902,6 +1093,58 @@ def get_provider_profile_storage_status(
     env: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     return build_provider_profile_store(env=env).storage_status()
+
+
+def _postgres_connection_factory(database_url: str) -> Callable[[], Any]:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+
+        return psycopg.connect(connection_url)
+
+    return connection_factory
+
+
+def _psycopg_database_url(database_url: str) -> str:
+    stripped = database_url.strip()
+    if stripped.startswith("postgresql+psycopg://"):
+        return "postgresql://" + stripped.removeprefix("postgresql+psycopg://")
+    return stripped
+
+
+def _cursor_rows(cursor: Any) -> list[dict[str, Any]]:
+    rows = cursor.fetchall()
+    return [_row_mapping(cursor, row) for row in rows]
+
+
+def _row_mapping(cursor: Any, row: Any) -> dict[str, Any]:
+    if isinstance(row, Mapping):
+        return dict(row)
+    if not isinstance(row, Sequence):
+        raise TypeError(
+            "Postgres provider profile cursor rows must be mappings or sequences"
+        )
+    description = getattr(cursor, "description", None)
+    if not description:
+        raise TypeError("Postgres provider profile sequence rows require description")
+    keys = [str(column[0]) for column in description]
+    return dict(zip(keys, row, strict=False))
+
+
+def _payload_from_row(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    payload = row["payload"]
+    if isinstance(payload, str):
+        return _from_json(payload)
+    if isinstance(payload, Mapping):
+        return payload
+    raise TypeError("Postgres provider profile payload must be a mapping or JSON string")
+
+
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def list_provider_configuration_profiles(

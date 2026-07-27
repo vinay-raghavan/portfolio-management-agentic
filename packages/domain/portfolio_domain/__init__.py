@@ -173,6 +173,7 @@ from .paper_execution_worker_runner import (
 )
 from .provider_profiles import (
     PROVIDER_CONFIG_DB_ENV,
+    PostgresProviderProfileStore,
     ProviderProfileStore,
     SQLiteProviderProfileStore,
     build_provider_profile_store,
@@ -367,6 +368,7 @@ __all__ = [
     "SQLiteMarketDataStore",
     "SQLiteProviderDataStore",
     "ProviderDataStore",
+    "PostgresProviderProfileStore",
     "SQLiteProviderProfileStore",
     "approve_fixture_paper_order_simulation",
     "DataProviderRegistry",

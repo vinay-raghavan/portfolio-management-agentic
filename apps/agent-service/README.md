@@ -115,18 +115,19 @@ When SQLite/local mode is selected, those HTTP contracts keep
 their process-local deterministic fallback for API tests and offline
 development. When
 `PAPER_LEDGER_DB_PATH` is configured, strategy, backtest, and paper-ledger
-tools use SQLite-backed state while individual stores are ported to Postgres.
+tools use SQLite-backed state for local/offline compatibility while the
+production-like path runs on Postgres-backed stores.
 The repository Compose file mounts `/data/paper-ledger.db` on a named volume
 for local container runs.
 When `PORTFOLIO_STORAGE_BACKEND=postgres`, `PORTFOLIO_DATABASE_URL`, and
 `PORTFOLIO_TENANT_ID` are configured, market snapshot, screener-run, universe,
-and factor-context tools use tenant-scoped Postgres state.
-`MARKET_DATA_DB_PATH` remains the explicit SQLite fallback for offline market
-snapshots, provider context, and screener runs. The repository Compose file
-mounts `/data/market-data.db` on the same named volume for local fallback runs.
-When `PROVIDER_CONFIG_DB_PATH` is configured, provider profile and import-job
-tools use SQLite-backed metadata state. The repository Compose file mounts
-`/data/provider-config.db` on the same named volume for local container runs.
+factor-context, provider-profile, and import-job tools use tenant-scoped
+Postgres state.
+`MARKET_DATA_DB_PATH` and `PROVIDER_CONFIG_DB_PATH` remain explicit SQLite
+fallbacks for offline market snapshots, provider context, screener runs,
+provider profiles, and import-job metadata. The repository Compose file mounts
+`/data/market-data.db` and `/data/provider-config.db` on the same named volume
+for local fallback runs.
 Configured refreshes can import normalized market, universe, fundamentals,
 sentiment, volatility, and macro records into Postgres in production-like mode
 or the SQLite fallback in offline mode. Scheduled
