@@ -57,8 +57,9 @@ Current coverage:
   approver-bound grant issuance and revocation, body-spoofed `approved_by`
   rejection, fresh execution-under-grant acceptance, revoked-grant rejection,
   Postgres-store routing when `PORTFOLIO_STORAGE_BACKEND=postgres`, database
-  URL redaction from responses, and paper-only response payloads without FYERS
-  or credential fields.
+  URL redaction from responses, duplicate idempotency rejection from the
+  Postgres ledger rather than process-local memory, and paper-only response
+  payloads without FYERS or credential fields.
 - Capstone evidence manifest contracts build a repo-safe submission evidence summary without local paths, broker/provider secrets, real account data, or raw provider payloads.
 - Model-backed eval checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, write a redacted baseline summary, produce deterministic failure triage, expose a manual credentialed baseline workflow, and never print secret values.
 - Eval dataset contracts verify the selected metrics include the LLM response-quality rubric plus deterministic forbidden-action and workflow-tool-trajectory code metrics, and execute representative trajectory-policy examples directly from `eval_config.yaml`.

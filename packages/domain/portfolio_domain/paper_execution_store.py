@@ -403,6 +403,29 @@ class PostgresPaperExecutionStore:
         _reject_secret_payload(grant.to_dict())
         return grant
 
+    def execution_decision_exists(self, idempotency_key: str) -> bool:
+        clean_key = idempotency_key.strip()
+        if not clean_key:
+            return False
+        params = {
+            "tenant_id": self._tenant_id,
+            "idempotency_key": clean_key,
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT TRUE AS exists
+                    FROM paper_ledger_entries
+                    WHERE tenant_id = %(tenant_id)s
+                      AND idempotency_key = %(idempotency_key)s
+                    LIMIT 1
+                    """.strip(),
+                    params,
+                )
+                row = _fetch_one_mapping(cursor)
+        return bool(row and row.get("exists"))
+
     def record_execution_decision(
         self,
         *,

@@ -599,6 +599,28 @@ def _record_paper_execution_decision(
     )
 
 
+def _used_paper_idempotency_keys(
+    actor: ActorContext,
+    idempotency_key: str,
+) -> set[str]:
+    clean_key = idempotency_key.strip()
+    if not clean_key:
+        return set()
+    store = _paper_execution_store_for_actor(actor)
+    if store is not None:
+        return {clean_key} if store.execution_decision_exists(clean_key) else set()
+    return set(_PAPER_IDEMPOTENCY_KEYS.setdefault(actor.tenant_id, set()))
+
+
+def _remember_paper_idempotency_key(
+    actor: ActorContext,
+    idempotency_key: str,
+) -> None:
+    if _paper_execution_store_for_actor(actor) is not None:
+        return
+    _PAPER_IDEMPOTENCY_KEYS.setdefault(actor.tenant_id, set()).add(idempotency_key)
+
+
 def _paper_order_from_route(
     actor: ActorContext,
     order_id: str,
@@ -761,7 +783,7 @@ def post_paper_order_execute(
     policy = _get_paper_policy(actor, grant.policy_ceiling_id)
     if policy is None:
         raise HTTPException(status_code=404, detail="paper_policy_not_found")
-    used_keys = _PAPER_IDEMPOTENCY_KEYS.setdefault(actor.tenant_id, set())
+    used_keys = _used_paper_idempotency_keys(actor, request.idempotency_key)
     decision = evaluate_paper_execution_order(
         policy=policy,
         grant=grant,
@@ -777,7 +799,7 @@ def post_paper_order_execute(
         current_net_notional=request.current_net_notional,
         kill_switch_active=request.kill_switch_active,
     )
-    used_keys.add(request.idempotency_key)
+    _remember_paper_idempotency_key(actor, request.idempotency_key)
     status_code = 200 if decision.status == "accepted" else 409
     if status_code != 200:
         return JSONResponse(

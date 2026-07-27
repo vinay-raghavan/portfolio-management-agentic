@@ -46,7 +46,8 @@ This slice establishes the safe contract between research, simulation, and the f
 - `PostgresPaperExecutionStore` persists and reads protected policy ceilings,
   batch requests, execution grants, and idempotent ledger decision rows through
   tenant-scoped Postgres tables created by Alembic. It can revoke active grants
-  atomically, stores JSON-safe summaries only, and rejects FYERS, broker
+  atomically, checks the durable ledger for duplicate idempotency keys before
+  API execution, stores JSON-safe summaries only, and rejects FYERS, broker
   trading-token, and credential-looking payload contamination before writes or
   reads return domain contracts.
 - The agent service exposes protected `/v1/paper/policies`,
@@ -75,9 +76,11 @@ store adapter for bounded paper execution state. Alembic migration
 `permitted_symbols` to `paper_execution_policy_ceilings` so policy ceilings can
 bound both symbols and future universe scopes without overloading fields.
 The protected HTTP endpoints keep local process state only as the
-SQLite/offline deterministic fallback; the next production hardening step is
-moving accepted execution-decision recording into a dedicated worker queue with
-durable idempotency reservation.
+SQLite/offline deterministic fallback. In Postgres mode, duplicate
+idempotency-key rejection reads from the tenant-scoped paper ledger instead of
+process memory. The next production hardening step is moving accepted
+execution-decision recording into a dedicated worker queue with durable grant
+capacity reservation.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.

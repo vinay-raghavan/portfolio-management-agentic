@@ -64,12 +64,12 @@ Set `PORTFOLIO_STORAGE_BACKEND=postgres` with `PORTFOLIO_DATABASE_URL` for
 production-like container runs; the repository Compose file runs Alembic
 migrations before the agent service starts. Set
 `PORTFOLIO_STORAGE_BACKEND=sqlite` for local/offline compatibility. When
-Postgres is selected, protected `/v1/paper/*` policy, batch, grant, revoke, and
-accepted execution-decision flows use the tenant-scoped
-`PostgresPaperExecutionStore` and never return the configured database URL.
-When SQLite/local mode is selected, those HTTP contracts keep their
-process-local deterministic fallback for API tests and offline development.
-When
+Postgres is selected, protected `/v1/paper/*` policy, batch, grant, revoke,
+duplicate-idempotency detection, and accepted execution-decision flows use the
+tenant-scoped `PostgresPaperExecutionStore` and never return the configured
+database URL. When SQLite/local mode is selected, those HTTP contracts keep
+their process-local deterministic fallback for API tests and offline
+development. When
 `PAPER_LEDGER_DB_PATH` is configured, strategy, backtest, and paper-ledger
 tools use SQLite-backed state while individual stores are ported to Postgres.
 The repository Compose file mounts `/data/paper-ledger.db` on a named volume

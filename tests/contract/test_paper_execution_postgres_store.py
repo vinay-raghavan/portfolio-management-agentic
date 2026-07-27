@@ -282,6 +282,25 @@ def test_store_records_execution_decision_as_idempotent_paper_ledger_entry() -> 
     assert connection.committed is True
 
 
+def test_store_checks_ledger_idempotency_key_with_tenant_scope_without_commit() -> None:
+    cursor = _FakeCursor(columns=["exists"], rows=[(True,), (None,)])
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+
+    assert store.execution_decision_exists("idem-seen") is True
+    assert store.execution_decision_exists("idem-new") is False
+
+    first_sql, first_params = cursor.executed[0]
+    second_sql, second_params = cursor.executed[1]
+    assert "FROM paper_ledger_entries" in first_sql
+    assert "tenant_id = %(tenant_id)s" in first_sql
+    assert "idempotency_key = %(idempotency_key)s" in first_sql
+    assert "LIMIT 1" in first_sql
+    assert first_params == {"tenant_id": TENANT_ID, "idempotency_key": "idem-seen"}
+    assert second_params == {"tenant_id": TENANT_ID, "idempotency_key": "idem-new"}
+    assert connection.committed is False
+
+
 def test_store_reads_policy_ceiling_with_tenant_scope() -> None:
     columns = [
         "id",
