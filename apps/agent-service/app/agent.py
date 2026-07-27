@@ -16,7 +16,8 @@
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
+from urllib.parse import urlparse
 
 from google.adk.agents import Agent
 from google.adk.apps import App
@@ -38,6 +39,7 @@ for relative_path in (
         sys.path.insert(0, package_path)
 
 from portfolio_mcp.tools import (  # noqa: E402
+    EXPOSED_TOOL_NAMES,
     create_backtest_request,
     create_pre_market_briefing,
     create_paper_order_proposal,
@@ -97,6 +99,67 @@ from portfolio_harness import (  # noqa: E402
 )
 
 
+IN_PROCESS_AGENT_TOOLS = [
+    get_portfolio_summary,
+    get_watchlist_snapshot,
+    get_signal_summary,
+    get_research_digest,
+    create_pre_market_briefing,
+    run_momentum_screener,
+    list_data_providers,
+    get_data_provider_health,
+    validate_data_provider_imports,
+    list_provider_profiles,
+    list_provider_source_templates,
+    list_provider_source_onboarding,
+    list_provider_import_previews,
+    list_provider_import_reconciliation,
+    list_provider_import_jobs,
+    get_provider_refresh_readiness,
+    refresh_provider_import_profile,
+    run_provider_refresh_schedule,
+    get_market_data_snapshot,
+    list_market_data_snapshots,
+    get_universe_members,
+    list_universes,
+    run_screener,
+    list_screener_runs,
+    explain_candidate_evidence,
+    search_pattern_library,
+    search_curated_research,
+    get_pattern_playbook,
+    cite_strategy_evidence,
+    explain_factor_stack,
+    get_recommendation_explanation,
+    generate_paper_trading_report,
+    create_backtest_request,
+    list_backtest_requests,
+    get_backtest_request,
+    get_backtest_result,
+    list_paper_orders,
+    list_paper_positions,
+    list_paper_fills,
+    get_paper_portfolio_accounting,
+    create_paper_order_proposal,
+    get_approval_queue,
+    get_audit_events,
+    get_risk_review,
+    draft_paper_strategy,
+    list_strategy_drafts,
+    get_strategy_draft,
+    create_paper_trade_proposal,
+]
+
+
+PRIVATE_MCP_HOSTS = {
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "mcp-server",
+    "host.containers.internal",
+}
+
+
 def configure_model_environment() -> None:
     """Configure model auth mode without doing credential discovery at import."""
     if os.getenv("GOOGLE_API_KEY"):
@@ -144,6 +207,53 @@ def build_model():
         return LiteLlm(model=f"openai/{config.model}")
 
     raise ValueError(f"Unsupported LLM_PROVIDER: {config.provider.value}")
+
+
+def build_agent_tools(env: Mapping[str, str] | None = None) -> list[Any]:
+    """Build the ADK tool surface for the configured transport.
+
+    Local tests and offline development default to the in-process adapter. The
+    production-like container path sets ``AGENT_TOOL_TRANSPORT=mcp`` so ADK
+    talks to the policy-enforced MCP server through streamable HTTP while
+    filtering to the repository's safe MCP catalog.
+    """
+    env = os.environ if env is None else env
+    transport = env.get("AGENT_TOOL_TRANSPORT", "in_process").strip().lower()
+    if transport in {"in_process", "in-process", "local"}:
+        return list(IN_PROCESS_AGENT_TOOLS)
+    if transport != "mcp":
+        raise RuntimeError(f"agent_tool_transport_unsupported:{transport}")
+
+    mcp_url = env.get("AGENT_MCP_URL", "http://mcp-server:8081/mcp").strip()
+    if not _is_private_mcp_url(mcp_url):
+        raise RuntimeError("agent_mcp_url_not_private")
+
+    try:
+        from google.adk.tools.mcp_tool.mcp_session_manager import (
+            StreamableHTTPConnectionParams,
+        )
+        from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
+    except ImportError as exc:  # pragma: no cover - exercised when deps omitted.
+        raise RuntimeError(
+            "agent_mcp_transport_unavailable: install mcp dependency in agent-service"
+        ) from exc
+
+    return [
+        McpToolset(
+            connection_params=StreamableHTTPConnectionParams(url=mcp_url),
+            tool_filter=sorted(EXPOSED_TOOL_NAMES),
+        )
+    ]
+
+
+def _is_private_mcp_url(value: str) -> bool:
+    parsed = urlparse(value)
+    if parsed.scheme != "http":
+        return False
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    return hostname in PRIVATE_MCP_HOSTS or hostname.endswith(".internal")
 
 
 WORKFLOW_ROUTING_GUIDE = """
@@ -303,56 +413,7 @@ Core rules:
 """,
     before_model_callback=_route_scope_model_request,
     before_tool_callback=_route_scope_tool_call,
-    tools=[
-        get_portfolio_summary,
-        get_watchlist_snapshot,
-        get_signal_summary,
-        get_research_digest,
-        create_pre_market_briefing,
-        run_momentum_screener,
-        list_data_providers,
-        get_data_provider_health,
-        validate_data_provider_imports,
-        list_provider_profiles,
-        list_provider_source_templates,
-        list_provider_source_onboarding,
-        list_provider_import_previews,
-        list_provider_import_reconciliation,
-        list_provider_import_jobs,
-        get_provider_refresh_readiness,
-        refresh_provider_import_profile,
-        run_provider_refresh_schedule,
-        get_market_data_snapshot,
-        list_market_data_snapshots,
-        get_universe_members,
-        list_universes,
-        run_screener,
-        list_screener_runs,
-        explain_candidate_evidence,
-        search_pattern_library,
-        search_curated_research,
-        get_pattern_playbook,
-        cite_strategy_evidence,
-        explain_factor_stack,
-        get_recommendation_explanation,
-        generate_paper_trading_report,
-        create_backtest_request,
-        list_backtest_requests,
-        get_backtest_request,
-        get_backtest_result,
-        list_paper_orders,
-        list_paper_positions,
-        list_paper_fills,
-        get_paper_portfolio_accounting,
-        create_paper_order_proposal,
-        get_approval_queue,
-        get_audit_events,
-        get_risk_review,
-        draft_paper_strategy,
-        list_strategy_drafts,
-        get_strategy_draft,
-        create_paper_trade_proposal,
-    ],
+    tools=build_agent_tools(),
 )
 
 app = App(

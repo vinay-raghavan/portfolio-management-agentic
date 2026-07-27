@@ -21,6 +21,8 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "LLM_PROVIDER=gemini" in env_example
     assert "ENABLE_CLOUD_TELEMETRY=false" in env_example
     assert "MCP_TRANSPORT=streamable-http" in env_example
+    assert "AGENT_TOOL_TRANSPORT=mcp" in env_example
+    assert "AGENT_MCP_URL=http://mcp-server:8081/mcp" in env_example
     assert "PAPER_LEDGER_DB_PATH=data/paper-ledger.db" in env_example
     assert "MARKET_DATA_DB_PATH=data/market-data.db" in env_example
     assert "PROVIDER_CONFIG_DB_PATH=data/provider-config.db" in env_example
@@ -98,6 +100,8 @@ def test_compose_mounts_paper_ledger_volume() -> None:
     assert "ollama pull \"$${OLLAMA_PREPULL_MODEL}\"" in compose
     assert "MODEL_CONTEXT_WINDOW_TOKENS: ${MODEL_CONTEXT_WINDOW_TOKENS:-8192}" in compose
     assert "MODEL_TUNING_CANDIDATES: ${MODEL_TUNING_CANDIDATES:-llama3.1:8b,gemma:7b,gemma4:12b}" in compose
+    assert "AGENT_TOOL_TRANSPORT: ${AGENT_TOOL_TRANSPORT:-mcp}" in compose
+    assert "AGENT_MCP_URL: ${AGENT_MCP_URL:-http://mcp-server:8081/mcp}" in compose
     assert '"11434:11434"' not in compose
     assert "paper-ledger-data:/data" in compose
     assert "paper-ledger-data:" in compose
