@@ -211,7 +211,7 @@ def run_momentum_screener(limit: int) -> dict[str, Any]:
 
 
 def list_data_providers() -> dict[str, Any]:
-    """Read-only provider-readiness catalog to call before claiming configured data is available."""
+    """Read-only provider-readiness catalog; always follow with get_data_provider_health before availability claims."""
     tool_name = "list_data_providers"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -866,7 +866,7 @@ def run_screener(
     preset: str = "momentum",
     limit: int = 10,
 ) -> dict[str, Any]:
-    """Read-only candidate-discovery screener with hard gates; does not draft or place orders."""
+    """Read-only candidate-discovery screener with hard gates; call explain_candidate_evidence or explain_factor_stack before explaining a candidate; does not draft or place orders."""
     tool_name = "run_screener"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -915,7 +915,7 @@ def explain_candidate_evidence(
     symbol: str,
     setup: str = "",
 ) -> dict[str, Any]:
-    """Read-only candidate-explanation after a screener candidate; does not create strategies or orders."""
+    """Read-only candidate-explanation after a screener candidate; call cite_strategy_evidence when pattern sources are requested; does not create strategies or orders."""
     tool_name = "explain_candidate_evidence"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1072,7 +1072,7 @@ def get_pattern_playbook(pattern_id: str) -> dict[str, Any]:
 
 
 def cite_strategy_evidence(symbol: str, setup: str) -> dict[str, Any]:
-    """Read-only citation-backed evidence for a paper-strategy explanation."""
+    """Read-only citation-backed evidence for source-grounded candidate or paper-strategy explanation."""
     tool_name = "cite_strategy_evidence"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1093,7 +1093,7 @@ def cite_strategy_evidence(symbol: str, setup: str) -> dict[str, Any]:
 
 
 def explain_factor_stack(symbol: str, setup: str = "") -> dict[str, Any]:
-    """Read-only factor stack with deterministic factors, citations, and paper-only next actions."""
+    """Read-only factor stack with deterministic factors, citations, and paper-only next actions; follow with cite_strategy_evidence for source-grounded pattern citations."""
     tool_name = "explain_factor_stack"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1114,7 +1114,7 @@ def explain_factor_stack(symbol: str, setup: str = "") -> dict[str, Any]:
 
 
 def get_recommendation_explanation(symbol: str, setup: str) -> dict[str, Any]:
-    """Read-only recommendation-to-paper-order explanation before any paper order proposal."""
+    """Read-only recommendation-to-paper-order explanation; must precede any paper order proposal."""
     tool_name = "get_recommendation_explanation"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1248,7 +1248,7 @@ def get_backtest_result(request_id: str) -> dict[str, Any]:
 
 
 def list_paper_orders() -> dict[str, Any]:
-    """Read-only paper order proposals without executing or filling them."""
+    """Read-only paper order proposals; inspect after get_approval_queue and before fills/accounting, without executing or filling them."""
     tool_name = "list_paper_orders"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1278,7 +1278,7 @@ def list_paper_positions() -> dict[str, Any]:
 
 
 def list_paper_fills() -> dict[str, Any]:
-    """Read-only simulated paper fills without touching any broker provider."""
+    """Read-only simulated paper fills after approval queue and paper order status inspection, without touching any broker provider."""
     tool_name = "list_paper_fills"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1292,7 +1292,7 @@ def list_paper_fills() -> dict[str, Any]:
 
 
 def get_paper_portfolio_accounting() -> dict[str, Any]:
-    """Read-only paper portfolio accounting after simulated fills."""
+    """Read-only paper portfolio accounting after simulated fills and paper order status inspection."""
     tool_name = "get_paper_portfolio_accounting"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1312,7 +1312,7 @@ def create_paper_order_proposal(
     order_type: str = "market",
     requested_price: float | None = None,
 ) -> dict[str, Any]:
-    """Draft-only recommendation-to-paper-order proposal; requires a ready recommendation preflight and does not fill."""
+    """Draft-only recommendation-to-paper-order proposal; call get_recommendation_explanation first, requires a ready recommendation preflight, and does not fill."""
     tool_name = "create_paper_order_proposal"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1429,7 +1429,7 @@ def simulate_approved_paper_fill(
 
 
 def get_approval_queue() -> dict[str, Any]:
-    """Read-only pending human approvals for paper-only actions."""
+    """Read-only pending human approvals; first step before paper order, fill, accounting, or post-approval inspection."""
     tool_name = "get_approval_queue"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
@@ -1472,7 +1472,7 @@ def get_risk_review() -> dict[str, Any]:
 
 
 def draft_paper_strategy(symbol: str, rationale: str) -> dict[str, Any]:
-    """Draft-only paper-trading strategy without executing any trade."""
+    """Draft-only paper-trading strategy; infer rationale from screener/backtest evidence when requested, without executing any trade."""
     tool_name = "draft_paper_strategy"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:

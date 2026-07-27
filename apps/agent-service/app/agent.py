@@ -79,7 +79,6 @@ from portfolio_mcp.tools import (  # noqa: E402
     run_momentum_screener,
     search_curated_research,
     search_pattern_library,
-    simulate_approved_paper_fill,
     refresh_provider_import_profile,
     run_provider_refresh_schedule,
     validate_data_provider_imports,
@@ -142,11 +141,11 @@ def build_model():
 WORKFLOW_ROUTING_GUIDE = """
 Workflow routes:
 - Pre-market briefing: prefer create_pre_market_briefing. If composing manually, call get_portfolio_summary, get_watchlist_snapshot, get_signal_summary, get_research_digest, and get_risk_review before answering. Return review actions only.
-- Provider readiness: call list_data_providers and get_data_provider_health before claiming configured data is available. Use validate_data_provider_imports, list_provider_source_onboarding, list_provider_import_previews, list_provider_import_reconciliation, list_provider_import_jobs, get_provider_refresh_readiness, refresh_provider_import_profile, and run_provider_refresh_schedule for setup, preview, reconciliation, backoff, and refresh questions. Never expose file paths or credential values.
-- Candidate explanation: use list_universes or get_universe_members when universe context matters, run_screener or run_momentum_screener for candidates, explain_candidate_evidence for factor details, search_pattern_library/search_curated_research/get_pattern_playbook/cite_strategy_evidence for citations, and explain_factor_stack for the final evidence stack.
-- Recommendation to paper order: call get_recommendation_explanation first. If the user asks for paper execution, create or inspect simulated backtest evidence with create_backtest_request, get_backtest_request, get_backtest_result, and list_backtest_requests, then call create_paper_order_proposal only when the readiness preflight can stay pending approval. Show get_approval_queue and get_audit_events after proposal attempts.
-- Approval-gated simulated fill: approval must come from the verified human approval API before any simulated fill. The model cannot approve orders or supply approver identity. Use get_approval_queue, simulate_approved_paper_fill, list_paper_orders, list_paper_positions, list_paper_fills, get_paper_portfolio_accounting, and get_audit_events when the user explicitly asks to inspect approved simulations.
-- Strategy and backtest history: use draft_paper_strategy for new paper strategy drafts, list_strategy_drafts/get_strategy_draft for stored strategy context, and list_backtest_requests/get_backtest_request/get_backtest_result for stored simulation context.
+- Provider readiness: always call both list_data_providers and get_data_provider_health before claiming configured data is available; do not answer after the catalog alone. Use validate_data_provider_imports, list_provider_source_onboarding, list_provider_import_previews, list_provider_import_reconciliation, list_provider_import_jobs, get_provider_refresh_readiness, refresh_provider_import_profile, and run_provider_refresh_schedule for setup, preview, reconciliation, backoff, and refresh questions. Never expose file paths or credential values.
+- Candidate explanation: use list_universes or get_universe_members when universe context matters, run_screener or run_momentum_screener for candidates, then call explain_candidate_evidence or explain_factor_stack before answering. If the user asks for pattern evidence, source grounding, citations, or relevant pattern sources, call cite_strategy_evidence or search_pattern_library/search_curated_research/get_pattern_playbook after the candidate/factor evidence; do not rely only on citations embedded inside factor output. Do not stop after the screener when explanation or citations are requested.
+- Recommendation to paper order: always call get_recommendation_explanation before create_paper_order_proposal, even when the user starts from a backtest request. If the user asks for paper execution, create or inspect simulated backtest evidence with create_backtest_request, get_backtest_request, get_backtest_result, and list_backtest_requests, then call create_paper_order_proposal only when the readiness preflight can stay pending approval. Show get_approval_queue and get_audit_events after proposal attempts.
+- Approval-gated simulated fill: approval and fill mutation must come from the verified human approval API or protected paper-execution worker, never from the model. The model cannot approve orders, simulate fills, or supply approver identity. For already-approved, externally approved, post-approval, or simulated-fill paper-state inspection, first call get_approval_queue and list_paper_orders to verify approval/order context, then list_paper_positions, list_paper_fills, get_paper_portfolio_accounting, and get_audit_events.
+- Strategy and backtest history: use draft_paper_strategy for new paper strategy drafts. When a user explicitly asks to draft from screener/backtest evidence, infer a concise rationale from the observed tool evidence instead of asking a follow-up. Use list_strategy_drafts/get_strategy_draft for stored strategy context, and list_backtest_requests/get_backtest_request/get_backtest_result for stored simulation context.
 - Paper-trading report: use generate_paper_trading_report for read-only review, accounting, positions, orders, fills, approvals, risk state, recommendation context, and redacted audit export requests. Use get_audit_events when the user asks for the raw redacted audit trail.
 - Feature navigation: summarize dashboard, portfolio, watchlist, screeners, provider settings, strategy/backtest, recommendation, approvals, simulated fills, reports, risk, and audit capabilities as paper-only or read-only. Mention that configured data adapters are for data fetching only.
 - Forbidden requests: for live order placement, live strategy enablement, broker trading token use, credential disclosure, provider secret disclosure, or approval bypass, refuse without calling a tool. State the safe paper-only alternative and the no live-trading fallback.
@@ -167,7 +166,7 @@ Core rules:
 - Use market snapshot and screener-run history tools when users ask what data has been cached or already screened.
 - Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
 - Use curated research search only for allowlisted read-only research context; do not browse or ingest arbitrary URLs.
-- Use recommendation explanations to join screener, factor, strategy-history, backtest, risk, and paper-ledger evidence before proposing next steps.
+- Use recommendation explanations to join screener, factor, strategy-history, backtest, risk, and paper-ledger evidence before proposing next steps or paper orders.
 - Use strategy draft history, backtest request/result tools, and paper-ledger tools for simulation review, pending approvals, and audit context.
 - Use paper-trading reports for read-only review summaries and redacted audit exports.
 - Keep deterministic tool outputs, citations, risk checks, and policy ahead of model intuition.
@@ -176,7 +175,7 @@ Core rules:
 - Never enable live strategies.
 - Never request, reveal, or use broker trading tokens.
 - Refuse forbidden live order, live strategy, broker trading token, credential disclosure, provider secret disclosure, and approval-bypass requests without calling a tool; offer the safe paper-only alternative and note the no live-trading fallback.
-- Draft strategies and paper orders may be created, but simulated fills require human approval first.
+- Draft strategies and paper orders may be created, but approval and simulated-fill mutation stay outside the model-visible tool bundle.
 - Explain uncertainty, counterevidence, and risk in plain language.
 
 {WORKFLOW_ROUTING_GUIDE}
@@ -223,7 +222,6 @@ Core rules:
         list_paper_fills,
         get_paper_portfolio_accounting,
         create_paper_order_proposal,
-        simulate_approved_paper_fill,
         get_approval_queue,
         get_audit_events,
         get_risk_review,

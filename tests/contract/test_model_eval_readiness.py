@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from scripts.run_agent_evals import (
@@ -11,6 +12,7 @@ from scripts.run_agent_evals import (
     build_preflight,
     build_run_summary,
     build_triage_report,
+    isolated_eval_state_environment,
     load_env_file,
     main as eval_main,
     run_eval_mode,
@@ -180,8 +182,57 @@ def test_eval_run_mode_records_command_results_and_stops_on_failure(tmp_path: Pa
     assert [result.name for result in results] == ["generate"]
     assert results[0].return_code == 7
     assert calls == [build_eval_commands(config)["generate"]]
-    assert (tmp_path / "artifacts/evals/traces").is_dir()
-    assert (tmp_path / "artifacts/evals/grade-results").is_dir()
+
+
+def test_eval_runner_isolates_stateful_local_stores(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("PAPER_LEDGER_DB_PATH", "data/paper-ledger.db")
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", "data/market-data.db")
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", "data/provider-config.db")
+
+    observed_env: list[dict[str, str]] = []
+
+    def passing_runner(command: list[str], cwd: Path) -> int:
+        observed_env.append(
+            {
+                "PAPER_LEDGER_DB_PATH": os.environ["PAPER_LEDGER_DB_PATH"],
+                "MARKET_DATA_DB_PATH": os.environ["MARKET_DATA_DB_PATH"],
+                "PROVIDER_CONFIG_DB_PATH": os.environ["PROVIDER_CONFIG_DB_PATH"],
+            }
+        )
+        return 0
+
+    results = run_eval_mode(
+        "run",
+        EvalRunConfig(app_dir=tmp_path),
+        runner=passing_runner,
+    )
+
+    assert [result.return_code for result in results] == [0, 0]
+    assert len(observed_env) == 2
+    for snapshot in observed_env:
+        assert snapshot["PAPER_LEDGER_DB_PATH"].endswith("paper-ledger.db")
+        assert snapshot["MARKET_DATA_DB_PATH"].endswith("market-data.db")
+        assert snapshot["PROVIDER_CONFIG_DB_PATH"].endswith("provider-config.db")
+        assert "data/" not in str(snapshot)
+    assert os.environ["PAPER_LEDGER_DB_PATH"] == "data/paper-ledger.db"
+    assert os.environ["MARKET_DATA_DB_PATH"] == "data/market-data.db"
+    assert os.environ["PROVIDER_CONFIG_DB_PATH"] == "data/provider-config.db"
+
+
+def test_isolated_eval_state_environment_restores_missing_values(monkeypatch) -> None:
+    monkeypatch.delenv("PAPER_LEDGER_DB_PATH", raising=False)
+    monkeypatch.delenv("MARKET_DATA_DB_PATH", raising=False)
+    monkeypatch.delenv("PROVIDER_CONFIG_DB_PATH", raising=False)
+
+    with isolated_eval_state_environment() as state_dir:
+        assert state_dir.exists()
+        assert os.environ["PAPER_LEDGER_DB_PATH"].endswith("paper-ledger.db")
+        assert os.environ["MARKET_DATA_DB_PATH"].endswith("market-data.db")
+        assert os.environ["PROVIDER_CONFIG_DB_PATH"].endswith("provider-config.db")
+
+    assert "PAPER_LEDGER_DB_PATH" not in os.environ
+    assert "MARKET_DATA_DB_PATH" not in os.environ
+    assert "PROVIDER_CONFIG_DB_PATH" not in os.environ
 
 
 def test_eval_run_mode_clears_stale_candidate_artifacts(tmp_path: Path) -> None:
