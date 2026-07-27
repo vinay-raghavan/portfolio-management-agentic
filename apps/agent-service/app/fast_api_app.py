@@ -62,6 +62,7 @@ if model_provider_path not in sys.path:
     sys.path.insert(0, model_provider_path)
 
 from portfolio_domain import (  # noqa: E402
+    BrokerAccountSnapshot,
     DatabaseBackend,
     DeterministicPaperExecutionWorker,
     FyersConnection,
@@ -77,6 +78,7 @@ from portfolio_domain import (  # noqa: E402
     PostgresFyersIntegrationStore,
     PostgresPaperExecutionStore,
     ProviderRefreshJob,
+    ProviderSnapshotEnvelope,
     actor_hash,
     evaluate_database_runtime_readiness,
     get_fyers_readonly_connector,
@@ -677,10 +679,13 @@ def post_fyers_refresh(
         refresh_type=request.refresh_type,
     )
     snapshots: list[dict[str, object]] = []
+    snapshot_envelopes: list[ProviderSnapshotEnvelope] = []
     errors: list[str] = []
     for symbol in request.symbols[:20]:
         try:
-            snapshots.append(connector.get_quote_envelope(symbol).to_dict())
+            envelope = connector.get_quote_envelope(symbol)
+            snapshot_envelopes.append(envelope)
+            snapshots.append(envelope.to_dict())
         except ValueError as exc:
             errors.append(str(exc))
     account_snapshot = connector.get_account_snapshot()
@@ -689,6 +694,13 @@ def post_fyers_refresh(
         errors=tuple(errors),
     )
     connection = _get_or_create_fyers_connection(actor)
+    _store_fyers_refresh_result(
+        actor=actor,
+        job=job,
+        connection=connection,
+        snapshots=tuple(snapshot_envelopes),
+        account_snapshot=account_snapshot,
+    )
     return {
         "status": "success",
         "job": job.to_dict(),
@@ -891,6 +903,25 @@ def _clear_fyers_oauth_sessions(actor: ActorContext) -> None:
             and session.connection_id == connection.connection_id
         ):
             del _FYERS_OAUTH_STATES[key]
+
+
+def _store_fyers_refresh_result(
+    *,
+    actor: ActorContext,
+    job: ProviderRefreshJob,
+    connection: FyersConnection,
+    snapshots: tuple[ProviderSnapshotEnvelope, ...],
+    account_snapshot: BrokerAccountSnapshot,
+) -> None:
+    store = _fyers_integration_store(actor)
+    if store is None:
+        return
+    store.record_refresh_result(
+        job=job,
+        connection_id=connection.connection_id,
+        snapshots=snapshots,
+        account_snapshot=account_snapshot,
+    )
 
 
 def _pkce_challenge(code_verifier: str) -> str:

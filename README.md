@@ -32,6 +32,10 @@ explicit safety policy.
   In production-like Postgres mode, sanitized connection metadata and hashed
   OAuth session state are stored tenant-scoped in Postgres; provider tokens,
   client secrets, trading tokens, and PKCE verifiers are never persisted.
+  Protected refreshes also persist read-only provider refresh-job rows,
+  provider snapshot envelopes, and broker account snapshots without converting
+  provider errors into empty holdings or mixing FYERS data into the paper
+  ledger.
 - Recommendation explanations join screener/factor evidence, provider refresh readiness, import-reconciliation gates, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with readiness preflight review sections, redacted audit exports, paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require a ready recommendation preflight before paper order proposals enter approval, keep approval and simulated-fill mutation on protected human/API paths, update paper positions/accounting, expose approval queues, and emit redacted audit events with the readiness snapshot.
@@ -319,6 +323,13 @@ daily auth expiry, PKCE challenge, and timestamps only; credential references
 remain null until the credential-vault worker lands, and tokens/verifiers are
 rejected from the storage contract. Local/offline mode keeps the process-local
 fallback so fixture-only API tests remain credential-free.
+
+FYERS refresh results use the same Postgres backend in production-like mode.
+The protected refresh endpoint records `provider_refresh_jobs`,
+`provider_snapshot_envelopes`, and `broker_account_snapshots` with source,
+freshness, provenance, signed quantities, funds, and explicit errors. Missing
+provider data stays an error on the refresh job; it is not replaced with Yahoo
+fallback data, empty holdings, zero funds, or paper-ledger state.
 
 Agent session memory is intentionally compact and short-lived. The runtime
 contract stores only a sanitized task summary plus references to authoritative

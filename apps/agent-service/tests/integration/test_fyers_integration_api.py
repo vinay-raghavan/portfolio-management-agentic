@@ -188,6 +188,7 @@ def test_fyers_api_uses_postgres_store_when_configured(monkeypatch) -> None:
             self.upserted_connection_count = 0
             self.upserted_session_count = 0
             self.cleared_connection_ids: list[str] = []
+            self.recorded_refreshes: list[dict[str, object]] = []
 
         def get_connection(self, *, user_id_hash: str) -> object | None:
             return self.connections.get(user_id_hash)
@@ -219,6 +220,23 @@ def test_fyers_api_uses_postgres_store_when_configured(monkeypatch) -> None:
                 if session.connection_id == connection_id:
                     del self.sessions[state_hash]
 
+        def record_refresh_result(
+            self,
+            *,
+            job,
+            connection_id: str,
+            snapshots,
+            account_snapshot,
+        ) -> None:
+            self.recorded_refreshes.append(
+                {
+                    "job": job,
+                    "connection_id": connection_id,
+                    "snapshots": tuple(snapshots),
+                    "account_snapshot": account_snapshot,
+                }
+            )
+
     fake_store = _FakeFyersStore()
     monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
     monkeypatch.setenv("PORTFOLIO_DATABASE_URL", "postgresql://redacted/db")
@@ -242,6 +260,11 @@ def test_fyers_api_uses_postgres_store_when_configured(monkeypatch) -> None:
         headers=_headers("postgres-fyers-actor", "analyst"),
         json={"state": state, "auth_code": "browser-auth-code"},
     )
+    refresh = client.post(
+        "/v1/integrations/fyers/refresh",
+        headers=_headers("postgres-fyers-actor", "analyst"),
+        json={"refresh_type": "account_snapshot", "symbols": ["INFY"]},
+    )
     disconnect = client.post(
         "/v1/integrations/fyers/oauth/disconnect",
         headers=_headers("postgres-fyers-actor", "analyst"),
@@ -250,14 +273,25 @@ def test_fyers_api_uses_postgres_store_when_configured(monkeypatch) -> None:
 
     assert start.status_code == 200
     assert callback.status_code == 200
+    assert refresh.status_code == 200
     assert disconnect.status_code == 200
     assert fake_store.upserted_connection_count >= 3
     assert fake_store.upserted_session_count == 1
+    assert len(fake_store.recorded_refreshes) == 1
+    assert fake_store.recorded_refreshes[0]["connection_id"] == start.json()["connection"][
+        "connection_id"
+    ]
+    assert fake_store.recorded_refreshes[0]["job"].status == "completed"
+    assert fake_store.recorded_refreshes[0]["snapshots"][0].snapshot_type == "quote"
+    assert fake_store.recorded_refreshes[0]["account_snapshot"].positions[1].signed_quantity == -1
     assert fake_store.sessions == {}
     assert fake_store.cleared_connection_ids == [start.json()["connection"]["connection_id"]]
     assert fast_api_app._FYERS_CONNECTIONS == {}
     assert fast_api_app._FYERS_OAUTH_STATES == {}
-    serialized = f"{fake_store.connections} {start.json()} {callback.json()} {disconnect.json()}".lower()
+    serialized = (
+        f"{fake_store.connections} {fake_store.recorded_refreshes} "
+        f"{start.json()} {callback.json()} {refresh.json()} {disconnect.json()}"
+    ).lower()
     assert "code_verifier" not in serialized
     assert "access_token" not in serialized
     assert "refresh_token" not in serialized

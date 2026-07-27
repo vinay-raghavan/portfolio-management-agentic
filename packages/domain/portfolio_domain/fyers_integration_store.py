@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
-from .fyers_integration import FyersConnection, FyersOAuthSession
+from .fyers_integration import FyersConnection, FyersOAuthSession, ProviderRefreshJob
+from .fyers_readonly import BrokerAccountSnapshot, ProviderSnapshotEnvelope
 
 
 class PostgresFyersIntegrationStore:
@@ -250,6 +252,111 @@ class PostgresFyersIntegrationStore:
                 )
             connection.commit()
 
+    def record_refresh_result(
+        self,
+        *,
+        job: ProviderRefreshJob,
+        connection_id: str,
+        snapshots: tuple[ProviderSnapshotEnvelope, ...],
+        account_snapshot: BrokerAccountSnapshot | None,
+    ) -> None:
+        if job.tenant_id != self._tenant_id:
+            raise ValueError("FYERS refresh job tenant does not match store tenant")
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO provider_refresh_jobs (
+                        id,
+                        tenant_id,
+                        provider,
+                        connection_id,
+                        job_type,
+                        status,
+                        requested_by,
+                        normalized_query_or_symbol,
+                        scheduled_for,
+                        started_at,
+                        finished_at,
+                        retry_count,
+                        error,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        %(refresh_row_id)s,
+                        %(tenant_id)s,
+                        %(provider)s,
+                        %(connection_id)s,
+                        %(job_type)s,
+                        %(status)s,
+                        %(requested_by)s,
+                        NULL,
+                        %(scheduled_for)s,
+                        %(started_at)s,
+                        %(finished_at)s,
+                        0,
+                        %(error)s,
+                        %(created_at)s,
+                        %(updated_at)s
+                    )
+                    """.strip(),
+                    _refresh_job_params(job=job, connection_id=connection_id),
+                )
+                for snapshot in snapshots:
+                    cursor.execute(
+                        _SNAPSHOT_INSERT_SQL,
+                        _snapshot_params(
+                            tenant_id=self._tenant_id,
+                            connection_id=connection_id,
+                            snapshot=snapshot,
+                        ),
+                    )
+                if account_snapshot is not None:
+                    account_envelope_params = _account_envelope_params(
+                        tenant_id=self._tenant_id,
+                        connection_id=connection_id,
+                        account_snapshot=account_snapshot,
+                    )
+                    cursor.execute(_SNAPSHOT_INSERT_SQL, account_envelope_params)
+                    cursor.execute(
+                        """
+                        INSERT INTO broker_account_snapshots (
+                            tenant_id,
+                            provider_snapshot_id,
+                            provider,
+                            account_ref,
+                            as_of,
+                            status,
+                            holdings,
+                            positions,
+                            funds,
+                            orders,
+                            trades,
+                            provenance,
+                            created_at
+                        ) VALUES (
+                            %(tenant_id)s,
+                            %(provider_snapshot_id)s,
+                            %(provider)s,
+                            %(account_ref)s,
+                            %(as_of)s,
+                            %(status)s,
+                            %(holdings)s,
+                            %(positions)s,
+                            %(funds)s,
+                            %(orders)s,
+                            %(trades)s,
+                            %(provenance)s,
+                            %(created_at)s
+                        )
+                        """.strip(),
+                        _account_snapshot_params(
+                            envelope_params=account_envelope_params,
+                            account_snapshot=account_snapshot,
+                        ),
+                    )
+            connection.commit()
+
 
 def _row_to_connection(row: Mapping[str, Any]) -> FyersConnection:
     metadata = row.get("metadata") if isinstance(row.get("metadata"), Mapping) else {}
@@ -279,6 +386,152 @@ def _row_to_session(row: Mapping[str, Any]) -> FyersOAuthSession:
         expires_at=_aware_utc(row["expires_at"]),
         created_at=_aware_utc(row["created_at"]),
     )
+
+
+def _refresh_job_params(
+    *,
+    job: ProviderRefreshJob,
+    connection_id: str,
+) -> dict[str, Any]:
+    failed = job.error_count > 0
+    return {
+        "refresh_row_id": str(uuid4()),
+        "tenant_id": job.tenant_id,
+        "provider": job.provider,
+        "connection_id": connection_id,
+        "job_type": job.refresh_type,
+        "status": "failed" if failed else "succeeded",
+        "requested_by": job.requested_by_actor_id,
+        "scheduled_for": _aware_utc(job.created_at),
+        "started_at": _aware_utc(job.created_at),
+        "finished_at": _optional_aware_utc(job.completed_at),
+        "error": (
+            {
+                "error_count": job.error_count,
+                "errors": list(job.errors),
+            }
+            if failed
+            else None
+        ),
+        "created_at": _aware_utc(job.created_at),
+        "updated_at": _optional_aware_utc(job.completed_at) or _aware_utc(job.created_at),
+    }
+
+
+_SNAPSHOT_INSERT_SQL = """
+INSERT INTO provider_snapshot_envelopes (
+    id,
+    tenant_id,
+    provider,
+    connection_id,
+    account_ref,
+    snapshot_type,
+    status,
+    source,
+    as_of,
+    fetched_at,
+    expires_at,
+    payload,
+    provenance,
+    created_at
+) VALUES (
+    %(snapshot_id)s,
+    %(tenant_id)s,
+    %(provider)s,
+    %(connection_id)s,
+    %(account_ref)s,
+    %(snapshot_type)s,
+    %(status)s,
+    %(source)s,
+    %(as_of)s,
+    %(fetched_at)s,
+    %(expires_at)s,
+    %(payload)s,
+    %(provenance)s,
+    %(created_at)s
+)
+""".strip()
+
+
+def _snapshot_params(
+    *,
+    tenant_id: str,
+    connection_id: str,
+    snapshot: ProviderSnapshotEnvelope,
+) -> dict[str, Any]:
+    return {
+        "snapshot_id": str(uuid4()),
+        "tenant_id": tenant_id,
+        "provider": snapshot.provider,
+        "connection_id": connection_id,
+        "account_ref": None,
+        "snapshot_type": snapshot.snapshot_type,
+        "status": snapshot.status,
+        "source": snapshot.source,
+        "as_of": _parse_timestamp(snapshot.as_of),
+        "fetched_at": _parse_timestamp(snapshot.fetched_at),
+        "expires_at": _parse_optional_timestamp(snapshot.expires_at),
+        "payload": dict(snapshot.payload),
+        "provenance": dict(snapshot.provenance),
+        "created_at": _parse_timestamp(snapshot.fetched_at),
+    }
+
+
+def _account_envelope_params(
+    *,
+    tenant_id: str,
+    connection_id: str,
+    account_snapshot: BrokerAccountSnapshot,
+) -> dict[str, Any]:
+    return {
+        "snapshot_id": str(uuid4()),
+        "tenant_id": tenant_id,
+        "provider": account_snapshot.provider,
+        "connection_id": connection_id,
+        "account_ref": None,
+        "snapshot_type": "broker_account",
+        "status": account_snapshot.status,
+        "source": account_snapshot.source,
+        "as_of": _parse_timestamp(account_snapshot.as_of),
+        "fetched_at": _parse_timestamp(account_snapshot.fetched_at),
+        "expires_at": _parse_optional_timestamp(account_snapshot.expires_at),
+        "payload": account_snapshot.to_dict(),
+        "provenance": dict(account_snapshot.provenance),
+        "created_at": _parse_timestamp(account_snapshot.fetched_at),
+    }
+
+
+def _account_snapshot_params(
+    *,
+    envelope_params: Mapping[str, Any],
+    account_snapshot: BrokerAccountSnapshot,
+) -> dict[str, Any]:
+    account_payload = account_snapshot.to_dict()
+    return {
+        "tenant_id": envelope_params["tenant_id"],
+        "provider_snapshot_id": envelope_params["snapshot_id"],
+        "provider": account_snapshot.provider,
+        "account_ref": envelope_params["account_ref"],
+        "as_of": envelope_params["as_of"],
+        "status": account_snapshot.status,
+        "holdings": account_payload["holdings"],
+        "positions": account_payload["positions"],
+        "funds": account_payload["funds"],
+        "orders": account_payload["orders"],
+        "trades": account_payload["trades"],
+        "provenance": account_payload["provenance"],
+        "created_at": envelope_params["created_at"],
+    }
+
+
+def _parse_timestamp(value: str) -> datetime:
+    return _aware_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
+
+
+def _parse_optional_timestamp(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    return _parse_timestamp(value)
 
 
 def _aware_utc(value: datetime) -> datetime:

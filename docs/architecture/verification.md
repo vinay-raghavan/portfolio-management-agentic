@@ -36,6 +36,11 @@ Current coverage:
   `fyers_connections` upserts, single-use actor/connection-scoped OAuth state,
   and absence of access tokens, refresh tokens, client secrets, trading tokens,
   or PKCE verifiers from persisted params and returned contracts.
+- FYERS refresh persistence contracts verify tenant-scoped
+  `provider_refresh_jobs`, `provider_snapshot_envelopes`, and
+  `broker_account_snapshots` writes for read-only refreshes, including signed
+  positions, funds, provenance, explicit provider errors, and no Yahoo fallback
+  or paper-ledger mixing.
 - Postgres/Alembic foundation contracts verify production-like storage selects
   Postgres explicitly through `PORTFOLIO_STORAGE_BACKEND`, redacts database and
   Redis credentials in runtime status payloads, requires migrations, preserves
