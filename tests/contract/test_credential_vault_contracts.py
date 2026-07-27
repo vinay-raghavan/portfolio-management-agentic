@@ -4,10 +4,12 @@ import pytest
 
 from portfolio_domain import (
     CredentialVaultBackend,
+    CredentialVaultSecretMaterial,
     FyersConnection,
     build_credential_vault_ref,
     evaluate_credential_vault_readiness,
     load_credential_vault_profile,
+    plan_credential_vault_write,
 )
 
 
@@ -68,6 +70,106 @@ def test_credential_vault_refs_require_real_vault_backend() -> None:
             subject_hash="sha256:user",
             backend=CredentialVaultBackend.DISABLED,
         )
+
+
+def test_credential_vault_write_plan_redacts_secret_material() -> None:
+    profile = load_credential_vault_profile(
+        {
+            "CREDENTIAL_VAULT_BACKEND": "macos_keychain",
+            "CREDENTIAL_VAULT_SERVICE": "portfolio-agentic-fyers",
+            "CREDENTIAL_VAULT_LOCAL_RUNTIME": "true",
+        }
+    )
+    credential_ref = build_credential_vault_ref(
+        tenant_id="tenant-1",
+        provider="fyers",
+        purpose="data_access_token",
+        subject_hash="sha256:user",
+        backend=CredentialVaultBackend.MACOS_KEYCHAIN,
+    )
+    material = CredentialVaultSecretMaterial(
+        payload={
+            "access_token": "fyers-access-token-secret",
+            "refresh_token": "fyers-refresh-token-secret",
+        },
+    )
+
+    plan = plan_credential_vault_write(
+        profile=profile,
+        credential_ref=credential_ref,
+        material=material,
+    )
+
+    serialized = f"{material!r} {plan.to_dict()}".lower()
+    assert plan.ready is True
+    assert plan.blocking_reasons == ()
+    assert plan.to_dict()["sensitive_field_count"] == 2
+    assert plan.to_dict()["credential_ref_configured"] is True
+    assert "fyers-access-token-secret" not in serialized
+    assert "fyers-refresh-token-secret" not in serialized
+    assert "access_token" not in serialized
+    assert "refresh_token" not in serialized
+
+
+def test_credential_vault_write_plan_fails_closed_for_disabled_or_mismatched_backend() -> None:
+    material = CredentialVaultSecretMaterial(payload={"access_token": "secret"})
+    credential_ref = build_credential_vault_ref(
+        tenant_id="tenant-1",
+        provider="fyers",
+        purpose="data_access_token",
+        subject_hash="sha256:user",
+        backend=CredentialVaultBackend.MACOS_KEYCHAIN,
+    )
+
+    disabled_plan = plan_credential_vault_write(
+        profile=load_credential_vault_profile({}),
+        credential_ref=credential_ref,
+        material=material,
+    )
+    kms_plan = plan_credential_vault_write(
+        profile=load_credential_vault_profile(
+            {
+                "CREDENTIAL_VAULT_BACKEND": "kms",
+                "CREDENTIAL_VAULT_KMS_KEY_URI": "projects/p/locations/l/keyRings/r/cryptoKeys/k",
+                "CREDENTIAL_VAULT_HOSTED_RUNTIME": "true",
+            }
+        ),
+        credential_ref=credential_ref,
+        material=material,
+    )
+
+    assert disabled_plan.ready is False
+    assert "credential_vault_disabled" in disabled_plan.blocking_reasons
+    assert kms_plan.ready is False
+    assert "credential_vault_ref_backend_mismatch" in kms_plan.blocking_reasons
+
+
+def test_credential_vault_write_plan_rejects_live_broker_secret_material() -> None:
+    profile = load_credential_vault_profile(
+        {
+            "CREDENTIAL_VAULT_BACKEND": "macos_keychain",
+            "CREDENTIAL_VAULT_SERVICE": "portfolio-agentic-fyers",
+            "CREDENTIAL_VAULT_LOCAL_RUNTIME": "true",
+        }
+    )
+    credential_ref = build_credential_vault_ref(
+        tenant_id="tenant-1",
+        provider="fyers",
+        purpose="data_access_token",
+        subject_hash="sha256:user",
+        backend=CredentialVaultBackend.MACOS_KEYCHAIN,
+    )
+    plan = plan_credential_vault_write(
+        profile=profile,
+        credential_ref=credential_ref,
+        material=CredentialVaultSecretMaterial(payload={"trading_token": "secret"}),
+    )
+
+    assert plan.ready is False
+    assert "credential_vault_live_broker_secret_forbidden" in plan.blocking_reasons
+    serialized = str(plan.to_dict()).lower()
+    assert "trading_token" not in serialized
+    assert "secret" not in serialized.replace("credential_vault_live_broker_secret_forbidden", "")
 
 
 def test_macos_keychain_vault_requires_service_name_and_local_runtime() -> None:
