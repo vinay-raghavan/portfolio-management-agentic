@@ -31,8 +31,12 @@ The router currently returns a `RouteDecision` for:
 - Paper approval routes to `/v1/paper/batches/{id}/approve`; approval identity
   must come from server-created `ActorContext` derived from the authenticated
   human API with an explicit tenant id, never from `approved_by` in model
-  output or request JSON. Missing actor subject or tenant metadata fails before
-  protected paper state is read or written.
+  output or request JSON. In production-like mode,
+  `OIDC_AUTH_ENABLED=true` makes protected routes derive `ActorContext` from a
+  signed Bearer token after issuer, audience, signature, expiry, subject,
+  tenant, role, and optional nonce validation; trusted actor headers remain
+  only the local/offline fallback. Missing actor subject or tenant metadata
+  fails before protected paper state is read or written.
 - Pre-market briefing routes may expose only the read-only
   `pre_market_briefing` capability tools.
 - Paper proposal routes may expose only the draft-only

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 
+from authlib.jose import JsonWebToken
 from fastapi.testclient import TestClient
 
 from app.fast_api_app import app
@@ -441,6 +443,51 @@ def test_session_summary_api_requires_actor_context() -> None:
 
     assert response.status_code == 401
     assert response.json()["detail"] == "actor_subject_required"
+
+
+def test_session_summary_api_can_derive_actor_from_oidc_bearer_token(monkeypatch) -> None:
+    monkeypatch.setenv("OIDC_AUTH_ENABLED", "true")
+    monkeypatch.setenv("OIDC_ISSUER", "https://issuer.example.com")
+    monkeypatch.setenv("OIDC_AUDIENCE", "portfolio-agent")
+    monkeypatch.setenv("OIDC_TENANT_CLAIM", "tenant_id")
+    monkeypatch.setenv("OIDC_ROLES_CLAIM", "roles")
+    monkeypatch.setenv("OIDC_ALLOWED_ALGORITHMS", "HS256")
+    monkeypatch.setenv(
+        "OIDC_JWKS_JSON",
+        json.dumps({"kty": "oct", "k": "dGVzdC1zaWduaW5nLXNlY3JldA"}),
+    )
+    token = JsonWebToken(["HS256"]).encode(
+        {"alg": "HS256"},
+        {
+            "iss": "https://issuer.example.com",
+            "aud": "portfolio-agent",
+            "sub": "immutable-subject-123",
+            "tenant_id": "tenant-oidc",
+            "roles": ["analyst"],
+            "exp": int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
+            "nonce": "nonce-123",
+        },
+        "test-signing-secret",
+    )
+    client = TestClient(app)
+
+    missing_token = client.get(
+        "/v1/sessions/session-oidc/summary",
+        headers={"X-Request-Id": "req-oidc", "X-OIDC-Nonce": "nonce-123"},
+    )
+    authorized = client.get(
+        "/v1/sessions/session-oidc/summary",
+        headers={
+            "Authorization": f"Bearer {token.decode('utf-8')}",
+            "X-Request-Id": "req-oidc",
+            "X-OIDC-Nonce": "nonce-123",
+        },
+    )
+
+    assert missing_token.status_code == 401
+    assert missing_token.json()["detail"] == "oidc_bearer_token_required"
+    assert authorized.status_code == 404
+    assert authorized.json()["detail"] == "session_memory_not_found"
 
 
 def test_session_summary_api_uses_postgres_store_when_configured(monkeypatch) -> None:
