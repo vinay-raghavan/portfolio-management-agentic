@@ -15,8 +15,10 @@ Set `PORTFOLIO_SENTIMENT_PROVIDER=json_file` and `PORTFOLIO_SENTIMENT_JSON_PATH`
 Set `PORTFOLIO_VOLATILITY_PROVIDER=json_file` and `PORTFOLIO_VOLATILITY_JSON_PATH` to read configured local volatility through the read-only JSON adapter.
 Set `PORTFOLIO_MACRO_PROVIDER=json_file` and `PORTFOLIO_MACRO_JSON_PATH` to read configured local macro/regime context through the read-only JSON adapter.
 The FYERS read-only connector currently exposes offline fixture tools for
-connection health, quotes, and normalized account snapshots:
-`get_fyers_connection_health`, `get_fyers_quote`, and
+connection health, quotes, OHLCV history, market depth, instrument metadata,
+option chains, and normalized account snapshots: `get_fyers_connection_health`,
+`get_fyers_quote`, `get_fyers_ohlcv_history`, `get_fyers_depth`,
+`get_fyers_instrument_metadata`, `get_fyers_option_chain`, and
 `get_fyers_account_snapshot`. These tools preserve exchange-qualified symbols,
 fresh/stale/unavailable status, signed quantities, funds, and provenance while
 keeping provider account data separate from the simulated paper ledger. OAuth
