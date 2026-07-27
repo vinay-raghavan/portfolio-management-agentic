@@ -125,6 +125,10 @@ from .paper_execution import (
     evaluate_paper_execution_order,
     issue_paper_execution_grant,
 )
+from .paper_execution_queue_processor import (
+    PaperExecutionQueueProcessor,
+    PaperExecutionQueueProcessorResult,
+)
 from .paper_execution_store import PostgresPaperExecutionStore
 from .provider_profiles import (
     PROVIDER_CONFIG_DB_ENV,
@@ -241,6 +245,8 @@ __all__ = [
     "PaperExecutionGrant",
     "PaperExecutionOrder",
     "PaperExecutionPolicyCeiling",
+    "PaperExecutionQueueProcessor",
+    "PaperExecutionQueueProcessorResult",
     "PaperExecutionWorkItem",
     "PaperExecutionWorkerRequest",
     "PaperFill",

@@ -45,10 +45,14 @@ This slice establishes the safe contract between research, simulation, and the f
   ceiling violations before returning any fill payload.
 - `DeterministicPaperExecutionWorker` owns the paper-only evaluate-and-record
   boundary through `PaperExecutionWorkerRequest`. `PaperExecutionWorkItem`
-  provides the durable queue contract for protected workers. In Postgres mode,
-  the protected API enqueues, claims, executes, records, and completes a
-  tenant-scoped work item synchronously today; later async routing can use the
-  same queue without giving the model or MCP layer execution authority.
+  provides the durable queue contract for protected workers, and
+  `PaperExecutionQueueProcessor` claims one tenant-scoped item, rebuilds the
+  authoritative policy/grant/batch/order context, rejects malformed or
+  credential-contaminated payloads, executes the deterministic worker, records
+  accepted ledger decisions, and completes the work item. In Postgres mode, the
+  protected API invokes this standalone processor synchronously today; later
+  async routing can call the same boundary without giving the model or MCP
+  layer execution authority.
 - `PostgresPaperExecutionStore` persists and reads protected policy ceilings,
   batch requests, execution grants, durable execution work items, and
   idempotent ledger decision rows through tenant-scoped Postgres tables created
@@ -98,11 +102,11 @@ grant `consumed_capacity`, not request-body `current_gross_notional` or
 `current_net_notional` fields. Successful accepted inserts update
 `paper_execution_grants.consumed_capacity`; conflict rejections do not consume
 capacity. In Postgres mode, `/v1/paper/orders/{id}/execute` now creates a
-`PaperExecutionWorkItem`, claims it as `paper-execution-api`, runs the
-deterministic worker, and completes the item as `completed` or `failed`. The
-next production hardening step is moving that synchronous queue lifecycle into
-a standalone asynchronous worker and serializing grant-capacity reservation
-inside that path.
+`PaperExecutionWorkItem` and processes it through
+`PaperExecutionQueueProcessor` as `paper-execution-api`, completing the item as
+`completed` or `failed`. The next production hardening step is adding the
+standalone asynchronous runner around this processor and serializing
+grant-capacity reservation inside that path.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.

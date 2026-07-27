@@ -32,7 +32,10 @@ explicit safety policy.
   creation, analyst batch proposals, approver-bound grants/revocation, and
   execution-under-grant decisions derive identity from `ActorContext` headers,
   reject body-spoofed approver fields, and use the tenant-scoped Postgres paper
-  execution store when `PORTFOLIO_STORAGE_BACKEND=postgres`.
+  execution store when `PORTFOLIO_STORAGE_BACKEND=postgres`. The Postgres path
+  enqueues durable `PaperExecutionWorkItem` records and processes them through
+  the standalone deterministic `PaperExecutionQueueProcessor`, giving the API
+  and the future async worker the same fail-closed execution boundary.
 - Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval infrastructure is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade`, writes redacted baseline summaries, and produces deterministic triage reports for grade-result failures without printing secret values. The eval config combines an LLM response-quality rubric with deterministic forbidden-action and workflow-tool-trajectory code metrics. A manual GitHub Actions workflow can run the credentialed baseline and upload ignored eval artifacts.
@@ -90,7 +93,7 @@ flowchart LR
     ROUTE --> MODEL["Model provider adapter<br/>Gemini, Ollama, Claude,<br/>OpenAI-compatible"]
     ROUTE --> MCP["MCP policy server<br/>route-scoped safe tools"]
     MCP --> DOMAIN["Deterministic domain services<br/>screeners, risk, recommendations,<br/>backtests, paper ledger"]
-    DOMAIN --> DB["State stores<br/>SQLite local mode today<br/>Postgres production-like target"]
+    DOMAIN --> DB["State stores<br/>Postgres production-like default<br/>SQLite local/offline fallback"]
     DOMAIN --> PROVIDERS["Read-only provider adapters<br/>fixtures, JSON files,<br/>future FYERS data connector"]
     ROUTE --> AUDIT["Evaluator and audit evidence<br/>ContextPack, ResponseEvaluator,<br/>evals and CI artifacts"]
 
