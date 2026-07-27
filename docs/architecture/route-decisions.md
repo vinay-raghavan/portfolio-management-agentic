@@ -25,6 +25,9 @@ The router currently returns a `RouteDecision` for:
   model-visible tools, require server-created `ActorContext`, return no provider
   tokens or PKCE verifier, and currently mark callbacks
   `token_exchange_not_configured` until the credential-vault worker lands.
+  In Postgres mode, the protected API persists only sanitized connection
+  metadata and hashed single-use OAuth state through the tenant-scoped FYERS
+  integration store; local/offline mode keeps an in-memory fallback.
 - Paper approval routes to `/v1/paper/batches/{id}/approve`; approval identity
   must come from server-created `ActorContext` derived from the authenticated
   human API with an explicit tenant id, never from `approved_by` in model

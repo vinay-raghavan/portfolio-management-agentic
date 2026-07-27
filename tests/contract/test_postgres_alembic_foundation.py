@@ -144,7 +144,7 @@ def test_alembic_revision_chain_has_single_head_and_no_orphans() -> None:
             heads.discard(parent)
 
     assert roots == {"20260725_0001"}
-    assert heads == {"20260727_0005"}
+    assert heads == {"20260727_0006"}
     assert all(
         len(children) <= 1 for children in children_by_parent.values()
     ), "linear production migration chain expected until an explicit merge migration exists"

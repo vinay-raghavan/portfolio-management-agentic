@@ -74,8 +74,10 @@ from portfolio_domain import (  # noqa: E402
     PaperExecutionQueueProcessor,
     PaperExecutionWorkerRequest,
     PaperExecutionWorkItem,
+    PostgresFyersIntegrationStore,
     PostgresPaperExecutionStore,
     ProviderRefreshJob,
+    actor_hash,
     evaluate_database_runtime_readiness,
     get_fyers_readonly_connector,
     hash_oauth_state,
@@ -589,7 +591,7 @@ def post_fyers_oauth_start(
     )
     connection = connection.oauth_started(expires_at=session.expires_at)
     _store_fyers_connection(actor, connection)
-    _FYERS_OAUTH_STATES[(actor.tenant_id, session.state_hash)] = session
+    _store_fyers_oauth_session(actor, session)
     return {
         "status": "authorization_required",
         "connection": connection.to_dict(),
@@ -762,7 +764,58 @@ def _fyers_connection_key(actor: ActorContext) -> tuple[str, str]:
     return (actor.tenant_id, actor.audit_actor)
 
 
+def _fyers_user_hash(actor: ActorContext) -> str:
+    return actor_hash(tenant_id=actor.tenant_id, user_id=actor.audit_actor)
+
+
+def _fyers_integration_store(
+    actor: ActorContext,
+) -> PostgresFyersIntegrationStore | None:
+    profile = load_database_runtime_profile(os.environ)
+    if profile.backend != DatabaseBackend.POSTGRES:
+        return None
+    if not profile.database_url:
+        raise HTTPException(status_code=503, detail="fyers_postgres_not_configured")
+    return _build_postgres_fyers_integration_store(
+        tenant_id=actor.tenant_id,
+        database_url=profile.database_url,
+    )
+
+
+def _build_postgres_fyers_integration_store(
+    *,
+    tenant_id: str,
+    database_url: str,
+) -> PostgresFyersIntegrationStore:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+        from psycopg.rows import dict_row
+
+        connection = psycopg.connect(connection_url, row_factory=dict_row)
+        connection.execute("SET app.tenant_id = %s", (tenant_id,))
+        return connection
+
+    return PostgresFyersIntegrationStore(
+        tenant_id=tenant_id,
+        connection_factory=connection_factory,
+    )
+
+
 def _get_or_create_fyers_connection(actor: ActorContext) -> FyersConnection:
+    store = _fyers_integration_store(actor)
+    if store is not None:
+        connection = store.get_connection(user_id_hash=_fyers_user_hash(actor))
+        if connection is not None:
+            return connection
+        connection = FyersConnection.disconnected(
+            tenant_id=actor.tenant_id,
+            user_id=actor.audit_actor,
+            connection_id=str(uuid4()),
+        )
+        return store.upsert_connection(connection)
+
     key = _fyers_connection_key(actor)
     connection = _FYERS_CONNECTIONS.get(key)
     if connection is not None:
@@ -780,17 +833,41 @@ def _store_fyers_connection(
     actor: ActorContext,
     connection: FyersConnection,
 ) -> FyersConnection:
+    store = _fyers_integration_store(actor)
+    if store is not None:
+        return store.upsert_connection(connection)
     _FYERS_CONNECTIONS[_fyers_connection_key(actor)] = connection
     return connection
+
+
+def _store_fyers_oauth_session(
+    actor: ActorContext,
+    session: FyersOAuthSession,
+) -> FyersOAuthSession:
+    store = _fyers_integration_store(actor)
+    if store is not None:
+        return store.upsert_oauth_session(session)
+    _FYERS_OAUTH_STATES[(actor.tenant_id, session.state_hash)] = session
+    return session
 
 
 def _pop_fyers_oauth_session(
     actor: ActorContext,
     state: str,
 ) -> FyersOAuthSession | None:
+    connection = _get_or_create_fyers_connection(actor)
+    store = _fyers_integration_store(actor)
+    if store is not None:
+        session = store.pop_oauth_session(
+            state_hash=hash_oauth_state(state),
+            connection_id=connection.connection_id,
+        )
+        if session is None or not session.active():
+            return None
+        return session
+
     key = (actor.tenant_id, hash_oauth_state(state))
     session = _FYERS_OAUTH_STATES.get(key)
-    connection = _get_or_create_fyers_connection(actor)
     if (
         session is None
         or not session.active()
@@ -803,6 +880,10 @@ def _pop_fyers_oauth_session(
 
 def _clear_fyers_oauth_sessions(actor: ActorContext) -> None:
     connection = _get_or_create_fyers_connection(actor)
+    store = _fyers_integration_store(actor)
+    if store is not None:
+        store.clear_oauth_sessions(connection_id=connection.connection_id)
+        return
     for key in tuple(_FYERS_OAUTH_STATES):
         session = _FYERS_OAUTH_STATES[key]
         if (
