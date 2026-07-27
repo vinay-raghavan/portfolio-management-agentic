@@ -29,9 +29,11 @@ Current coverage:
   challenge generation without returning a verifier, short-lived one-time
   verifier cache behavior, callback fail-closed on unknown state or missing
   verifier, explicit token-exchange-disabled status until the credential vault
-  is wired, read-only normalized fixture refreshes with signed positions, and
-  absence of provider tokens, credential material, broker mutation methods,
-  model-visible OAuth tools, or paper-ledger payload mixing.
+  is wired, operator `FYERS_CONNECTOR_KILL_SWITCH` rejection before connector
+  access or refresh-result persistence, read-only normalized fixture refreshes
+  with signed positions, and absence of provider tokens, credential material,
+  broker mutation methods, model-visible OAuth tools, or paper-ledger payload
+  mixing.
 - FYERS Postgres storage contracts verify the Alembic-managed
   `fyers_oauth_sessions` table, tenant row-level security, sanitized
   `fyers_connections` upserts, single-use actor/connection-scoped OAuth state,

@@ -1036,6 +1036,11 @@ def post_fyers_refresh(
     """Run a protected read-only FYERS fixture refresh without live broker calls."""
     _require_any_role(actor, {"viewer", "analyst", "admin"})
     _reject_sensitive_fyers_payload(request.model_dump())
+    if _fyers_connector_kill_switch_active():
+        raise HTTPException(
+            status_code=503,
+            detail="fyers_connector_kill_switch_active",
+        )
     connector = get_fyers_readonly_connector()
     job = ProviderRefreshJob.created(
         tenant_id=actor.tenant_id,
@@ -1086,6 +1091,13 @@ def _credential_vault_readiness_payload() -> dict:
         load_credential_vault_profile(os.environ),
     )
     return readiness.to_dict()
+
+
+def _fyers_connector_kill_switch_active() -> bool:
+    return env_flag_enabled(
+        "FYERS_CONNECTOR_KILL_SWITCH",
+        "PORTFOLIO_FYERS_CONNECTOR_KILL_SWITCH",
+    )
 
 
 def _reject_sensitive_paper_payload(payload: object) -> None:

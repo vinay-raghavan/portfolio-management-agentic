@@ -25,6 +25,7 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "AGENT_MCP_URL=http://mcp-server:8081/mcp" in env_example
     assert "PAPER_LEDGER_DB_PATH=data/paper-ledger.db" in env_example
     assert "PAPER_EXECUTION_KILL_SWITCH=false" in env_example
+    assert "FYERS_CONNECTOR_KILL_SWITCH=false" in env_example
     assert "MARKET_DATA_DB_PATH=data/market-data.db" in env_example
     assert "PROVIDER_CONFIG_DB_PATH=data/provider-config.db" in env_example
     assert "PORTFOLIO_MARKET_DATA_PROVIDER=fixture" in env_example
@@ -53,7 +54,11 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "# OLLAMA_STATUS_TIMEOUT_SECONDS=1.5" in env_example
     assert "# OLLAMA_AVAILABLE_MODEL_DIGESTS=llama3.1:8b=sha256:<pinned-local-model-digest>" in env_example
     assert "# MODEL_TUNING_CANDIDATES=llama3.1:8b,gemma:7b,gemma4:12b" in env_example
-    assert "FYERS" not in env_example.upper()
+    assert "FYERS_CLIENT_ID" not in env_example.upper()
+    assert "FYERS_CLIENT_SECRET" not in env_example.upper()
+    assert "FYERS_ACCESS_TOKEN" not in env_example.upper()
+    assert "FYERS_REFRESH_TOKEN" not in env_example.upper()
+    assert "FYERS_TRADING_TOKEN" not in env_example.upper()
 
 
 def test_dockerignore_excludes_local_references_and_env_files() -> None:
@@ -77,6 +82,7 @@ def test_compose_mounts_paper_ledger_volume() -> None:
 
     assert "PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}" in compose
     assert "PAPER_EXECUTION_KILL_SWITCH: ${PAPER_EXECUTION_KILL_SWITCH:-false}" in compose
+    assert "FYERS_CONNECTOR_KILL_SWITCH: ${FYERS_CONNECTOR_KILL_SWITCH:-false}" in compose
     assert "ENABLE_CLOUD_TELEMETRY: ${ENABLE_CLOUD_TELEMETRY:-false}" in compose
     assert "MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}" in compose
     assert "PROVIDER_CONFIG_DB_PATH: ${PROVIDER_CONFIG_DB_PATH:-/data/provider-config.db}" in compose

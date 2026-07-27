@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
-from portfolio_domain import hash_oauth_state
 
 import app.fast_api_app as fast_api_app
 
@@ -179,7 +178,9 @@ def test_fyers_oauth_start_and_callback_use_short_lived_pkce_verifier_cache(
     stored_session, stored_verifier = fake_cache.stores[0]
     assert stored_session.connection_id == connection_id
     assert len(stored_verifier) >= 32
-    assert fake_cache.pops == [(TENANT_ID, connection_id, hash_oauth_state(state))]
+    assert fake_cache.pops == [
+        (TENANT_ID, connection_id, fast_api_app.hash_oauth_state(state))
+    ]
     assert fake_cache.records == {}
     serialized = f"{start.json()} {callback.json()}".lower()
     assert stored_verifier.lower() not in serialized
@@ -212,6 +213,32 @@ def test_fyers_oauth_callback_fails_closed_when_pkce_verifier_is_missing(
 
     assert response.status_code == 409
     assert response.json()["detail"] == "fyers_oauth_verifier_unknown_or_expired"
+
+
+def test_fyers_refresh_operator_kill_switch_blocks_connector_calls(
+    monkeypatch,
+) -> None:
+    def forbidden_connector():
+        raise AssertionError("FYERS connector must not run while kill switch is active")
+
+    monkeypatch.setenv("FYERS_CONNECTOR_KILL_SWITCH", "true")
+    monkeypatch.setattr(
+        fast_api_app,
+        "get_fyers_readonly_connector",
+        forbidden_connector,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/integrations/fyers/refresh",
+        headers=_headers("analyst-kill-switch", "analyst"),
+        json={"refresh_type": "account_snapshot", "symbols": ["INFY"]},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "fyers_connector_kill_switch_active"
+    assert "token" not in str(response.json()).lower()
+    assert "secret" not in str(response.json()).lower()
 
 
 def test_fyers_oauth_status_disconnect_and_refresh_are_human_api_only_and_redacted() -> None:
