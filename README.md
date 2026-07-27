@@ -438,6 +438,7 @@ LLM_MODEL=llama3.1:8b \
 OLLAMA_BASE_URL=http://host.containers.internal:11434 \
 podman compose up --build
 curl http://localhost:8000/v1/models/ollama/status
+curl http://localhost:8000/v1/models/tuning/status
 ```
 
 If you use the optional Compose-managed Ollama service instead of a native host
@@ -464,6 +465,10 @@ Candidate model promotion is model-independent: the tuning gate compares any
 7B/8B/local/hosted candidate to the incumbent baseline using safety, core task
 success, response score, applicable trajectory, judge-error, token, and latency
 thresholds without storing prompts or responses.
+`/v1/models/tuning/status` exposes the active provider/model, candidate list,
+development and sealed holdout set names, disabled fine-tuning gate, and
+promotion thresholds. It does not return provider keys, raw prompts, raw
+responses, or eval example payloads.
 
 ## CI/CD
 

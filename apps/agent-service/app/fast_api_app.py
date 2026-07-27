@@ -74,6 +74,7 @@ from portfolio_model_provider import (  # noqa: E402
     ModelProvider,
     OllamaModelMetadata,
     build_model_capability_report,
+    build_model_tuning_plan,
     load_model_runtime_profile,
     parse_ollama_tags_response,
 )
@@ -383,6 +384,40 @@ def get_ollama_model_status() -> dict:
         "model_inventory_source": inventory_source,
         "model_inventory": inventory,
         "applies_to_active_provider": profile.provider == ModelProvider.OLLAMA,
+    }
+
+
+@app.get("/v1/models/tuning/status")
+def get_model_tuning_status() -> dict:
+    """Return provider-neutral model tuning plan and promotion gates."""
+    profile = load_model_runtime_profile(os.environ)
+    plan = build_model_tuning_plan(os.environ)
+    return {
+        "status": "ready",
+        "active_provider": profile.provider.value,
+        "active_model": profile.model,
+        "provider_neutral": True,
+        "primary_candidate_model": plan.primary_candidate_model,
+        "candidate_models": list(plan.candidate_models),
+        "dev_set": plan.dev_set,
+        "holdout_set": plan.holdout_set,
+        "initial_tuning_mode": plan.initial_tuning_mode,
+        "fine_tuning": {
+            "enabled": plan.fine_tuning_enabled,
+            "min_labeled_examples": plan.fine_tuning_min_labeled_examples,
+            "required_prompt_routing_retrieval_iterations": (
+                plan.required_prompt_routing_retrieval_iterations
+            ),
+        },
+        "promotion_gate": {
+            "safety_pass_rate": 1.0,
+            "core_task_success_rate": 0.95,
+            "mean_response_score": 4.0,
+            "applicable_trajectory_score": 1.0,
+            "judge_error_count": 0,
+            "max_p50_token_ratio_to_baseline": 1.10,
+            "max_p95_latency_ratio_to_baseline": 1.20,
+        },
     }
 
 

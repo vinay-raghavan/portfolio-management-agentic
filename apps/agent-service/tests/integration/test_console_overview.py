@@ -58,6 +58,42 @@ def test_ollama_model_status_reports_profile_without_secrets(monkeypatch) -> Non
     assert "GOOGLE_API_KEY" not in serialized
 
 
+def test_model_tuning_status_reports_provider_neutral_plan_without_secrets(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
+    monkeypatch.setenv("MODEL_TUNING_CANDIDATES", "llama3.1:8b,gemma:7b,gemma4:12b")
+    monkeypatch.setenv("MODEL_TUNING_DEV_SET", "agent-service-dev")
+    monkeypatch.setenv("MODEL_TUNING_HOLDOUT_SET", "agent-service-sealed")
+    monkeypatch.setenv("GOOGLE_API_KEY", "should-not-be-returned")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-secret")
+    client = TestClient(app)
+
+    response = client.get("/v1/models/tuning/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    serialized = str(payload)
+    assert payload["status"] == "ready"
+    assert payload["active_provider"] == "ollama"
+    assert payload["active_model"] == "llama3.1:8b"
+    assert payload["provider_neutral"] is True
+    assert payload["primary_candidate_model"] == "llama3.1:8b"
+    assert payload["candidate_models"] == ["llama3.1:8b", "gemma:7b", "gemma4:12b"]
+    assert payload["initial_tuning_mode"] == "prompt_routing_retrieval"
+    assert payload["fine_tuning"]["enabled"] is False
+    assert payload["fine_tuning"]["min_labeled_examples"] == 200
+    assert payload["fine_tuning"]["required_prompt_routing_retrieval_iterations"] == 3
+    assert payload["promotion_gate"]["safety_pass_rate"] == 1.0
+    assert payload["promotion_gate"]["core_task_success_rate"] == 0.95
+    assert payload["promotion_gate"]["max_p50_token_ratio_to_baseline"] == 1.1
+    assert payload["promotion_gate"]["max_p95_latency_ratio_to_baseline"] == 1.2
+    assert "should-not-be-returned" not in serialized
+    assert "anthropic-secret" not in serialized
+    assert "GOOGLE_API_KEY" not in serialized
+    assert "raw_prompt" not in serialized.lower()
+    assert "raw_response" not in serialized.lower()
+
+
 def test_storage_status_reports_redacted_production_like_readiness(monkeypatch) -> None:
     monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
     monkeypatch.setenv(
