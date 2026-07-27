@@ -437,16 +437,24 @@ def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
 
     approval_response = client.post(
         f"/console/workflows/paper-orders/{order_id}/approval",
-        json={
-            "approved_by": "console-test-reviewer",
-            "approval_note": "Approve simulated fill for workflow test.",
+        headers={
+            "X-Actor-Sub": "oidc-console-approver",
+            "X-Tenant-Id": "tenant-console-test",
+            "X-Actor-Roles": "viewer,approver",
+            "X-Request-Id": "req-console-approval",
         },
+        json={"approval_note": "Approve simulated fill for workflow test."},
     )
     assert approval_response.status_code == 200
     approval_payload = approval_response.json()
     assert approval_payload["action"]["status"] == "approved"
     assert approval_payload["action"]["policy"]["tier"] == "approval_required"
     assert approval_payload["action"]["approval_request"]["status"] == "approved"
+    assert approval_payload["action"]["audit_event"]["actor"] == "oidc-console-approver"
+    assert (
+        approval_payload["action"]["audit_event"]["redacted_payload"]["approved_by"]
+        == "oidc-console-approver"
+    )
 
     fill_response = client.post(
         f"/console/workflows/paper-orders/{order_id}/fill",
@@ -462,3 +470,59 @@ def test_console_workflow_action_lifecycle_stays_paper_only() -> None:
     ] >= 1
     assert "place_live_order" not in str(fill_payload).lower()
     assert "never-return-this" not in str(fill_payload).lower()
+
+
+def test_console_approval_rejects_body_approver_spoofing() -> None:
+    client = TestClient(app)
+    strategy_response = client.post(
+        "/console/workflows/strategy-drafts",
+        json={
+            "symbol": "TATAMOTORS",
+            "rationale": "Identity spoof regression coverage.",
+        },
+    )
+    strategy_id = strategy_response.json()["action"]["strategy"]["strategy_id"]
+    order_response = client.post(
+        "/console/workflows/paper-orders",
+        json={
+            "strategy_id": strategy_id,
+            "symbol": "TATAMOTORS",
+            "side": "buy",
+            "quantity": 7,
+            "order_type": "market",
+        },
+    )
+    order_id = order_response.json()["action"]["paper_order"]["order_id"]
+
+    response = client.post(
+        f"/console/workflows/paper-orders/{order_id}/approval",
+        headers={
+            "X-Actor-Sub": "verified-human-approver",
+            "X-Tenant-Id": "tenant-console-test",
+            "X-Actor-Roles": "approver",
+            "X-Request-Id": "req-spoof-attempt",
+        },
+        json={
+            "approved_by": "model-or-attacker",
+            "approval_note": "Try to spoof the human approver.",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_console_approval_requires_approver_actor_role() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/console/workflows/paper-orders/unknown/approval",
+        headers={
+            "X-Actor-Sub": "analyst-only",
+            "X-Tenant-Id": "tenant-console-test",
+            "X-Actor-Roles": "analyst",
+            "X-Request-Id": "req-no-approval-role",
+        },
+        json={"approval_note": "Should not reach ledger lookup."},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "approver_role_required"

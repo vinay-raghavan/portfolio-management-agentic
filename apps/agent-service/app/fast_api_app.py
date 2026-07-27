@@ -21,11 +21,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import urlopen
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 from google.cloud import logging as google_cloud_logging
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from app.actor_context import ActorContext, actor_context_dependency
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
 from app.console import (
@@ -83,9 +84,8 @@ class PaperOrderRequest(BaseModel):
 
 
 class PaperOrderApprovalRequest(BaseModel):
-    approved_by: str = Field(
-        default="web-console-reviewer", min_length=1, max_length=80
-    )
+    model_config = ConfigDict(extra="forbid")
+
     approval_note: str = Field(default="", max_length=500)
 
 
@@ -334,11 +334,13 @@ def post_console_paper_order(request: PaperOrderRequest) -> dict:
 def post_console_paper_order_approval(
     order_id: str,
     request: PaperOrderApprovalRequest,
+    actor: ActorContext = Depends(actor_context_dependency),
 ) -> dict:
     """Approve a paper order for simulated fill processing only."""
+    actor.require_approver()
     return approve_console_paper_order(
         order_id,
-        request.approved_by,
+        actor.audit_actor,
         request.approval_note,
     )
 

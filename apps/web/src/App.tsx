@@ -1177,7 +1177,6 @@ function App() {
     void postWorkflowAction(
       `/console/workflows/paper-orders/${pendingOrder.order_id}/approval`,
       {
-        approved_by: 'web-console-reviewer',
         approval_note: 'Approve simulated fill from the web workflow page.',
       },
       'Approve simulation',
