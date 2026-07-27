@@ -47,9 +47,11 @@ Current coverage:
   paper-only with no FYERS/live/credential fields.
 - Postgres paper-execution store contracts verify Alembic adds explicit
   `permitted_symbols`, protected policy/batch/grant/ledger writes are
-  tenant-scoped and committed, grant approval identity is not requester-spoofed,
+  tenant-scoped and committed, read paths return tenant-scoped domain
+  contracts without committing, active grant revocation updates and returns the
+  revoked grant atomically, grant approval identity is not requester-spoofed,
   idempotent ledger rows use `ON CONFLICT ... DO NOTHING`, and FYERS or
-  credential-looking payloads fail closed before storage.
+  credential-looking payloads fail closed before storage or read return.
 - Protected paper-execution API contracts verify `/v1/paper/*` requires
   authenticated `ActorContext`, admin policy creation, analyst batch proposal,
   approver-bound grant issuance and revocation, body-spoofed `approved_by`
