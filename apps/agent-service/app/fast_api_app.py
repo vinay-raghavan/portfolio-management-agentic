@@ -345,6 +345,18 @@ def env_flag_enabled(*names: str) -> bool:
     return any(os.getenv(name, "").strip().lower() in truthy_values for name in names)
 
 
+def _model_route_kill_switch_active() -> bool:
+    return env_flag_enabled(
+        "MODEL_ROUTE_KILL_SWITCH",
+        "PORTFOLIO_MODEL_ROUTE_KILL_SWITCH",
+    )
+
+
+def _reject_if_model_route_kill_switch_active() -> None:
+    if _model_route_kill_switch_active():
+        raise HTTPException(status_code=503, detail="model_route_kill_switch_active")
+
+
 def build_logger():
     if not cloud_telemetry_enabled():
         return LocalLogger()
@@ -582,6 +594,7 @@ def post_research_refresh(
 def get_ollama_model_status() -> dict:
     """Return redacted model runtime readiness and route-budget status."""
     profile = load_model_runtime_profile(os.environ)
+    kill_switch_active = _model_route_kill_switch_active()
     inventory_source, available_model_ids, available_model_digests, inventory = (
         _ollama_inventory(
             profile.provider,
@@ -594,8 +607,12 @@ def get_ollama_model_status() -> dict:
         available_model_digests=available_model_digests,
         env=os.environ,
     )
+    blocking_reasons = list(report.blocking_reasons)
+    if kill_switch_active and "model_route_kill_switch_active" not in blocking_reasons:
+        blocking_reasons.append("model_route_kill_switch_active")
+    startup_allowed = report.startup_allowed and not kill_switch_active
     return {
-        "status": "ready" if report.startup_allowed else "blocked",
+        "status": "ready" if startup_allowed else "blocked",
         "provider": profile.provider.value,
         "local": profile.local,
         "model": profile.model,
@@ -617,8 +634,9 @@ def get_ollama_model_status() -> dict:
             for route, budget in sorted(profile.route_budgets.items())
         },
         "required_capabilities": report.required_capabilities,
-        "startup_allowed": report.startup_allowed,
-        "blocking_reasons": report.blocking_reasons,
+        "startup_allowed": startup_allowed,
+        "blocking_reasons": blocking_reasons,
+        "model_route_kill_switch_active": kill_switch_active,
         "model_available": report.model_available,
         "model_digest_verified": report.model_digest_verified,
         "model_inventory_source": inventory_source,
@@ -632,11 +650,16 @@ def get_model_tuning_status() -> dict:
     """Return provider-neutral model tuning plan and promotion gates."""
     profile = load_model_runtime_profile(os.environ)
     plan = build_model_tuning_plan(os.environ)
+    kill_switch_active = _model_route_kill_switch_active()
     return {
-        "status": "ready",
+        "status": "blocked" if kill_switch_active else "ready",
         "active_provider": profile.provider.value,
         "active_model": profile.model,
         "provider_neutral": True,
+        "model_route_kill_switch_active": kill_switch_active,
+        "blocking_reasons": (
+            ["model_route_kill_switch_active"] if kill_switch_active else []
+        ),
         "primary_candidate_model": plan.primary_candidate_model,
         "candidate_models": list(plan.candidate_models),
         "dev_set": plan.dev_set,
@@ -665,6 +688,7 @@ def get_model_tuning_status() -> dict:
 def evaluate_model_tuning_candidate(payload: dict) -> dict:
     """Evaluate aggregate model metrics against provider-neutral promotion gates."""
     _reject_sensitive_model_tuning_payload(payload)
+    _reject_if_model_route_kill_switch_active()
     try:
         request = ModelCandidatePromotionRequest.model_validate(payload)
     except ValidationError as exc:
@@ -714,6 +738,7 @@ def evaluate_model_tuning_candidate(payload: dict) -> dict:
 def evaluate_model_tuning_candidate_suite(payload: dict) -> dict:
     """Evaluate a provider-neutral model candidate suite against release gates."""
     _reject_sensitive_model_tuning_payload(payload)
+    _reject_if_model_route_kill_switch_active()
     try:
         request = ModelCandidateSuitePromotionRequest.model_validate(payload)
     except ValidationError as exc:

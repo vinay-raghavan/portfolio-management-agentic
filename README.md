@@ -609,6 +609,11 @@ The status endpoint uses configured inventory in CI/offline mode or a short
 private Ollama `/api/tags` probe at runtime. It does not send prompts; it
 reports route budgets, queue limits, capability readiness, model availability,
 and model-digest verification state.
+Set `MODEL_ROUTE_KILL_SWITCH=true` or
+`PORTFOLIO_MODEL_ROUTE_KILL_SWITCH=true` to block protected model-tuning
+evaluation routes while keeping `/v1/models/ollama/status` and
+`/v1/models/tuning/status` observable with an explicit
+`model_route_kill_switch_active` blocking reason.
 
 Prompt, routing, retrieval, and budget tuning are the initial optimization
 surface. Fine-tuning remains disabled until the eval harness has enough labeled
@@ -633,6 +638,8 @@ minimum/required candidate coverage, ranks only promotable candidates, and
 returns a deterministic selected model without storing prompts, responses, or
 eval examples. This is the preferred gate when comparing `llama3.1:8b`,
 `gemma4:12b`, or any other 7B/8B-compatible model against the incumbent.
+When the model-route kill switch is active, candidate and suite evaluation
+requests fail closed with HTTP 503 before schema parsing or promotion logic.
 `/v1/models/usage/events` records provider-neutral model usage metrics only:
 prompt-token count, output-token count, route, tool calls, queue wait, latency,
 retry count, and request id. In offline/SQLite mode the API uses an in-process

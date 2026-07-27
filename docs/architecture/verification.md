@@ -348,6 +348,10 @@ The model tuning status API is provider-neutral. It reports candidate model
 names, development and sealed holdout set identifiers, prompt/routing/retrieval
 tuning mode, disabled fine-tuning guardrails, and promotion thresholds without
 returning provider secrets, raw prompts, raw responses, or eval examples.
+`MODEL_ROUTE_KILL_SWITCH` / `PORTFOLIO_MODEL_ROUTE_KILL_SWITCH` keeps status
+endpoints observable while marking the route blocked and makes protected
+candidate and suite evaluation fail closed with HTTP 503 before promotion
+logic runs.
 The candidate-evaluation API applies those thresholds to metric-only baseline
 and candidate evidence. It rejects candidates outside `MODEL_TUNING_CANDIDATES`
 and rejects raw prompt, raw response, transcript, message, token, or secret
