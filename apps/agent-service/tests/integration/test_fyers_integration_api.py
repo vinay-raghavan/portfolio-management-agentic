@@ -178,3 +178,88 @@ def test_fyers_oauth_status_disconnect_and_refresh_are_human_api_only_and_redact
     assert "trading_token" not in serialized
     assert "place_order" not in serialized
     assert "paper_ledger" not in serialized
+
+
+def test_fyers_api_uses_postgres_store_when_configured(monkeypatch) -> None:
+    class _FakeFyersStore:
+        def __init__(self) -> None:
+            self.connections: dict[str, object] = {}
+            self.sessions: dict[str, object] = {}
+            self.upserted_connection_count = 0
+            self.upserted_session_count = 0
+            self.cleared_connection_ids: list[str] = []
+
+        def get_connection(self, *, user_id_hash: str) -> object | None:
+            return self.connections.get(user_id_hash)
+
+        def upsert_connection(self, connection):
+            self.connections[connection.user_id_hash] = connection
+            self.upserted_connection_count += 1
+            return connection
+
+        def upsert_oauth_session(self, session):
+            self.sessions[session.state_hash] = session
+            self.upserted_session_count += 1
+            return session
+
+        def pop_oauth_session(
+            self,
+            *,
+            state_hash: str,
+            connection_id: str,
+        ) -> object | None:
+            session = self.sessions.get(state_hash)
+            if session is None or session.connection_id != connection_id:
+                return None
+            return self.sessions.pop(state_hash)
+
+        def clear_oauth_sessions(self, *, connection_id: str) -> None:
+            self.cleared_connection_ids.append(connection_id)
+            for state_hash, session in tuple(self.sessions.items()):
+                if session.connection_id == connection_id:
+                    del self.sessions[state_hash]
+
+    fake_store = _FakeFyersStore()
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv("PORTFOLIO_DATABASE_URL", "postgresql://redacted/db")
+    monkeypatch.setattr(
+        fast_api_app,
+        "_build_postgres_fyers_integration_store",
+        lambda *, tenant_id, database_url: fake_store,
+    )
+    fast_api_app._FYERS_CONNECTIONS.clear()
+    fast_api_app._FYERS_OAUTH_STATES.clear()
+    client = TestClient(app)
+
+    start = client.post(
+        "/v1/integrations/fyers/oauth/start",
+        headers=_headers("postgres-fyers-actor", "analyst"),
+        json={},
+    )
+    state = start.json()["oauth"]["state"]
+    callback = client.post(
+        "/v1/integrations/fyers/oauth/callback",
+        headers=_headers("postgres-fyers-actor", "analyst"),
+        json={"state": state, "auth_code": "browser-auth-code"},
+    )
+    disconnect = client.post(
+        "/v1/integrations/fyers/oauth/disconnect",
+        headers=_headers("postgres-fyers-actor", "analyst"),
+        json={},
+    )
+
+    assert start.status_code == 200
+    assert callback.status_code == 200
+    assert disconnect.status_code == 200
+    assert fake_store.upserted_connection_count >= 3
+    assert fake_store.upserted_session_count == 1
+    assert fake_store.sessions == {}
+    assert fake_store.cleared_connection_ids == [start.json()["connection"]["connection_id"]]
+    assert fast_api_app._FYERS_CONNECTIONS == {}
+    assert fast_api_app._FYERS_OAUTH_STATES == {}
+    serialized = f"{fake_store.connections} {start.json()} {callback.json()} {disconnect.json()}".lower()
+    assert "code_verifier" not in serialized
+    assert "access_token" not in serialized
+    assert "refresh_token" not in serialized
+    assert "client_secret" not in serialized
+    assert "trading_token" not in serialized

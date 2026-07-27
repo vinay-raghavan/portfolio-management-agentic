@@ -29,6 +29,9 @@ explicit safety policy.
   verifier, keep callback token exchange disabled until a credential vault is
   wired, and refresh only through the read-only normalized FYERS fixture with
   no Yahoo fallback, broker mutation, provider token, or paper-ledger mixing.
+  In production-like Postgres mode, sanitized connection metadata and hashed
+  OAuth session state are stored tenant-scoped in Postgres; provider tokens,
+  client secrets, trading tokens, and PKCE verifiers are never persisted.
 - Recommendation explanations join screener/factor evidence, provider refresh readiness, import-reconciliation gates, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with readiness preflight review sections, redacted audit exports, paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require a ready recommendation preflight before paper order proposals enter approval, keep approval and simulated-fill mutation on protected human/API paths, update paper positions/accounting, expose approval queues, and emit redacted audit events with the readiness snapshot.
@@ -307,6 +310,15 @@ paper policies, grants, ledger entries, model-usage telemetry, and immutable
 audit events. SQLite remains useful for offline capstone mode and fast
 deterministic tests while Postgres-backed contract tests are introduced
 feature-by-feature.
+
+Protected FYERS connection state is Postgres-backed when
+`PORTFOLIO_STORAGE_BACKEND=postgres`: the API stores sanitized
+`fyers_connections` rows plus hashed, single-use `fyers_oauth_sessions` rows.
+The persisted records include provider, user hash, read-only scopes, status,
+daily auth expiry, PKCE challenge, and timestamps only; credential references
+remain null until the credential-vault worker lands, and tokens/verifiers are
+rejected from the storage contract. Local/offline mode keeps the process-local
+fallback so fixture-only API tests remain credential-free.
 
 Agent session memory is intentionally compact and short-lived. The runtime
 contract stores only a sanitized task summary plus references to authoritative

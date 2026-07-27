@@ -89,6 +89,7 @@ from .fyers_integration import (
     actor_hash,
     hash_oauth_state,
 )
+from .fyers_integration_store import PostgresFyersIntegrationStore
 from .market_data_store import (
     SQLiteMarketDataStore,
     build_market_data_store,
@@ -303,6 +304,7 @@ __all__ = [
     "PatternStore",
     "PostgresResearchSearchPlan",
     "PostgresResearchStore",
+    "PostgresFyersIntegrationStore",
     "PostgresPaperExecutionStore",
     "PostgresSessionMemoryStore",
     "PortfolioSummary",

@@ -31,6 +31,11 @@ Current coverage:
   vault is wired, read-only normalized fixture refreshes with signed positions,
   and absence of provider tokens, credential material, broker mutation methods,
   model-visible OAuth tools, or paper-ledger payload mixing.
+- FYERS Postgres storage contracts verify the Alembic-managed
+  `fyers_oauth_sessions` table, tenant row-level security, sanitized
+  `fyers_connections` upserts, single-use actor/connection-scoped OAuth state,
+  and absence of access tokens, refresh tokens, client secrets, trading tokens,
+  or PKCE verifiers from persisted params and returned contracts.
 - Postgres/Alembic foundation contracts verify production-like storage selects
   Postgres explicitly through `PORTFOLIO_STORAGE_BACKEND`, redacts database and
   Redis credentials in runtime status payloads, requires migrations, preserves
