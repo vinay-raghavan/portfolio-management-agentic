@@ -18,6 +18,9 @@ from .tools import (
     get_backtest_request,
     get_backtest_result,
     get_data_provider_health,
+    get_fyers_account_snapshot,
+    get_fyers_connection_health,
+    get_fyers_quote,
     get_market_data_snapshot,
     get_pattern_playbook,
     get_paper_portfolio_accounting,
@@ -90,6 +93,9 @@ def build_server():
     server.tool()(run_momentum_screener)
     server.tool()(list_data_providers)
     server.tool()(get_data_provider_health)
+    server.tool()(get_fyers_connection_health)
+    server.tool()(get_fyers_quote)
+    server.tool()(get_fyers_account_snapshot)
     server.tool()(validate_data_provider_imports)
     server.tool()(list_provider_profiles)
     server.tool()(list_provider_source_templates)

@@ -16,6 +16,7 @@ from portfolio_domain import (
     get_fixture_backtest_request,
     get_fixture_backtest_result,
     get_fixture_strategy_draft,
+    get_fyers_readonly_connector,
     get_fixture_paper_portfolio_accounting,
     get_data_provider_registry,
     get_market_data_storage_status,
@@ -73,6 +74,9 @@ EXPOSED_TOOL_NAMES = {
     "get_provider_refresh_readiness",
     "refresh_provider_import_profile",
     "run_provider_refresh_schedule",
+    "get_fyers_connection_health",
+    "get_fyers_quote",
+    "get_fyers_account_snapshot",
     "get_market_data_snapshot",
     "list_market_data_snapshots",
     "get_universe_members",
@@ -223,6 +227,53 @@ def get_data_provider_health() -> dict[str, Any]:
         "status": "success",
         "policy": decision.to_dict(),
         "health": [item.to_dict() for item in registry.health()],
+    }
+
+
+def get_fyers_connection_health() -> dict[str, Any]:
+    """Read-only FYERS connector health without exposing credential values."""
+    tool_name = "get_fyers_connection_health"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "health": get_fyers_readonly_connector().connection_health().to_dict(),
+    }
+
+
+def get_fyers_quote(symbol: str) -> dict[str, Any]:
+    """Read-only FYERS quote snapshot; no fallback source and no trading action."""
+    tool_name = "get_fyers_quote"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name, {"symbol": symbol})
+    try:
+        quote = get_fyers_readonly_connector().get_quote(symbol)
+    except ValueError as exc:
+        return {
+            "status": "unavailable",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "quote": quote.to_dict(),
+    }
+
+
+def get_fyers_account_snapshot() -> dict[str, Any]:
+    """Read-only FYERS normalized account snapshot with signed quantities and no credential values."""
+    tool_name = "get_fyers_account_snapshot"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name)
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "snapshot": get_fyers_readonly_connector().get_account_snapshot().to_dict(),
     }
 
 

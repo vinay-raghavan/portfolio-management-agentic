@@ -13,6 +13,16 @@ Set `PORTFOLIO_FUNDAMENTALS_PROVIDER=json_file` and `PORTFOLIO_FUNDAMENTALS_JSON
 Set `PORTFOLIO_SENTIMENT_PROVIDER=json_file` and `PORTFOLIO_SENTIMENT_JSON_PATH` to read configured local sentiment through the read-only JSON adapter.
 Set `PORTFOLIO_VOLATILITY_PROVIDER=json_file` and `PORTFOLIO_VOLATILITY_JSON_PATH` to read configured local volatility through the read-only JSON adapter.
 Set `PORTFOLIO_MACRO_PROVIDER=json_file` and `PORTFOLIO_MACRO_JSON_PATH` to read configured local macro/regime context through the read-only JSON adapter.
+The FYERS read-only connector currently exposes offline fixture tools for
+connection health, quotes, and normalized account snapshots:
+`get_fyers_connection_health`, `get_fyers_quote`, and
+`get_fyers_account_snapshot`. These tools preserve exchange-qualified symbols,
+fresh/stale/unavailable status, signed quantities, funds, and provenance while
+keeping provider account data separate from the simulated paper ledger. OAuth
+start/callback/status/disconnect, provider app administration, and any broker
+mutation surface stay outside MCP/model-visible bundles. Unknown FYERS symbols
+return unavailable/error context; they are not converted to empty holdings,
+zero funds, or another provider's data.
 Use `validate_data_provider_imports` to validate configured local JSON files before running provider-backed workflows. It reports validation status and sample identifiers without exposing local paths or credential values.
 Use `list_provider_source_templates` to retrieve synthetic, adapter-valid JSON
 templates and accepted wrapper names for each configured source kind without

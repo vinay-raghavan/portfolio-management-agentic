@@ -10,6 +10,9 @@ Use this capability for read-only provider status, normalized snapshot freshness
 ## Allowed tools
 
 - `get_data_provider_health`
+- `get_fyers_account_snapshot`
+- `get_fyers_connection_health`
+- `get_fyers_quote`
 - `get_market_data_snapshot`
 - `get_provider_refresh_readiness`
 - `list_data_providers`
