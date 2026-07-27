@@ -67,8 +67,8 @@ explicit safety policy.
   Worker JSON summaries expose backed-off tenant workers and the sanitized
   schedule-state backend, and operators can run a read-only health snapshot
   without claiming queue items.
-- Market-data and provider-context persistence store fixture/configured-provider market snapshots, screener runs, universes, fundamentals, sentiment, volatility, and macro context in tenant-scoped Postgres tables for production-like runs, using the same JSON payload shape returned by the tools. `MARKET_DATA_DB_PATH` remains the explicit SQLite offline fallback.
-- Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can import normalized market and provider-context records into tenant-scoped Postgres when `PORTFOLIO_STORAGE_BACKEND=postgres`, or into the SQLite fallback behind `MARKET_DATA_DB_PATH` for offline runs. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
+- Market-data, provider-context, and provider-profile persistence store fixture/configured-provider market snapshots, screener runs, universes, fundamentals, sentiment, volatility, macro context, provider configuration profiles, and import-refresh jobs in tenant-scoped Postgres tables for production-like runs, using the same sanitized JSON payload shape returned by the tools. `MARKET_DATA_DB_PATH` and `PROVIDER_CONFIG_DB_PATH` remain explicit SQLite offline fallbacks.
+- Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can import normalized market and provider-context records into tenant-scoped Postgres when `PORTFOLIO_STORAGE_BACKEND=postgres`, or into the SQLite fallback behind `MARKET_DATA_DB_PATH` for offline runs. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval infrastructure is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade`, writes redacted baseline summaries, and produces deterministic triage reports for grade-result failures without printing secret values. The eval config combines an LLM response-quality rubric with deterministic forbidden-action and workflow-tool-trajectory code metrics. A manual GitHub Actions workflow can run the credentialed baseline and upload ignored eval artifacts.
 - Capstone evidence manifest generation is available through `scripts/build_capstone_evidence.py`; it summarizes deterministic verification, container services, implemented workflow evidence, eval baseline status, eval submission readiness, and remaining submission gaps without local paths or secret values.
 - Agent workflow-routing guidance is embedded in the ADK instruction and eval rubric so pre-market, provider-readiness, candidate explanation, recommendation-to-paper-order, reporting, feature-navigation, and forbidden-action requests have explicit safe tool paths before the first credentialed baseline, while approval/fill mutations route to protected human/API paths outside model-visible MCP. Compose runs the ADK agent through the private streamable-HTTP MCP tool boundary by default via `AGENT_TOOL_TRANSPORT=mcp` and `AGENT_MCP_URL=http://mcp-server:8081/mcp`; the in-process adapter remains available for deterministic local/unit tests. Model-facing MCP tool descriptions now name policy tiers and high-risk workflow sequencing constraints.
@@ -305,11 +305,12 @@ Compose mode sets `PORTFOLIO_STORAGE_BACKEND=postgres` by default and treats
 Postgres plus Alembic as the production-like storage path. The service runtime
 profile redacts database and Redis credentials in status/readiness payloads and
 fails production-like readiness when Postgres is not selected or the database
-URL is missing. SQLite paths remain available for local/offline compatibility
-while individual stores are ported: `PAPER_LEDGER_DB_PATH`,
-`MARKET_DATA_DB_PATH`, and `PROVIDER_CONFIG_DB_PATH`. Market snapshots,
-screener runs, and provider-context records now use tenant-scoped Postgres in
-production-like mode, while the compatibility paths remain `/data/paper-ledger.db`,
+URL is missing. SQLite paths remain available for explicit local/offline
+compatibility: `PAPER_LEDGER_DB_PATH`, `MARKET_DATA_DB_PATH`, and
+`PROVIDER_CONFIG_DB_PATH`. Market snapshots,
+screener runs, provider-context records, provider configuration profiles, and
+provider import-refresh jobs now use tenant-scoped Postgres in production-like
+mode, while the compatibility paths remain `/data/paper-ledger.db`,
 `/data/market-data.db`, and `/data/provider-config.db` on the
 `paper-ledger-data` volume; the agent-service-local `.env.example` keeps
 relative `../../data/*.db` paths for fast credential-free tests.

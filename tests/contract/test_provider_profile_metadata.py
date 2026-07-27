@@ -4,13 +4,16 @@ import json
 from pathlib import Path
 
 from portfolio_domain.provider_profiles import (
+    PostgresProviderProfileStore,
     PROVIDER_CONFIG_DB_ENV,
+    build_provider_profile_store,
     list_provider_configuration_profiles,
     list_provider_import_reconciliation,
     list_provider_import_jobs,
     refresh_provider_import_profile_metadata,
 )
 from portfolio_domain.market_data_store import SQLiteMarketDataStore
+from portfolio_domain.models import ProviderImportJob
 
 
 def _write_market_snapshot(tmp_path) -> str:
@@ -76,6 +79,193 @@ def test_provider_profiles_are_metadata_only_and_path_safe(tmp_path) -> None:
     assert "private-market-snapshots" not in combined
     assert "api_key" not in combined
     assert "token" not in combined
+
+
+TENANT_ID = "11111111-1111-1111-1111-111111111111"
+
+
+class _FakeCursor:
+    def __init__(self, rows: list[dict] | None = None) -> None:
+        self.executed: list[tuple[str, dict]] = []
+        self._rows = rows or []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args) -> None:
+        return None
+
+    def execute(self, sql: str, params: dict) -> None:
+        self.executed.append((sql, params))
+
+    def fetchone(self):
+        if not self._rows:
+            return None
+        return self._rows.pop(0)
+
+    def fetchall(self):
+        if not self._rows:
+            return []
+        return [self._rows.pop(0)]
+
+
+class _FakeConnection:
+    def __init__(self, cursor: _FakeCursor) -> None:
+        self.cursor_instance = cursor
+        self.committed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args) -> None:
+        return None
+
+    def cursor(self) -> _FakeCursor:
+        return self.cursor_instance
+
+    def commit(self) -> None:
+        self.committed = True
+
+
+def test_migration_adds_tenant_scoped_provider_profile_metadata_tables() -> None:
+    migration = Path(
+        "infra/db/alembic/versions/20260727_0009_provider_profile_store.py"
+    ).read_text()
+
+    assert 'revision = "20260727_0009"' in migration
+    assert 'down_revision = "20260727_0008"' in migration
+    assert "provider_configuration_profiles" in migration
+    assert "provider_import_jobs" in migration
+    assert "tenant_id" in migration
+    assert "payload" in migration
+    assert "jsonb" in migration.lower()
+    assert "ENABLE ROW LEVEL SECURITY" in migration
+    assert "tenant_isolation_{table_name}" in migration
+    assert "DROP POLICY IF EXISTS" in migration
+    assert "access_token" not in migration
+    assert "credential" not in migration
+
+
+def test_postgres_provider_profile_store_records_tenant_scoped_metadata_without_paths(
+    tmp_path,
+) -> None:
+    json_path = _write_market_snapshot(tmp_path)
+    env = {
+        PROVIDER_CONFIG_DB_ENV: str(tmp_path / "provider-config.db"),
+        "PORTFOLIO_MARKET_DATA_PROVIDER": "json_file",
+        "PORTFOLIO_MARKET_DATA_JSON_PATH": json_path,
+    }
+    profile = {
+        item.provider_id: item for item in list_provider_configuration_profiles(env=env)
+    }["configured_market_data"]
+    cursor = _FakeCursor()
+    connection = _FakeConnection(cursor)
+    store = PostgresProviderProfileStore(
+        tenant_id=TENANT_ID,
+        connection_factory=lambda: connection,
+    )
+
+    stored = store.upsert_profile(profile)
+
+    tenant_sql, tenant_params = cursor.executed[0]
+    sql, params = cursor.executed[1]
+    serialized = f"{sql} {params}".lower()
+    assert "set_config('app.tenant_id'" in tenant_sql
+    assert tenant_params == {"tenant_id": TENANT_ID}
+    assert "INSERT INTO provider_configuration_profiles" in sql
+    assert "ON CONFLICT (tenant_id, profile_id)" in sql
+    assert params["tenant_id"] == TENANT_ID
+    assert params["profile_id"] == "profile-configured-market-data"
+    assert params["provider_id"] == "configured_market_data"
+    assert params["payload"] == profile.to_dict()
+    assert stored.to_dict() == profile.to_dict()
+    assert connection.committed is True
+    assert str(tmp_path).lower() not in serialized
+    assert "private-market-snapshots" not in serialized
+    assert "access_token" not in serialized
+    assert "secret" not in serialized
+
+
+def test_postgres_provider_profile_store_reads_profiles_and_jobs() -> None:
+    profile = list_provider_configuration_profiles()[0]
+    job = ProviderImportJob(
+        job_id="provider-import-configured-market-data-001",
+        profile_id=profile.profile_id,
+        provider_id=profile.provider_id,
+        kind=profile.kind,
+        status="skipped",
+        trigger="contract_test",
+        provider_mode=profile.provider_mode,
+        source_label=profile.source_label,
+        validation_status=profile.last_validation_status,
+        payload_count=profile.payload_count,
+        sample_identifiers=profile.sample_identifiers,
+        message="fixture provider remains active",
+        started_at="2026-06-22T09:21:00+05:30",
+        completed_at="2026-06-22T09:21:00+05:30",
+        progress_state="skipped",
+        attempts=1,
+        imported_count=0,
+        skipped_count=0,
+        target_store="none",
+        audit_event={
+            "event_type": "provider_import_skipped",
+            "provider_id": profile.provider_id,
+        },
+        notes=[
+            "Provider import refresh records sanitized execution metadata.",
+            "No raw provider payload, account data, sensitive value, or resolved path is stored.",
+        ],
+    )
+    cursor = _FakeCursor(
+        rows=[
+            {"payload": profile.to_dict()},
+            {"payload": job.to_dict()},
+        ]
+    )
+    connection = _FakeConnection(cursor)
+    store = PostgresProviderProfileStore(
+        tenant_id=TENANT_ID,
+        connection_factory=lambda: connection,
+    )
+
+    profiles = store.list_profiles(limit=5)
+    jobs = store.list_import_jobs(limit=5)
+
+    profile_tenant_sql, profile_tenant_params = cursor.executed[0]
+    profile_sql, profile_params = cursor.executed[1]
+    job_tenant_sql, job_tenant_params = cursor.executed[2]
+    job_sql, job_params = cursor.executed[3]
+    assert "set_config('app.tenant_id'" in profile_tenant_sql
+    assert profile_tenant_params == {"tenant_id": TENANT_ID}
+    assert "FROM provider_configuration_profiles" in profile_sql
+    assert "tenant_id = %(tenant_id)s" in profile_sql
+    assert profile_params == {"tenant_id": TENANT_ID, "limit": 5}
+    assert "set_config('app.tenant_id'" in job_tenant_sql
+    assert job_tenant_params == {"tenant_id": TENANT_ID}
+    assert "FROM provider_import_jobs" in job_sql
+    assert "tenant_id = %(tenant_id)s" in job_sql
+    assert job_params == {"tenant_id": TENANT_ID, "limit": 5}
+    assert [item.to_dict() for item in profiles] == [profile.to_dict()]
+    assert [item.to_dict() for item in jobs] == [job.to_dict()]
+
+
+def test_provider_profile_store_uses_postgres_for_production_like_backend() -> None:
+    store = build_provider_profile_store(
+        {
+            "PORTFOLIO_STORAGE_BACKEND": "postgres",
+            "PORTFOLIO_DATABASE_URL": "postgresql+psycopg://portfolio:secret@db:5432/portfolio_agentic",
+            "PORTFOLIO_TENANT_ID": TENANT_ID,
+        }
+    )
+
+    assert isinstance(store, PostgresProviderProfileStore)
+    assert store.storage_status() == {
+        "status": "persisted",
+        "backend": "postgres",
+        "configured": True,
+        "tenant_scoped": True,
+    }
 
 
 def test_provider_import_refresh_tracks_job_without_storing_payload_or_path(
