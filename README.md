@@ -295,9 +295,10 @@ relative `../../data/*.db` paths for fast credential-free tests.
 
 The production-like storage target is Postgres, with tenant-scoped tables for
 sessions, FYERS/provider connections, normalized snapshots, research documents,
-paper policies, grants, ledger entries, and immutable audit events. SQLite
-remains useful for offline capstone mode and fast deterministic tests while
-Postgres-backed contract tests are introduced feature-by-feature.
+paper policies, grants, ledger entries, model-usage telemetry, and immutable
+audit events. SQLite remains useful for offline capstone mode and fast
+deterministic tests while Postgres-backed contract tests are introduced
+feature-by-feature.
 
 Agent session memory is intentionally compact and short-lived. The runtime
 contract stores only a sanitized task summary plus references to authoritative
@@ -472,9 +473,14 @@ promotion thresholds. It does not return provider keys, raw prompts, raw
 responses, or eval example payloads.
 `/v1/models/usage/events` records provider-neutral model usage metrics only:
 prompt-token count, output-token count, route, tool calls, queue wait, latency,
-retry count, and request id. The API rejects extra payload/content fields and
+retry count, and request id. In offline/SQLite mode the API uses an in-process
+rolling buffer; when `PORTFOLIO_STORAGE_BACKEND=postgres` it writes the same
+metric-only event to tenant-scoped `model_usage_events` through Alembic-managed
+Postgres storage. The API rejects extra payload/content fields and
 `/v1/models/usage/summary` returns aggregate token, latency, queue, retry, and
-budget-violation summaries for tuning comparisons.
+budget-violation summaries for tuning comparisons. Raw prompts, raw responses,
+provider credentials, and broker tokens are never accepted as telemetry fields
+or stored in this table.
 
 ## CI/CD
 

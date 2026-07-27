@@ -30,6 +30,12 @@ Current coverage:
   production-like readiness is required. Alembic revision-chain contracts also
   verify a single migration head, no orphaned `down_revision` references, and
   reversible upgrade/downgrade functions for every migration file.
+- Model usage telemetry contracts verify metric-only `ModelUsageEvent`
+  persistence, tenant-scoped Postgres `model_usage_events` migration with row
+  level security, idempotent request recording, FastAPI routing to Postgres
+  when production-like storage is configured, in-memory fallback for
+  local/offline mode, and rejection/non-retention of raw prompts, raw responses,
+  provider credentials, broker tokens, or secret-looking payloads.
 - Session-memory contracts verify compact summary-only persistence, tenant and
   actor-scoped Postgres upserts/reads/deletes, 2-hour idle and 24-hour absolute TTLs,
   immediate deletion, object-reference-only carryover, and rejection of raw
@@ -256,7 +262,9 @@ returning provider secrets, raw prompts, raw responses, or eval examples.
 Model usage telemetry accepts only metric fields: route, provider/model ids,
 prompt/output token counts, tool-call count, queue wait, latency, retry count,
 and request id. Extra fields are rejected so raw prompts, raw responses, and
-credential material do not enter the telemetry store; summaries expose aggregate
+credential material do not enter the telemetry store. Production-like Postgres
+mode persists those events in tenant-scoped `model_usage_events`; local/offline
+mode keeps only a rolling process-memory buffer. Summaries expose aggregate
 token, latency, queue, retry, route, and budget-violation data.
 
 For the optional Compose-managed Ollama profile, run

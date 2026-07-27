@@ -21,6 +21,7 @@ from .config import (
     parse_ollama_tags_response,
     summarize_model_usage_events,
 )
+from .usage_store import PostgresModelUsageStore
 
 __all__ = [
     "DEFAULT_ROUTE_BUDGETS",
@@ -35,6 +36,7 @@ __all__ = [
     "ModelUsageEvent",
     "ModelUsageSummary",
     "OllamaModelMetadata",
+    "PostgresModelUsageStore",
     "RouteBudget",
     "build_model_capability_report",
     "evaluate_model_candidate_for_tuning",

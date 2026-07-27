@@ -154,6 +154,89 @@ def test_model_usage_telemetry_records_budgeted_metrics_without_payloads(monkeyp
     assert "secret" not in serialized
 
 
+def test_model_usage_telemetry_uses_postgres_store_when_configured(monkeypatch) -> None:
+    class _FakeStore:
+        def __init__(self) -> None:
+            self.recorded = []
+
+        def record(self, event, decision) -> None:
+            self.recorded.append((event, decision))
+
+        def list_recent(self, *, limit: int = 500):
+            return tuple(event for event, _decision in self.recorded)
+
+    fake_store = _FakeStore()
+
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setattr("app.fast_api_app._model_usage_store", lambda actor=None: fake_store)
+    app.state.model_usage_events = []
+    client = TestClient(app)
+
+    recorded = client.post(
+        "/v1/models/usage/events",
+        headers={
+            "X-Actor-Sub": "model-telemetry-worker",
+            "X-Tenant-Id": "11111111-1111-1111-1111-111111111111",
+            "X-Actor-Roles": "admin",
+            "X-Request-Id": "req-http-postgres-usage",
+        },
+        json={
+            "provider": "ollama",
+            "model": "llama3.1:8b",
+            "route": "research",
+            "prompt_tokens": 1200,
+            "output_tokens": 300,
+            "tool_calls": 3,
+            "queue_wait_ms": 50,
+            "latency_ms": 1400,
+            "retries": 0,
+            "request_id": "req-postgres-usage",
+        },
+    )
+    summary = client.get(
+        "/v1/models/usage/summary",
+        headers={
+            "X-Actor-Sub": "model-telemetry-worker",
+            "X-Tenant-Id": "11111111-1111-1111-1111-111111111111",
+            "X-Actor-Roles": "admin",
+            "X-Request-Id": "req-http-postgres-summary",
+        },
+    )
+
+    assert recorded.status_code == 200
+    assert recorded.json()["stored_event_count"] == 1
+    assert summary.status_code == 200
+    payload = summary.json()
+    serialized = str(payload).lower()
+    assert payload["summary"]["event_count"] == 1
+    assert payload["summary"]["routes"] == {"research": 1}
+    assert app.state.model_usage_events == []
+    assert "db-secret" not in serialized
+    assert "raw_prompt" not in serialized
+    assert "raw_response" not in serialized
+
+
+def test_model_usage_telemetry_requires_actor_context_for_postgres(monkeypatch) -> None:
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    client = TestClient(app)
+
+    response = client.get("/v1/models/usage/summary")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "actor_context_required"
+    assert "db-secret" not in str(response.json())
+
+
 def test_model_usage_telemetry_rejects_payload_content_fields(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
