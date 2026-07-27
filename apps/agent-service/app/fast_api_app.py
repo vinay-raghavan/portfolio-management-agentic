@@ -621,6 +621,53 @@ def _remember_paper_idempotency_key(
     _PAPER_IDEMPOTENCY_KEYS.setdefault(actor.tenant_id, set()).add(idempotency_key)
 
 
+def _paper_execution_current_exposure(
+    actor: ActorContext,
+    grant: PaperExecutionGrant,
+    request: PaperExecuteApiRequest,
+) -> dict[str, float]:
+    if _paper_execution_store_for_actor(actor) is not None:
+        return {
+            "gross_notional": _float_mapping_value(
+                grant.consumed_capacity,
+                "gross_notional",
+            ),
+            "net_notional": _float_mapping_value(
+                grant.consumed_capacity,
+                "net_notional",
+            ),
+        }
+    return {
+        "gross_notional": float(request.current_gross_notional),
+        "net_notional": float(request.current_net_notional),
+    }
+
+
+def _paper_execution_exposure_after(
+    *,
+    current_exposure: Mapping[str, float],
+    order: PaperExecutionOrder,
+    quote_price: float,
+) -> dict[str, float]:
+    notional = round(order.quantity * quote_price, 2)
+    return {
+        "gross_notional": current_exposure["gross_notional"] + abs(notional),
+        "net_notional": (
+            current_exposure["net_notional"] + notional
+            if order.side == "buy"
+            else current_exposure["net_notional"] - notional
+        ),
+    }
+
+
+def _float_mapping_value(payload: Mapping[str, object], key: str) -> float:
+    value = payload.get(key, 0.0)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _paper_order_from_route(
     actor: ActorContext,
     order_id: str,
@@ -784,6 +831,7 @@ def post_paper_order_execute(
     if policy is None:
         raise HTTPException(status_code=404, detail="paper_policy_not_found")
     used_keys = _used_paper_idempotency_keys(actor, request.idempotency_key)
+    current_exposure = _paper_execution_current_exposure(actor, grant, request)
     decision = evaluate_paper_execution_order(
         policy=policy,
         grant=grant,
@@ -795,8 +843,8 @@ def post_paper_order_execute(
         now=request.now or datetime.now(UTC),
         used_idempotency_keys=used_keys,
         available_cash=request.available_cash,
-        current_gross_notional=request.current_gross_notional,
-        current_net_notional=request.current_net_notional,
+        current_gross_notional=current_exposure["gross_notional"],
+        current_net_notional=current_exposure["net_notional"],
         kill_switch_active=request.kill_switch_active,
     )
     _remember_paper_idempotency_key(actor, request.idempotency_key)
@@ -817,10 +865,11 @@ def post_paper_order_execute(
         order=order,
         decision=decision,
         fill_price=request.quote_price,
-        exposure_after={
-            "gross_notional": request.current_gross_notional,
-            "net_notional": request.current_net_notional,
-        },
+        exposure_after=_paper_execution_exposure_after(
+            current_exposure=current_exposure,
+            order=order,
+            quote_price=request.quote_price,
+        ),
     )
     if decision.status != "accepted":
         return JSONResponse(
