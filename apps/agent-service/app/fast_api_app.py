@@ -72,11 +72,14 @@ from portfolio_domain import (  # noqa: E402
 )
 from portfolio_model_provider import (  # noqa: E402
     ModelProvider,
+    ModelUsageEvent,
     OllamaModelMetadata,
     build_model_capability_report,
     build_model_tuning_plan,
+    evaluate_model_usage_event,
     load_model_runtime_profile,
     parse_ollama_tags_response,
+    summarize_model_usage_events,
 )
 
 setup_telemetry()
@@ -112,6 +115,21 @@ class PaperOrderApprovalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     approval_note: str = Field(default="", max_length=500)
+
+
+class ModelUsageEventRequest(BaseModel):
+    provider: ModelProvider
+    model: str = Field(min_length=1, max_length=120)
+    route: str = Field(min_length=1, max_length=120)
+    prompt_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    tool_calls: int = Field(ge=0)
+    queue_wait_ms: int = Field(ge=0)
+    latency_ms: int = Field(ge=0)
+    retries: int = Field(ge=0)
+    request_id: str = Field(min_length=1, max_length=120)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class PaperFillRequest(BaseModel):
@@ -421,6 +439,56 @@ def get_model_tuning_status() -> dict:
     }
 
 
+@app.post("/v1/models/usage/events")
+def record_model_usage_event(request: ModelUsageEventRequest) -> dict:
+    """Record redacted model usage metrics and evaluate route budgets."""
+    payload = request.model_dump()
+    _reject_sensitive_model_usage_payload(payload)
+    profile = load_model_runtime_profile(os.environ)
+    event = ModelUsageEvent(
+        provider=request.provider,
+        model=request.model,
+        route=request.route,
+        prompt_tokens=request.prompt_tokens,
+        output_tokens=request.output_tokens,
+        tool_calls=request.tool_calls,
+        queue_wait_ms=request.queue_wait_ms,
+        latency_ms=request.latency_ms,
+        retries=request.retries,
+        request_id=request.request_id,
+    )
+    decision = evaluate_model_usage_event(profile, event)
+    events = _model_usage_events()
+    events.append(event)
+    max_events = max(profile.queue_max_depth * 10, 100)
+    if len(events) > max_events:
+        del events[: len(events) - max_events]
+    return {
+        "status": "recorded",
+        "budget_decision": decision.to_dict(),
+        "stored_event_count": len(events),
+    }
+
+
+@app.get("/v1/models/usage/summary")
+def get_model_usage_summary() -> dict:
+    """Return aggregate model usage metrics without prompts or responses."""
+    profile = load_model_runtime_profile(os.environ)
+    events = tuple(_model_usage_events())
+    summary = summarize_model_usage_events(profile, events)
+    budget_violations: dict[str, int] = {}
+    for event in events:
+        decision = evaluate_model_usage_event(profile, event)
+        if not decision.allowed:
+            budget_violations[event.route] = budget_violations.get(event.route, 0) + 1
+    return {
+        "status": "ready",
+        "summary": summary.to_dict(),
+        "budget_violations": budget_violations,
+        "stored_event_count": len(events),
+    }
+
+
 @app.get("/v1/storage/status")
 def get_storage_status(require_production_like: bool = False) -> dict:
     """Return redacted storage runtime and migration-readiness status."""
@@ -456,6 +524,32 @@ def _reject_sensitive_paper_payload(payload: object) -> None:
     )
     if any(fragment in lowered for fragment in forbidden):
         raise HTTPException(status_code=400, detail="paper_payload_contains_sensitive_data")
+
+
+def _reject_sensitive_model_usage_payload(payload: object) -> None:
+    lowered = str(payload).lower()
+    forbidden = (
+        "raw_prompt",
+        "raw_response",
+        "access_token",
+        "refresh_token",
+        "api_key",
+        "authorization:",
+        "bearer ",
+        "password",
+        "secret",
+        "trading_token",
+    )
+    if any(fragment in lowered for fragment in forbidden):
+        raise HTTPException(status_code=400, detail="model_usage_contains_sensitive_data")
+
+
+def _model_usage_events() -> list[ModelUsageEvent]:
+    events = getattr(app.state, "model_usage_events", None)
+    if not isinstance(events, list):
+        events = []
+        app.state.model_usage_events = events
+    return events
 
 
 def _aware_utc(value: datetime) -> datetime:

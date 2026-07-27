@@ -439,6 +439,7 @@ OLLAMA_BASE_URL=http://host.containers.internal:11434 \
 podman compose up --build
 curl http://localhost:8000/v1/models/ollama/status
 curl http://localhost:8000/v1/models/tuning/status
+curl http://localhost:8000/v1/models/usage/summary
 ```
 
 If you use the optional Compose-managed Ollama service instead of a native host
@@ -469,6 +470,11 @@ thresholds without storing prompts or responses.
 development and sealed holdout set names, disabled fine-tuning gate, and
 promotion thresholds. It does not return provider keys, raw prompts, raw
 responses, or eval example payloads.
+`/v1/models/usage/events` records provider-neutral model usage metrics only:
+prompt-token count, output-token count, route, tool calls, queue wait, latency,
+retry count, and request id. The API rejects extra payload/content fields and
+`/v1/models/usage/summary` returns aggregate token, latency, queue, retry, and
+budget-violation summaries for tuning comparisons.
 
 ## CI/CD
 

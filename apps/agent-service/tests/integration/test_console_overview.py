@@ -94,6 +94,91 @@ def test_model_tuning_status_reports_provider_neutral_plan_without_secrets(monke
     assert "raw_response" not in serialized.lower()
 
 
+def test_model_usage_telemetry_records_budgeted_metrics_without_payloads(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
+    monkeypatch.setenv("MODEL_CONTEXT_WINDOW_TOKENS", "8192")
+    client = TestClient(app)
+    app.state.model_usage_events = []
+
+    first = client.post(
+        "/v1/models/usage/events",
+        json={
+            "provider": "ollama",
+            "model": "llama3.1:8b",
+            "route": "technical_analysis",
+            "prompt_tokens": 3200,
+            "output_tokens": 700,
+            "tool_calls": 4,
+            "queue_wait_ms": 120,
+            "latency_ms": 2400,
+            "retries": 1,
+            "request_id": "req-usage-1",
+        },
+    )
+    second = client.post(
+        "/v1/models/usage/events",
+        json={
+            "provider": "ollama",
+            "model": "llama3.1:8b",
+            "route": "technical_analysis",
+            "prompt_tokens": 7000,
+            "output_tokens": 1700,
+            "tool_calls": 6,
+            "queue_wait_ms": 40,
+            "latency_ms": 4000,
+            "retries": 0,
+            "request_id": "req-usage-2",
+        },
+    )
+    summary = client.get("/v1/models/usage/summary")
+
+    assert first.status_code == 200
+    assert first.json()["budget_decision"]["allowed"] is True
+    assert second.status_code == 200
+    assert second.json()["budget_decision"]["allowed"] is False
+    assert "prompt_input_budget_exceeded" in second.json()["budget_decision"]["violations"]
+    assert "output_budget_exceeded" in second.json()["budget_decision"]["violations"]
+    assert "tool_call_budget_exceeded" in second.json()["budget_decision"]["violations"]
+
+    assert summary.status_code == 200
+    payload = summary.json()
+    serialized = str(payload).lower()
+    assert payload["summary"]["event_count"] == 2
+    assert payload["summary"]["routes"] == {"technical_analysis": 2}
+    assert payload["summary"]["prompt_tokens"] == 10200
+    assert payload["summary"]["output_tokens"] == 2400
+    assert payload["budget_violations"] == {"technical_analysis": 1}
+    assert "raw_prompt" not in serialized
+    assert "raw_response" not in serialized
+    assert "secret" not in serialized
+
+
+def test_model_usage_telemetry_rejects_payload_content_fields(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/models/usage/events",
+        json={
+            "provider": "ollama",
+            "model": "llama3.1:8b",
+            "route": "research",
+            "prompt_tokens": 10,
+            "output_tokens": 5,
+            "tool_calls": 1,
+            "queue_wait_ms": 0,
+            "latency_ms": 20,
+            "retries": 0,
+            "request_id": "req-secret",
+            "raw_prompt": "provider secret should not be accepted",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_storage_status_reports_redacted_production_like_readiness(monkeypatch) -> None:
     monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
     monkeypatch.setenv(

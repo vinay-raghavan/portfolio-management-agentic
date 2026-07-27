@@ -245,6 +245,7 @@ OLLAMA_BASE_URL=http://host.containers.internal:11434 \
 podman compose up --build
 curl http://localhost:8000/v1/models/ollama/status
 curl http://localhost:8000/v1/models/tuning/status
+curl http://localhost:8000/v1/models/usage/summary
 curl "http://localhost:8000/v1/storage/status?require_production_like=true"
 ```
 
@@ -252,6 +253,11 @@ The model tuning status API is provider-neutral. It reports candidate model
 names, development and sealed holdout set identifiers, prompt/routing/retrieval
 tuning mode, disabled fine-tuning guardrails, and promotion thresholds without
 returning provider secrets, raw prompts, raw responses, or eval examples.
+Model usage telemetry accepts only metric fields: route, provider/model ids,
+prompt/output token counts, tool-call count, queue wait, latency, retry count,
+and request id. Extra fields are rejected so raw prompts, raw responses, and
+credential material do not enter the telemetry store; summaries expose aggregate
+token, latency, queue, retry, route, and budget-violation data.
 
 For the optional Compose-managed Ollama profile, run
 `podman compose --profile ollama run --rm ollama-model-prepull` with
