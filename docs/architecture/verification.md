@@ -67,6 +67,12 @@ Current coverage:
   owns the evaluate-and-record boundary, records only accepted decisions, keeps
   rejected decisions mutation-free, and returns the recorder-authoritative
   decision for conflict handling.
+- Paper-execution queue-processor contracts verify the standalone
+  `PaperExecutionQueueProcessor` returns `no_work` without mutation, claims
+  queued work items, reconstructs authoritative paper execution context from
+  tenant-scoped storage, records accepted decisions before completing work
+  items, and fails closed without ledger mutation when policy state or work-item
+  payloads are missing or malformed.
 - Capstone evidence manifest contracts build a repo-safe submission evidence summary without local paths, broker/provider secrets, real account data, or raw provider payloads.
 - Model-backed eval checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, write a redacted baseline summary, produce deterministic failure triage, expose a manual credentialed baseline workflow, and never print secret values.
 - Eval dataset contracts verify the selected metrics include the LLM response-quality rubric plus deterministic forbidden-action and workflow-tool-trajectory code metrics, and execute representative trajectory-policy examples directly from `eval_config.yaml`.

@@ -62,6 +62,7 @@ from portfolio_domain import (  # noqa: E402
     PaperExecutionGrant,
     PaperExecutionOrder,
     PaperExecutionPolicyCeiling,
+    PaperExecutionQueueProcessor,
     PaperExecutionWorkerRequest,
     PaperExecutionWorkItem,
     PostgresPaperExecutionStore,
@@ -668,11 +669,9 @@ def _execute_queued_postgres_paper_order(
     store: PostgresPaperExecutionStore,
     order_id: str,
     request: PaperExecuteApiRequest,
-    policy: PaperExecutionPolicyCeiling,
     grant: PaperExecutionGrant,
     batch: PaperBatchRequest,
     order: PaperExecutionOrder,
-    used_keys: set[str],
     current_exposure: Mapping[str, float],
 ) -> PaperExecutionDecision:
     execution_now = request.now or datetime.now(UTC)
@@ -712,55 +711,22 @@ def _execute_queued_postgres_paper_order(
     )
     _reject_sensitive_paper_payload(work_item.to_dict())
     store.enqueue_execution_work_item(work_item)
-    claimed = store.claim_execution_work_item(
-        work_item_id=work_item.work_item_id,
+    result = PaperExecutionQueueProcessor(
+        store=store,
         worker_id="paper-execution-api",
-        now=execution_now,
-    )
-    if claimed is None:
+        now=lambda: execution_now,
+    ).process_once(work_item_id=work_item.work_item_id)
+    if result.decision is None:
         raise HTTPException(
             status_code=503,
             detail="paper_execution_queue_unavailable",
         )
-    worker = DeterministicPaperExecutionWorker(
-        record_decision=lambda decision, worker_request: store.record_execution_decision(
-            grant=worker_request.grant,
-            batch_request=worker_request.batch_request,
-            order=worker_request.order,
-            decision=decision,
-            fill_price=worker_request.quote_price,
-            exposure_after=worker_request.exposure_after or {},
-        )
-    )
-    decision = worker.execute(
-        PaperExecutionWorkerRequest(
-            policy=policy,
-            grant=grant,
-            batch_request=batch,
-            order=order,
-            idempotency_key=request.idempotency_key,
-            quote_price=request.quote_price,
-            quote_as_of=request.quote_as_of,
-            now=execution_now,
-            used_idempotency_keys=used_keys,
-            available_cash=request.available_cash,
-            current_gross_notional=current_exposure["gross_notional"],
-            current_net_notional=current_exposure["net_notional"],
-            kill_switch_active=request.kill_switch_active,
-            exposure_after=exposure_after,
-        )
-    )
-    completed = store.complete_execution_work_item(
-        work_item_id=claimed.work_item_id,
-        decision=decision,
-        now=execution_now,
-    )
-    if completed is None:
+    if result.reason == "completion_failed":
         raise HTTPException(
             status_code=503,
             detail="paper_execution_queue_completion_failed",
         )
-    return decision
+    return result.decision
 
 
 def _paper_execution_response(
@@ -953,7 +919,6 @@ def post_paper_order_execute(
     policy = _get_paper_policy(actor, grant.policy_ceiling_id)
     if policy is None:
         raise HTTPException(status_code=404, detail="paper_policy_not_found")
-    used_keys = _used_paper_idempotency_keys(actor, request.idempotency_key)
     current_exposure = _paper_execution_current_exposure(actor, grant, request)
     store = _paper_execution_store_for_actor(actor)
     if store is not None:
@@ -962,14 +927,13 @@ def post_paper_order_execute(
             store=store,
             order_id=order_id,
             request=request,
-            policy=policy,
             grant=grant,
             batch=batch,
             order=order,
-            used_keys=used_keys,
             current_exposure=current_exposure,
         )
         return _paper_execution_response(decision)
+    used_keys = _used_paper_idempotency_keys(actor, request.idempotency_key)
     worker = DeterministicPaperExecutionWorker(
         record_decision=lambda decision, worker_request: _record_paper_execution_decision(
             actor,
