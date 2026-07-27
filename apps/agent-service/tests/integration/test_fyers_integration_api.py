@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from portfolio_domain import hash_oauth_state
 
 import app.fast_api_app as fast_api_app
 
@@ -117,6 +118,100 @@ def test_fyers_oauth_state_is_actor_connection_scoped() -> None:
     assert wrong_actor.status_code == 409
     assert owner.status_code == 200
     assert owner.json()["connection"]["status"] == "reconnect_required"
+
+
+class _FakePkceVerifierCache:
+    def __init__(self, *, drop_on_pop: bool = False) -> None:
+        self.drop_on_pop = drop_on_pop
+        self.records: dict[tuple[str, str, str], str] = {}
+        self.stores: list[tuple[object, str]] = []
+        self.pops: list[tuple[str, str, str]] = []
+        self.clears: list[tuple[str, str]] = []
+
+    def store(self, *, session, code_verifier: str):
+        self.stores.append((session, code_verifier))
+        self.records[(session.tenant_id, session.connection_id, session.state_hash)] = (
+            code_verifier
+        )
+        return session
+
+    def pop(self, *, tenant_id: str, connection_id: str, state_hash: str):
+        self.pops.append((tenant_id, connection_id, state_hash))
+        if self.drop_on_pop:
+            return None
+        return self.records.pop((tenant_id, connection_id, state_hash), None)
+
+    def clear_connection(self, *, tenant_id: str, connection_id: str) -> None:
+        self.clears.append((tenant_id, connection_id))
+        for key in tuple(self.records):
+            if key[0] == tenant_id and key[1] == connection_id:
+                del self.records[key]
+
+    def to_dict(self) -> dict[str, str]:
+        return {"backend": "fake"}
+
+
+def test_fyers_oauth_start_and_callback_use_short_lived_pkce_verifier_cache(
+    monkeypatch,
+) -> None:
+    fake_cache = _FakePkceVerifierCache()
+    monkeypatch.setattr(fast_api_app, "_fyers_pkce_verifier_cache", lambda: fake_cache)
+    fast_api_app._FYERS_CONNECTIONS.clear()
+    fast_api_app._FYERS_OAUTH_STATES.clear()
+    client = TestClient(app)
+
+    start = client.post(
+        "/v1/integrations/fyers/oauth/start",
+        headers=_headers("pkce-cache-owner", "analyst"),
+        json={},
+    )
+    state = start.json()["oauth"]["state"]
+    connection_id = start.json()["connection"]["connection_id"]
+    callback = client.post(
+        "/v1/integrations/fyers/oauth/callback",
+        headers=_headers("pkce-cache-owner", "analyst"),
+        json={"state": state, "auth_code": "browser-auth-code"},
+    )
+
+    assert start.status_code == 200
+    assert callback.status_code == 200
+    assert len(fake_cache.stores) == 1
+    stored_session, stored_verifier = fake_cache.stores[0]
+    assert stored_session.connection_id == connection_id
+    assert len(stored_verifier) >= 32
+    assert fake_cache.pops == [(TENANT_ID, connection_id, hash_oauth_state(state))]
+    assert fake_cache.records == {}
+    serialized = f"{start.json()} {callback.json()}".lower()
+    assert stored_verifier.lower() not in serialized
+    assert "code_verifier" not in serialized
+    assert "access_token" not in serialized
+
+
+def test_fyers_oauth_callback_fails_closed_when_pkce_verifier_is_missing(
+    monkeypatch,
+) -> None:
+    fake_cache = _FakePkceVerifierCache(drop_on_pop=True)
+    monkeypatch.setattr(fast_api_app, "_fyers_pkce_verifier_cache", lambda: fake_cache)
+    fast_api_app._FYERS_CONNECTIONS.clear()
+    fast_api_app._FYERS_OAUTH_STATES.clear()
+    client = TestClient(app)
+
+    start = client.post(
+        "/v1/integrations/fyers/oauth/start",
+        headers=_headers("pkce-cache-missing", "analyst"),
+        json={},
+    )
+    response = client.post(
+        "/v1/integrations/fyers/oauth/callback",
+        headers=_headers("pkce-cache-missing", "analyst"),
+        json={
+            "state": start.json()["oauth"]["state"],
+            "auth_code": "browser-auth-code",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "fyers_oauth_verifier_unknown_or_expired"
 
 
 def test_fyers_oauth_status_disconnect_and_refresh_are_human_api_only_and_redacted() -> None:

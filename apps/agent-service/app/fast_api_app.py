@@ -67,6 +67,7 @@ from portfolio_domain import (  # noqa: E402
     DeterministicPaperExecutionWorker,
     FyersConnection,
     FyersOAuthSession,
+    InMemoryFyersPkceVerifierCache,
     PaperBatchRequest,
     PaperExecutionDecision,
     PaperExecutionGrant,
@@ -81,6 +82,7 @@ from portfolio_domain import (  # noqa: E402
     PostgresSessionMemoryStore,
     ProviderRefreshJob,
     ProviderSnapshotEnvelope,
+    RedisFyersPkceVerifierCache,
     SessionMemoryPolicy,
     SessionMemoryRecord,
     SessionMemoryValidationError,
@@ -296,6 +298,8 @@ _PAPER_GRANTS: dict[tuple[str, str], PaperExecutionGrant] = {}
 _PAPER_IDEMPOTENCY_KEYS: dict[str, set[str]] = {}
 _FYERS_CONNECTIONS: dict[tuple[str, str], FyersConnection] = {}
 _FYERS_OAUTH_STATES: dict[tuple[str, str], FyersOAuthSession] = {}
+_FYERS_PKCE_VERIFIER_CACHE = InMemoryFyersPkceVerifierCache()
+_FYERS_REDIS_PKCE_VERIFIER_CACHES: dict[str, RedisFyersPkceVerifierCache] = {}
 _SESSION_MEMORY: dict[tuple[str, str, str], SessionMemoryRecord] = {}
 
 
@@ -760,6 +764,7 @@ def post_fyers_oauth_start(
     connection = connection.oauth_started(expires_at=session.expires_at)
     _store_fyers_connection(actor, connection)
     _store_fyers_oauth_session(actor, session)
+    _store_fyers_pkce_verifier(session=session, code_verifier=code_verifier)
     return {
         "status": "authorization_required",
         "connection": connection.to_dict(),
@@ -788,6 +793,11 @@ def post_fyers_oauth_callback(
     session = _pop_fyers_oauth_session(actor, request.state)
     if session is None:
         raise HTTPException(status_code=409, detail="fyers_oauth_state_unknown_or_expired")
+    if _pop_fyers_pkce_verifier(actor=actor, session=session) is None:
+        raise HTTPException(
+            status_code=409,
+            detail="fyers_oauth_verifier_unknown_or_expired",
+        )
     connection = _get_or_create_fyers_connection(actor).callback_recorded()
     _store_fyers_connection(actor, connection)
     credential_vault = _credential_vault_readiness_payload()
@@ -1010,6 +1020,53 @@ def _build_postgres_fyers_integration_store(
     )
 
 
+def _fyers_pkce_verifier_cache():
+    redis_url = os.getenv("REDIS_URL", "").strip()
+    if not redis_url:
+        return _FYERS_PKCE_VERIFIER_CACHE
+    cache = _FYERS_REDIS_PKCE_VERIFIER_CACHES.get(redis_url)
+    if cache is None:
+        from redis import Redis
+
+        cache = RedisFyersPkceVerifierCache(redis_client=Redis.from_url(redis_url))
+        _FYERS_REDIS_PKCE_VERIFIER_CACHES[redis_url] = cache
+    return cache
+
+
+def _store_fyers_pkce_verifier(
+    *,
+    session: FyersOAuthSession,
+    code_verifier: str,
+) -> None:
+    _fyers_pkce_verifier_cache().store(
+        session=session,
+        code_verifier=code_verifier,
+    )
+
+
+def _pop_fyers_pkce_verifier(
+    *,
+    actor: ActorContext,
+    session: FyersOAuthSession,
+) -> str | None:
+    return _fyers_pkce_verifier_cache().pop(
+        tenant_id=actor.tenant_id,
+        connection_id=session.connection_id,
+        state_hash=session.state_hash,
+    )
+
+
+def _clear_fyers_pkce_verifiers(
+    actor: ActorContext,
+    *,
+    connection_id: str,
+) -> None:
+    _fyers_pkce_verifier_cache().clear_connection(
+        tenant_id=actor.tenant_id,
+        connection_id=connection_id,
+    )
+
+
 def _get_or_create_fyers_connection(actor: ActorContext) -> FyersConnection:
     store = _fyers_integration_store(actor)
     if store is not None:
@@ -1087,6 +1144,7 @@ def _pop_fyers_oauth_session(
 
 def _clear_fyers_oauth_sessions(actor: ActorContext) -> None:
     connection = _get_or_create_fyers_connection(actor)
+    _clear_fyers_pkce_verifiers(actor, connection_id=connection.connection_id)
     store = _fyers_integration_store(actor)
     if store is not None:
         store.clear_oauth_sessions(connection_id=connection.connection_id)
