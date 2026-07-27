@@ -82,6 +82,11 @@ from .fyers_readonly import (
     normalize_fyers_symbol,
     parse_fyers_symbol,
 )
+from .fyers_sdk_readonly import (
+    FyersSdkReadOnlyConnector,
+    FyersSdkUnavailableError,
+    build_fyers_sdk_client_factory,
+)
 from .fyers_integration import (
     FyersConnection,
     FyersOAuthSession,
@@ -289,6 +294,8 @@ __all__ = [
     "FyersPosition",
     "FyersQuote",
     "FyersReadOnlyConnector",
+    "FyersSdkReadOnlyConnector",
+    "FyersSdkUnavailableError",
     "FyersOAuthSession",
     "GateResult",
     "Holding",
@@ -408,6 +415,7 @@ __all__ = [
     "create_fixture_paper_order_proposal",
     "create_fixture_strategy_draft",
     "build_credential_vault_ref",
+    "build_fyers_sdk_client_factory",
     "draft_strategy",
     "evaluate_database_runtime_readiness",
     "evaluate_credential_vault_readiness",

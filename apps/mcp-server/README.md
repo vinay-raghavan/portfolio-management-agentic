@@ -12,18 +12,21 @@ Set `PORTFOLIO_FUNDAMENTALS_PROVIDER=json_file` and `PORTFOLIO_FUNDAMENTALS_JSON
 Set `PORTFOLIO_SENTIMENT_PROVIDER=json_file` and `PORTFOLIO_SENTIMENT_JSON_PATH` to read configured local sentiment through the read-only JSON adapter.
 Set `PORTFOLIO_VOLATILITY_PROVIDER=json_file` and `PORTFOLIO_VOLATILITY_JSON_PATH` to read configured local volatility through the read-only JSON adapter.
 Set `PORTFOLIO_MACRO_PROVIDER=json_file` and `PORTFOLIO_MACRO_JSON_PATH` to read configured local macro/regime context through the read-only JSON adapter.
-The FYERS read-only connector currently exposes offline fixture tools for
-connection health, quotes, OHLCV history, market depth, instrument metadata,
-option chains, and normalized account snapshots: `get_fyers_connection_health`,
-`get_fyers_quote`, `get_fyers_ohlcv_history`, `get_fyers_depth`,
+The FYERS read-only connector exposes model-safe tools for connection health,
+quotes, OHLCV history, market depth, instrument metadata, option chains, and
+normalized account snapshots: `get_fyers_connection_health`, `get_fyers_quote`,
+`get_fyers_ohlcv_history`, `get_fyers_depth`,
 `get_fyers_instrument_metadata`, `get_fyers_option_chain`, and
-`get_fyers_account_snapshot`. These tools preserve exchange-qualified symbols,
-fresh/stale/unavailable status, signed quantities, funds, and provenance while
-keeping provider account data separate from the simulated paper ledger. OAuth
-start/callback/status/disconnect, provider app administration, and any broker
-mutation surface stay outside MCP/model-visible bundles. Unknown FYERS symbols
-return unavailable/error context; they are not converted to empty holdings,
-zero funds, or another provider's data.
+`get_fyers_account_snapshot`. Local/offline runs use the deterministic fixture;
+protected connector workers may use the isolated `fyers-apiv3==3.1.14`
+read-only SDK adapter behind the same normalized contracts. These surfaces
+preserve exchange-qualified symbols, fresh/stale/unavailable status, signed
+quantities, funds, hashed provider order/trade identifiers, and provenance
+while keeping provider account data separate from the simulated paper ledger.
+OAuth start/callback/status/disconnect, provider app administration, and any
+broker mutation surface stay outside MCP/model-visible bundles. Unknown FYERS
+symbols or provider errors return unavailable/error context; they are not
+converted to empty holdings, zero funds, or another provider's data.
 Use `search_curated_research` to retrieve read-only curated research hits from
 the repository `ResearchStore` contract. The MCP payload is fixture-backed
 lexical retrieval over versioned public-safe pattern documents by default

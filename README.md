@@ -15,20 +15,29 @@ explicit safety policy.
 - Pre-market briefing workflow composes synthetic portfolio, watchlist, signal, research, and risk context.
 - Product data foundation adds fixture/configured universes, configured fundamentals, sentiment, volatility, macro/regime context, deterministic screener runs, provider refresh readiness and import-reconciliation evidence, pattern-card retrieval, citation-backed strategy evidence, and factor-stack explanations.
 - Provider adapter contracts expose fixture defaults, configured read-only JSON market-data, universe, fundamentals, sentiment, volatility, and macro adapters, provider catalog, health, import validation, market snapshot, and universe-member tools.
-- FYERS read-only MCP fixtures expose connection health, quotes, OHLCV history,
+- FYERS read-only connector contracts expose connection health, quotes, OHLCV history,
   market depth, instrument metadata, option chains, and normalized account
   snapshots with exchange-qualified symbols, explicit unavailable responses,
   signed quantities, funds, and provenance while keeping OAuth, credentials,
   provider administration, and broker mutations outside the model-visible
   surface.
+- The protected FYERS data connector now includes an isolated
+  `fyers-apiv3==3.1.14` read-only SDK adapter for worker/API use. It reuses the
+  reference symbol mappings, normalizes quotes, OHLCV, depth, metadata, option
+  chains, holdings, signed positions, funds, and read-only order/trade history,
+  hashes raw provider order/trade identifiers, disables Yahoo fallback, and
+  raises explicit unavailable errors instead of returning empty holdings or zero
+  funds. It does not expose any broker mutation method to MCP/model-visible
+  tools.
 - Protected FYERS human-facing API contracts are available for
   `/v1/integrations/fyers/oauth/start`, `/callback`, `/status`,
   `/disconnect`, and `/v1/integrations/fyers/refresh` (plus the
   `/oauth/refresh` compatibility alias). They require server-created
   `ActorContext`, generate OAuth state and PKCE challenge without returning a
   verifier, keep callback token exchange disabled until a credential vault is
-  wired, and refresh only through the read-only normalized FYERS fixture with
-  no Yahoo fallback, broker mutation, provider token, or paper-ledger mixing.
+  wired, and refresh only through the read-only normalized FYERS connector
+  surface with no Yahoo fallback, broker mutation, provider token, or
+  paper-ledger mixing.
   In production-like Postgres mode, sanitized connection metadata and hashed
   OAuth session state are stored tenant-scoped in Postgres; provider tokens,
   client secrets, trading tokens, and PKCE verifiers are never persisted.
@@ -125,7 +134,7 @@ flowchart LR
     ROUTE --> MCP["MCP policy server<br/>route-scoped safe tools"]
     MCP --> DOMAIN["Deterministic domain services<br/>screeners, risk, recommendations,<br/>backtests, paper ledger"]
     DOMAIN --> DB["State stores<br/>Postgres production-like default<br/>SQLite local/offline fallback"]
-    DOMAIN --> PROVIDERS["Read-only provider adapters<br/>fixtures, JSON files,<br/>FYERS normalized data fixtures"]
+    DOMAIN --> PROVIDERS["Read-only provider adapters<br/>fixtures, JSON files,<br/>FYERS normalized connector data"]
     ROUTE --> AUDIT["Evaluator and audit evidence<br/>ContextPack, ResponseEvaluator,<br/>evals and CI artifacts"]
 
     MODEL -. "synthesis only" .-> ROUTE
@@ -377,6 +386,10 @@ The protected refresh endpoint records `provider_refresh_jobs`,
 freshness, provenance, signed quantities, funds, and explicit errors. Missing
 provider data stays an error on the refresh job; it is not replaced with Yahoo
 fallback data, empty holdings, zero funds, or paper-ledger state.
+The SDK-backed connector is pinned to `fyers-apiv3==3.1.14` and must be
+constructed only inside protected connector workers with vault-loaded data-app
+credentials; MCP tools continue to expose only sanitized read-only normalized
+snapshots.
 
 Agent session memory is intentionally compact and short-lived. The runtime
 contract stores only a sanitized task summary plus references to authoritative
