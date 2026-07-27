@@ -44,6 +44,11 @@ Postgres runtime path is tenant-scoped full-text search over `research_sources`
 and `research_documents`; a migration keeps each document search field current
 on insert or update, and `PostgresResearchStore` executes the same query through
 an injectable connection factory for runtime wiring and production-like tests.
+The MCP tool uses fixture retrieval by default and switches to Postgres only
+when `PORTFOLIO_RESEARCH_STORE_BACKEND=postgres`,
+`PORTFOLIO_RESEARCH_TENANT_ID`, and `PORTFOLIO_DATABASE_URL` are explicitly
+configured. Misconfigured Postgres mode returns an error instead of falling
+back to fixtures.
 Source administration, arbitrary URL ingestion, and research-source refresh
 configuration stay outside MCP/model-visible tools.
 

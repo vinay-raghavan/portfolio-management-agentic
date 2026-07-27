@@ -7,9 +7,11 @@ import pytest
 from portfolio_domain import (
     BUILTIN_RESEARCH_SOURCES,
     PostgresResearchStore,
+    RetrievalHit,
     build_postgres_research_search_query,
     normalize_research_query,
 )
+from portfolio_mcp import tools as mcp_tools
 from portfolio_mcp.tools import EXPOSED_TOOL_NAMES, search_curated_research
 from portfolio_policy import ActionTier, classify_tool
 
@@ -92,6 +94,130 @@ def test_search_curated_research_mcp_tool_is_read_only_and_fixture_backed() -> N
     assert result["hits"][0]["source_status"] == "fresh"
     assert result["hits"][0]["checksum"].startswith("sha256:")
     assert "embedding" not in str(result).lower()
+
+
+def test_mcp_research_tool_can_use_configured_postgres_backend(monkeypatch) -> None:
+    built: dict[str, str] = {}
+
+    class _FakeStore:
+        def search(self, query: str, *, normalized_symbol=None, limit: int = 5):
+            built["query"] = query
+            built["normalized_symbol"] = str(normalized_symbol)
+            built["limit"] = str(limit)
+            return [
+                RetrievalHit(
+                    document_id="doc-1",
+                    source_id="source-1",
+                    title="SEBI circular",
+                    rank=1,
+                    score=0.77,
+                    snippet="SEBI circular summary",
+                    checksum="sha256:abc",
+                    published_at="2026-07-25T00:00:00Z",
+                    fetched_at="2026-07-25T00:15:00Z",
+                    source_status="available",
+                    citation_url="https://www.sebi.gov.in/",
+                    metadata={"document_key": "sebi:circular"},
+                )
+            ]
+
+    def _fake_builder(*, tenant_id: str, database_url: str):
+        built["tenant_id"] = tenant_id
+        built["database_url_seen"] = "yes" if database_url else "no"
+        return _FakeStore()
+
+    monkeypatch.setenv("PORTFOLIO_RESEARCH_STORE_BACKEND", "postgres")
+    monkeypatch.setenv("PORTFOLIO_RESEARCH_TENANT_ID", "tenant-123")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setattr(mcp_tools, "_build_postgres_research_store", _fake_builder)
+
+    result = search_curated_research("SEBI circular", limit=2)
+
+    assert result["status"] == "success"
+    assert result["retrieval"] == {
+        "mode": "postgres_runtime",
+        "backend": "postgres_full_text",
+        "vector_retrieval": "disabled",
+        "source_policy": "admin_allowlist_only",
+    }
+    assert result["hits"][0]["document_id"] == "doc-1"
+    assert built == {
+        "tenant_id": "tenant-123",
+        "database_url_seen": "yes",
+        "query": "SEBI circular",
+        "normalized_symbol": "None",
+        "limit": "2",
+    }
+    assert "db-secret" not in str(result)
+    assert "postgresql+psycopg" not in str(result)
+
+
+def test_mcp_research_tool_does_not_fallback_when_postgres_is_misconfigured(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("PORTFOLIO_RESEARCH_STORE_BACKEND", "postgres")
+    monkeypatch.delenv("PORTFOLIO_RESEARCH_TENANT_ID", raising=False)
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+
+    result = search_curated_research("SEBI circular", limit=2)
+
+    assert result["status"] == "error"
+    assert result["retrieval"]["mode"] == "postgres_runtime"
+    assert result["error"] == "postgres_research_store_not_configured"
+    assert "hits" not in result
+    assert "file_backed_fixture" not in str(result)
+    assert "db-secret" not in str(result)
+
+
+def test_mcp_research_tool_redacts_postgres_runtime_failures(monkeypatch) -> None:
+    class _FailingStore:
+        def search(self, query: str, *, normalized_symbol=None, limit: int = 5):
+            raise RuntimeError("db-secret should not leak")
+
+    monkeypatch.setenv("PORTFOLIO_RESEARCH_STORE_BACKEND", "postgres")
+    monkeypatch.setenv("PORTFOLIO_RESEARCH_TENANT_ID", "tenant-123")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setattr(
+        mcp_tools,
+        "_build_postgres_research_store",
+        lambda **_kwargs: _FailingStore(),
+    )
+
+    result = search_curated_research("SEBI circular", limit=2)
+
+    assert result["status"] == "unavailable"
+    assert result["retrieval"]["backend"] == "postgres_full_text"
+    assert result["error"] == "postgres_research_store_unavailable"
+    assert "db-secret" not in str(result)
+
+
+def test_mcp_server_declares_postgres_driver_dependency() -> None:
+    pyproject = Path("apps/mcp-server/pyproject.toml").read_text()
+
+    assert "psycopg[binary]>=3.2,<4" in pyproject
+
+
+def test_research_runtime_backend_env_is_documented_and_wired_to_compose() -> None:
+    env_example = Path(".env.example").read_text()
+    compose = Path("docker-compose.yml").read_text()
+
+    assert "PORTFOLIO_RESEARCH_STORE_BACKEND=fixture" in env_example
+    assert "# PORTFOLIO_RESEARCH_STORE_BACKEND=postgres" in env_example
+    assert "# PORTFOLIO_RESEARCH_TENANT_ID=<tenant-uuid>" in env_example
+    assert (
+        "PORTFOLIO_RESEARCH_STORE_BACKEND: ${PORTFOLIO_RESEARCH_STORE_BACKEND:-fixture}"
+        in compose
+    )
+    assert "PORTFOLIO_RESEARCH_TENANT_ID: ${PORTFOLIO_RESEARCH_TENANT_ID:-}" in compose
 
 
 class _FakeCursor:

@@ -5,6 +5,7 @@ description = "Policy-enforced MCP server for portfolio and paper-trading tools"
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "mcp>=1.13.0,<2.0.0",
+    "psycopg[binary]>=3.2,<4",
 ]
 
 [dependency-groups]

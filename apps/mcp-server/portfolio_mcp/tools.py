@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from portfolio_domain import (
+    PostgresResearchStore,
     approve_fixture_paper_order_simulation,
     build_factor_stack_explanation,
     build_paper_trading_report,
@@ -55,6 +57,11 @@ from portfolio_domain import (
     validate_configured_provider_imports,
 )
 from portfolio_policy import ActionTier, authorize_tool_call, redact_sensitive
+
+
+RESEARCH_STORE_BACKEND_ENV = "PORTFOLIO_RESEARCH_STORE_BACKEND"
+RESEARCH_TENANT_ID_ENV = "PORTFOLIO_RESEARCH_TENANT_ID"
+DATABASE_URL_ENV = "PORTFOLIO_DATABASE_URL"
 
 EXPOSED_TOOL_NAMES = {
     "get_portfolio_summary",
@@ -951,31 +958,97 @@ def search_pattern_library(
 
 
 def search_curated_research(query: str, limit: int = 5) -> dict[str, Any]:
-    """Read-only curated research search over allowlisted fixture-backed documents."""
+    """Read-only curated research search over allowlisted documents."""
     tool_name = "search_curated_research"
     decision = authorize_tool_call(tool_name)
     if not decision.allowed:
         return _blocked(tool_name, {"query": query, "limit": limit})
     bounded_limit = max(1, min(int(limit), 20))
+    retrieval = _research_retrieval_payload()
     try:
-        hits = search_research_documents(query, limit=bounded_limit)
+        if _research_store_backend() == "postgres":
+            store, config_error = _configured_postgres_research_store()
+            if config_error is not None:
+                return {
+                    "status": "error",
+                    "policy": decision.to_dict(),
+                    "retrieval": retrieval,
+                    "error": config_error,
+                }
+            hits = store.search(query, limit=bounded_limit)
+        else:
+            hits = search_research_documents(query, limit=bounded_limit)
     except ValueError as exc:
         return {
             "status": "error",
             "policy": decision.to_dict(),
+            "retrieval": retrieval,
             "error": str(exc),
+        }
+    except Exception:
+        return {
+            "status": "unavailable",
+            "policy": decision.to_dict(),
+            "retrieval": retrieval,
+            "error": "postgres_research_store_unavailable",
         }
     return {
         "status": "success",
         "policy": decision.to_dict(),
-        "retrieval": {
-            "mode": "file_backed_fixture",
-            "backend": "lexical",
-            "vector_retrieval": "disabled",
-            "source_policy": "admin_allowlist_only",
-        },
+        "retrieval": retrieval,
         "hits": [hit.to_dict() for hit in hits],
     }
+
+
+def _research_store_backend() -> str:
+    backend = os.getenv(RESEARCH_STORE_BACKEND_ENV, "fixture").strip().lower()
+    return "postgres" if backend == "postgres" else "fixture"
+
+
+def _research_retrieval_payload() -> dict[str, str]:
+    if _research_store_backend() == "postgres":
+        return {
+            "mode": "postgres_runtime",
+            "backend": "postgres_full_text",
+            "vector_retrieval": "disabled",
+            "source_policy": "admin_allowlist_only",
+        }
+    return {
+        "mode": "file_backed_fixture",
+        "backend": "lexical",
+        "vector_retrieval": "disabled",
+        "source_policy": "admin_allowlist_only",
+    }
+
+
+def _configured_postgres_research_store() -> tuple[Any, str | None]:
+    tenant_id = os.getenv(RESEARCH_TENANT_ID_ENV, "").strip()
+    database_url = os.getenv(DATABASE_URL_ENV, "").strip()
+    if not tenant_id or not database_url:
+        return None, "postgres_research_store_not_configured"
+    return (
+        _build_postgres_research_store(
+            tenant_id=tenant_id,
+            database_url=database_url,
+        ),
+        None,
+    )
+
+
+def _build_postgres_research_store(
+    *,
+    tenant_id: str,
+    database_url: str,
+) -> PostgresResearchStore:
+    def connection_factory():
+        import psycopg
+
+        return psycopg.connect(database_url)
+
+    return PostgresResearchStore(
+        tenant_id=tenant_id,
+        connection_factory=connection_factory,
+    )
 
 
 def get_pattern_playbook(pattern_id: str) -> dict[str, Any]:
