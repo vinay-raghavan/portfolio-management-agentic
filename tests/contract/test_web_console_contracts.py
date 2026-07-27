@@ -164,6 +164,19 @@ def test_web_console_does_not_send_approver_identity_in_approval_body() -> None:
     assert "approved_by" not in approval_call
 
 
+def test_web_console_uses_rounded_widget_design_contract() -> None:
+    styles = (WEB_ROOT / "src" / "styles.css").read_text()
+    rounded_refinement = styles.split("/* Rounded widget refinement", 1)[1]
+
+    assert "--radius-lg: 44px;" in styles
+    assert "--widget-radius: var(--radius-lg);" in styles
+    assert "--control-radius: 30px;" in styles
+    assert ".candidate-table" in rounded_refinement
+    assert "border-radius: var(--widget-radius);" in rounded_refinement
+    assert ".selected-workflow" in rounded_refinement
+    assert "border-radius: 0" not in rounded_refinement
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 
