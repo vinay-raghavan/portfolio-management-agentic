@@ -56,3 +56,50 @@ def test_ollama_model_status_reports_profile_without_secrets(monkeypatch) -> Non
     assert payload["route_budgets"]["research"]["effective_input_tokens"] == 6553
     assert "should-not-be-returned" not in serialized
     assert "GOOGLE_API_KEY" not in serialized
+
+
+def test_storage_status_reports_redacted_production_like_readiness(monkeypatch) -> None:
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setenv("REDIS_URL", "redis://:redis-secret@redis:6379/0")
+    monkeypatch.setenv("PAPER_LEDGER_DB_PATH", "/data/paper-ledger.db")
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", "/data/market-data.db")
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", "/data/provider-config.db")
+    client = TestClient(app)
+
+    response = client.get("/v1/storage/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    serialized = str(payload)
+    assert payload["status"] == "ready"
+    assert payload["profile"]["backend"] == "postgres"
+    assert payload["profile"]["production_like"] is True
+    assert payload["profile"]["migrations_required"] is True
+    assert payload["profile"]["database_url"] == (
+        "postgresql+psycopg://portfolio:***@postgres:5432/portfolio_agentic"
+    )
+    assert payload["profile"]["redis_url"] == "redis://:***@redis:6379/0"
+    assert payload["readiness"]["ready"] is True
+    assert payload["readiness"]["blocking_reasons"] == []
+    assert "db-secret" not in serialized
+    assert "redis-secret" not in serialized
+
+
+def test_storage_status_blocks_sqlite_when_production_like_required(monkeypatch) -> None:
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "sqlite")
+    monkeypatch.delenv("PORTFOLIO_DATABASE_URL", raising=False)
+    client = TestClient(app)
+
+    response = client.get("/v1/storage/status?require_production_like=true")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "blocked"
+    assert payload["profile"]["backend"] == "sqlite"
+    assert payload["readiness"]["blocking_reasons"] == [
+        "postgres_required_for_production_like_testing"
+    ]

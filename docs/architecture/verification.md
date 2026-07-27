@@ -192,6 +192,7 @@ LLM_MODEL=llama3.1:8b \
 OLLAMA_BASE_URL=http://host.containers.internal:11434 \
 podman compose up --build
 curl http://localhost:8000/v1/models/ollama/status
+curl "http://localhost:8000/v1/storage/status?require_production_like=true"
 ```
 
 ## GitHub Actions

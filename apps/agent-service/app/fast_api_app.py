@@ -17,6 +17,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Annotated
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import urlopen
@@ -42,10 +43,17 @@ from app.console import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+domain_path = str(REPO_ROOT / "packages/domain")
+if domain_path not in sys.path:
+    sys.path.insert(0, domain_path)
 model_provider_path = str(REPO_ROOT / "packages/model-provider")
 if model_provider_path not in sys.path:
     sys.path.insert(0, model_provider_path)
 
+from portfolio_domain import (  # noqa: E402
+    evaluate_database_runtime_readiness,
+    load_database_runtime_profile,
+)
 from portfolio_model_provider import (  # noqa: E402
     ModelProvider,
     OllamaModelMetadata,
@@ -284,6 +292,21 @@ def get_ollama_model_status() -> dict:
     }
 
 
+@app.get("/v1/storage/status")
+def get_storage_status(require_production_like: bool = False) -> dict:
+    """Return redacted storage runtime and migration-readiness status."""
+    profile = load_database_runtime_profile(os.environ)
+    readiness = evaluate_database_runtime_readiness(
+        profile,
+        require_production_like=require_production_like,
+    )
+    return {
+        "status": "ready" if readiness.ready else "blocked",
+        "profile": profile.to_dict(),
+        "readiness": readiness.to_dict(),
+    }
+
+
 @app.get("/console/overview")
 def get_console_overview() -> dict:
     """Return safe, policy-controlled state for the thin web console."""
@@ -334,7 +357,7 @@ def post_console_paper_order(request: PaperOrderRequest) -> dict:
 def post_console_paper_order_approval(
     order_id: str,
     request: PaperOrderApprovalRequest,
-    actor: ActorContext = Depends(actor_context_dependency),
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
 ) -> dict:
     """Approve a paper order for simulated fill processing only."""
     actor.require_approver()

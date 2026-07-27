@@ -270,6 +270,16 @@ For host-local commands, `.env.example` uses the same database on
 provide `PORTFOLIO_DATABASE_URL` through the deployment secret manager rather
 than committing environment files.
 
+The agent service exposes redacted storage readiness at:
+
+```bash
+curl "http://localhost:8000/v1/storage/status?require_production_like=true"
+```
+
+The response reports the selected backend, migration requirement, redacted
+database/Redis URLs, SQLite compatibility paths, and readiness blocking
+reasons. It never returns raw database or Redis credentials.
+
 The default data-provider mode is offline-safe fixtures. To enable configured
 read-only market-data, universe, fundamentals, sentiment, volatility, and macro
 adapters, set:
