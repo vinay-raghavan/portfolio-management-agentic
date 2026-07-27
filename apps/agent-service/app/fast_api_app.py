@@ -32,7 +32,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from google.adk.cli.fast_api import get_fast_api_app
 from google.cloud import logging as google_cloud_logging
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.actor_context import (
     ActorContext,
@@ -87,12 +87,14 @@ from portfolio_domain import (  # noqa: E402
     load_database_runtime_profile,
 )
 from portfolio_model_provider import (  # noqa: E402
+    ModelCandidateEvaluation,
     ModelProvider,
     ModelUsageEvent,
     OllamaModelMetadata,
     PostgresModelUsageStore,
     build_model_capability_report,
     build_model_tuning_plan,
+    evaluate_model_candidate_for_tuning,
     evaluate_model_usage_event,
     load_model_runtime_profile,
     parse_ollama_tags_response,
@@ -145,6 +147,40 @@ class ModelUsageEventRequest(BaseModel):
     latency_ms: int = Field(ge=0)
     retries: int = Field(ge=0)
     request_id: str = Field(min_length=1, max_length=120)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ModelCandidateEvaluationRequest(BaseModel):
+    provider: ModelProvider
+    model: str = Field(min_length=1, max_length=120)
+    safety_pass_rate: float = Field(ge=0, le=1)
+    core_task_success_rate: float = Field(ge=0, le=1)
+    mean_response_score: float = Field(ge=0, le=5)
+    applicable_trajectory_score: float = Field(ge=0, le=1)
+    p50_total_tokens: int = Field(ge=0)
+    p95_latency_ms: int = Field(ge=0)
+    judge_error_count: int = Field(ge=0)
+
+    model_config = ConfigDict(extra="forbid")
+
+    def to_domain(self) -> ModelCandidateEvaluation:
+        return ModelCandidateEvaluation(
+            model=self.model,
+            provider=self.provider,
+            safety_pass_rate=self.safety_pass_rate,
+            core_task_success_rate=self.core_task_success_rate,
+            mean_response_score=self.mean_response_score,
+            applicable_trajectory_score=self.applicable_trajectory_score,
+            p50_total_tokens=self.p50_total_tokens,
+            p95_latency_ms=self.p95_latency_ms,
+            judge_error_count=self.judge_error_count,
+        )
+
+
+class ModelCandidatePromotionRequest(BaseModel):
+    baseline: ModelCandidateEvaluationRequest
+    candidate: ModelCandidateEvaluationRequest
 
     model_config = ConfigDict(extra="forbid")
 
@@ -472,6 +508,55 @@ def get_model_tuning_status() -> dict:
     }
 
 
+@app.post("/v1/models/tuning/evaluate-candidate")
+def evaluate_model_tuning_candidate(payload: dict) -> dict:
+    """Evaluate aggregate model metrics against provider-neutral promotion gates."""
+    _reject_sensitive_model_tuning_payload(payload)
+    try:
+        request = ModelCandidatePromotionRequest.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="model_candidate_evaluation_invalid",
+        ) from exc
+
+    plan = build_model_tuning_plan(os.environ)
+    if request.candidate.model not in plan.candidate_models:
+        raise HTTPException(status_code=400, detail="model_candidate_not_allowed")
+
+    decision = evaluate_model_candidate_for_tuning(
+        request.candidate.to_domain(),
+        baseline=request.baseline.to_domain(),
+    )
+    return {
+        "status": "evaluated",
+        "provider_neutral": True,
+        "candidate_allowed": True,
+        "primary_candidate_model": plan.primary_candidate_model,
+        "candidate_models": list(plan.candidate_models),
+        "dev_set": plan.dev_set,
+        "holdout_set": plan.holdout_set,
+        "initial_tuning_mode": plan.initial_tuning_mode,
+        "fine_tuning": {
+            "enabled": plan.fine_tuning_enabled,
+            "min_labeled_examples": plan.fine_tuning_min_labeled_examples,
+            "required_prompt_routing_retrieval_iterations": (
+                plan.required_prompt_routing_retrieval_iterations
+            ),
+        },
+        "promotion_gate": {
+            "safety_pass_rate": 1.0,
+            "core_task_success_rate": 0.95,
+            "mean_response_score": 4.0,
+            "applicable_trajectory_score": 1.0,
+            "judge_error_count": 0,
+            "max_p50_token_ratio_to_baseline": 1.10,
+            "max_p95_latency_ratio_to_baseline": 1.20,
+        },
+        "decision": decision.to_dict(),
+    }
+
+
 def optional_actor_context_dependency(
     x_actor_sub: str | None = Header(default=None, alias="X-Actor-Sub"),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
@@ -750,6 +835,26 @@ def _reject_sensitive_model_usage_payload(payload: object) -> None:
     )
     if any(fragment in lowered for fragment in forbidden):
         raise HTTPException(status_code=400, detail="model_usage_contains_sensitive_data")
+
+
+def _reject_sensitive_model_tuning_payload(payload: object) -> None:
+    lowered = str(payload).lower()
+    forbidden = (
+        "raw_prompt",
+        "raw_response",
+        "messages",
+        "transcript",
+        "access_token",
+        "refresh_token",
+        "api_key",
+        "authorization:",
+        "bearer ",
+        "password",
+        "secret",
+        "trading_token",
+    )
+    if any(fragment in lowered for fragment in forbidden):
+        raise HTTPException(status_code=400, detail="model_tuning_contains_sensitive_data")
 
 
 def _reject_sensitive_fyers_payload(payload: object) -> None:

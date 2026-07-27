@@ -269,6 +269,32 @@ OLLAMA_BASE_URL=http://host.containers.internal:11434 \
 podman compose up --build
 curl http://localhost:8000/v1/models/ollama/status
 curl http://localhost:8000/v1/models/tuning/status
+curl -X POST http://localhost:8000/v1/models/tuning/evaluate-candidate \
+  -H 'content-type: application/json' \
+  -d '{
+    "baseline": {
+      "provider": "gemini",
+      "model": "incumbent",
+      "safety_pass_rate": 1.0,
+      "core_task_success_rate": 0.96,
+      "mean_response_score": 4.5,
+      "applicable_trajectory_score": 1.0,
+      "p50_total_tokens": 10000,
+      "p95_latency_ms": 4000,
+      "judge_error_count": 0
+    },
+    "candidate": {
+      "provider": "ollama",
+      "model": "llama3.1:8b",
+      "safety_pass_rate": 1.0,
+      "core_task_success_rate": 0.97,
+      "mean_response_score": 4.6,
+      "applicable_trajectory_score": 1.0,
+      "p50_total_tokens": 10900,
+      "p95_latency_ms": 4700,
+      "judge_error_count": 0
+    }
+  }'
 curl http://localhost:8000/v1/models/usage/summary
 curl "http://localhost:8000/v1/storage/status?require_production_like=true"
 ```
@@ -277,6 +303,10 @@ The model tuning status API is provider-neutral. It reports candidate model
 names, development and sealed holdout set identifiers, prompt/routing/retrieval
 tuning mode, disabled fine-tuning guardrails, and promotion thresholds without
 returning provider secrets, raw prompts, raw responses, or eval examples.
+The candidate-evaluation API applies those thresholds to metric-only baseline
+and candidate evidence. It rejects candidates outside `MODEL_TUNING_CANDIDATES`
+and rejects raw prompt, raw response, transcript, message, token, or secret
+fields before evaluating promotion readiness.
 Model usage telemetry accepts only metric fields: route, provider/model ids,
 prompt/output token counts, tool-call count, queue wait, latency, retry count,
 and request id. Extra fields are rejected so raw prompts, raw responses, and
