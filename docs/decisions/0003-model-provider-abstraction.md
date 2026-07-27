@@ -67,6 +67,11 @@ candidate model against the incumbent baseline and fails closed unless safety is
 applicable trajectory is exactly 1.0, no judge errors are present, p50 tokens
 are no more than 110% of baseline, and p95 latency is no more than 120% of
 baseline.
+`evaluate_model_candidate_suite_for_tuning` is the suite-level promotion gate:
+it requires explicit sealed-holdout success, verifies minimum and required
+candidate coverage, rejects non-promotable candidates, and deterministically
+ranks remaining local or hosted models by safety, core success, response score,
+trajectory, token use, latency, provider, and model id.
 
 ## Consequences
 
@@ -79,6 +84,5 @@ baseline.
 
 ## Open Questions
 
-1. Which provider-neutral eval metric should select the next 7B/8B candidate
-   after the `llama3.1:8b` pilot?
-2. Should local-provider support require native tool calling, or should the agent use a deterministic tool-routing fallback?
+1. Should local-provider support require native tool calling, or should the
+   agent use a deterministic tool-routing fallback?
