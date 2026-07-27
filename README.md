@@ -353,6 +353,15 @@ continue to return `token_exchange_not_configured` until the token-exchange
 worker is enabled. Vault references are internal storage pointers, not model or
 API-visible credentials.
 
+The domain also defines a backend-neutral credential-vault write plan. It
+accepts secret material only inside non-serializing
+`CredentialVaultSecretMaterial` objects, returns redacted readiness/write
+summaries, refuses disabled or mismatched vault backends, and rejects
+live-broker trading-token payloads. Native macOS Keychain or hosted KMS writers
+must implement that contract without passing secrets through command-line
+arguments; the macOS `security` CLI `-w` path is intentionally not used because
+it exposes secret material in process arguments.
+
 FYERS refresh results use the same Postgres backend in production-like mode.
 The protected refresh endpoint records `provider_refresh_jobs`,
 `provider_snapshot_envelopes`, and `broker_account_snapshots` with source,

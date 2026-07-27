@@ -94,9 +94,12 @@ from .credential_vault import (
     CredentialVaultBackend,
     CredentialVaultProfile,
     CredentialVaultReadiness,
+    CredentialVaultSecretMaterial,
+    CredentialVaultWritePlan,
     build_credential_vault_ref,
     evaluate_credential_vault_readiness,
     load_credential_vault_profile,
+    plan_credential_vault_write,
 )
 from .fyers_integration_store import PostgresFyersIntegrationStore
 from .market_data_store import (
@@ -258,6 +261,8 @@ __all__ = [
     "CredentialVaultBackend",
     "CredentialVaultProfile",
     "CredentialVaultReadiness",
+    "CredentialVaultSecretMaterial",
+    "CredentialVaultWritePlan",
     "DatabaseBackend",
     "DatabaseRuntimeProfile",
     "DatabaseRuntimeReadiness",
@@ -414,6 +419,7 @@ __all__ = [
     "issue_paper_execution_grant",
     "load_database_runtime_profile",
     "load_credential_vault_profile",
+    "plan_credential_vault_write",
     "list_configured_fundamentals_snapshots",
     "list_configured_macro_snapshots",
     "list_configured_market_data_snapshots",

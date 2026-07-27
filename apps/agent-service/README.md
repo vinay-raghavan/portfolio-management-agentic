@@ -95,6 +95,10 @@ backends. It returns configured booleans and blocking reasons only; provider
 secrets, access tokens, refresh tokens, and client secrets are not accepted or
 returned. FYERS OAuth callbacks include this readiness and keep token exchange
 disabled until a token-exchange worker is enabled.
+Credential-vault write plans remain backend neutral and redacted: token payloads
+are carried only in non-serializing domain objects, live-broker trading-token
+payloads are rejected, and future Keychain/KMS writers must avoid command-line
+secret delivery.
 Protected `/v1/sessions/{session_id}/summary` routes persist only compact
 session summaries and sanitized object references through
 `PostgresSessionMemoryStore` in Postgres mode; local/offline mode keeps the same
