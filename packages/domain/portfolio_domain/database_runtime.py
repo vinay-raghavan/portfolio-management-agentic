@@ -97,7 +97,7 @@ def evaluate_database_runtime_readiness(
         blocking_reasons.append("postgres_required_for_production_like_testing")
     if profile.backend == DatabaseBackend.POSTGRES and not profile.database_url:
         blocking_reasons.append("postgres_database_url_missing")
-    if profile.migrations_required and not Path(profile.alembic_config_path).exists():
+    if profile.migrations_required and not _path_exists(profile.alembic_config_path):
         blocking_reasons.append("alembic_config_missing")
 
     return DatabaseRuntimeReadiness(
@@ -148,3 +148,13 @@ def _redact_url(url: str) -> str:
             parsed.fragment,
         )
     )
+
+
+def _path_exists(path: str) -> bool:
+    candidate = Path(path)
+    if candidate.exists():
+        return True
+    if candidate.is_absolute():
+        return False
+    repo_root = Path(__file__).resolve().parents[3]
+    return (repo_root / candidate).exists()
