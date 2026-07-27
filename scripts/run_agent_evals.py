@@ -111,6 +111,7 @@ class EvalRunSummary:
     mode: str
     provider: str
     generated_at: str
+    candidate_commit: str
     preflight: EvalPreflightReport
     command_results: list[EvalCommandResult]
     artifacts: dict[str, object]
@@ -127,6 +128,7 @@ class EvalRunSummary:
             "mode": self.mode,
             "provider": self.provider,
             "generated_at": self.generated_at,
+            "candidate_commit": self.candidate_commit,
             "preflight": self.preflight.to_dict(),
             "command_results": [
                 result.to_dict() for result in self.command_results
@@ -173,6 +175,7 @@ class EvalFailure:
 class EvalTriageReport:
     status: str
     generated_at: str
+    candidate_commit: str
     results_dir: str
     traces_dir: str
     result_files: list[str]
@@ -198,6 +201,7 @@ class EvalTriageReport:
             "schema_version": self.schema_version,
             "status": self.status,
             "generated_at": self.generated_at,
+            "candidate_commit": self.candidate_commit,
             "results_dir": self.results_dir,
             "traces_dir": self.traces_dir,
             "result_files": self.result_files,
@@ -249,6 +253,28 @@ def _under_app(app_dir: Path, path: Path) -> Path:
 
 def _utc_timestamp() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _candidate_commit(app_dir: Path, env: Mapping[str, str] | None = None) -> str:
+    env = os.environ if env is None else env
+    env_sha = env.get("GITHUB_SHA") or env.get("CANDIDATE_COMMIT")
+    if env_sha and _looks_like_commit_sha(env_sha):
+        return env_sha
+    repo_dir = app_dir.resolve().parents[1] if len(app_dir.resolve().parents) > 1 else app_dir
+    result = subprocess.run(
+        ["git", "-C", _path_string(repo_dir), "rev-parse", "HEAD"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    git_sha = result.stdout.strip()
+    return git_sha if result.returncode == 0 and _looks_like_commit_sha(git_sha) else "unknown"
+
+
+def _looks_like_commit_sha(value: str) -> bool:
+    stripped = value.strip()
+    return len(stripped) >= 7 and all(character in "0123456789abcdefABCDEF" for character in stripped)
 
 
 def _artifact_files(app_dir: Path, path: Path) -> list[str]:
@@ -773,13 +799,16 @@ def build_run_summary(
     status: str,
     command_results: list[EvalCommandResult],
     generated_at: str | None = None,
+    candidate_commit: str | None = None,
 ) -> EvalRunSummary:
+    candidate_commit = candidate_commit or _candidate_commit(config.app_dir)
     failed_results = [
         result for result in command_results if result.return_code != 0
     ]
     notes = [
         "Summary stores environment key names only; credential values are never recorded.",
         "Trace and grade result file names are listed relative to their artifact directories.",
+        "Eval artifacts are bound to candidate_commit and are not release-ready when that value is unknown.",
         "The official ADK eval path remains agents-cli eval generate followed by agents-cli eval grade.",
     ]
     if failed_results:
@@ -820,6 +849,7 @@ def build_run_summary(
         mode=mode,
         provider=preflight.provider,
         generated_at=_utc_timestamp() if generated_at is None else generated_at,
+        candidate_commit=candidate_commit,
         preflight=preflight,
         command_results=command_results,
         artifacts={
@@ -843,6 +873,7 @@ def build_run_summary(
             missing_environment=preflight.missing_environment,
             missing_binaries=preflight.missing_binaries,
             missing_files=preflight.missing_files,
+            candidate_commit=candidate_commit,
         ),
     )
 
@@ -856,6 +887,7 @@ def _run_submission_readiness(
     missing_environment: list[str],
     missing_binaries: list[str],
     missing_files: list[str],
+    candidate_commit: str,
 ) -> dict[str, object]:
     blocking_reasons: list[str] = []
     required_next_actions: list[str] = []
@@ -865,11 +897,19 @@ def _run_submission_readiness(
             blocking_reasons.append("No eval trace artifacts were produced.")
         if not grade_result_files:
             blocking_reasons.append("No eval grade-result artifacts were produced.")
+        if candidate_commit == "unknown":
+            blocking_reasons.append(
+                "Eval artifacts are not bound to an exact candidate commit."
+            )
         if blocking_reasons:
-            readiness_status = "artifact_gap"
+            readiness_status = (
+                "commit_unbound"
+                if candidate_commit == "unknown" and trace_files and grade_result_files
+                else "artifact_gap"
+            )
             required_next_actions.extend(
                 [
-                    "Inspect agents-cli output for missing trace or grade result files.",
+                    "Inspect agents-cli output for missing trace, grade result, or commit metadata.",
                     "Rerun uv run python scripts/run_agent_evals.py run --fail-on-skip.",
                 ]
             )
@@ -936,7 +976,9 @@ def write_run_summary(summary: EvalRunSummary, output: Path) -> Path:
 def build_triage_report(
     config: EvalRunConfig,
     generated_at: str | None = None,
+    candidate_commit: str | None = None,
 ) -> EvalTriageReport:
+    candidate_commit = candidate_commit or _candidate_commit(config.app_dir)
     resolved_results_dir = _under_app(config.app_dir, config.results_dir)
     result_files = _artifact_files(config.app_dir, config.results_dir)
     trace_files = _artifact_files(config.app_dir, config.traces_dir)
@@ -1099,18 +1141,31 @@ def build_triage_report(
         next_actions = [
             "Keep the grade result as the current baseline and compare future eval runs against it.",
         ]
-        submission_readiness = {
-            "status": "ready_for_capstone_submission",
-            "blocking_reasons": [],
-            "required_next_actions": [
-                "Keep the baseline summary, triage report, traces, and grade artifacts with the capstone evidence package.",
-                "Regenerate uv run python scripts/build_capstone_evidence.py.",
-            ],
-        }
+        if candidate_commit == "unknown":
+            submission_readiness = {
+                "status": "commit_unbound",
+                "blocking_reasons": [
+                    "Eval artifacts are not bound to an exact candidate commit."
+                ],
+                "required_next_actions": [
+                    "Rerun uv run python scripts/run_agent_evals.py run --fail-on-skip from a Git checkout or set CANDIDATE_COMMIT/GITHUB_SHA.",
+                    "Rerun uv run python scripts/run_agent_evals.py triage --json.",
+                ],
+            }
+        else:
+            submission_readiness = {
+                "status": "ready_for_capstone_submission",
+                "blocking_reasons": [],
+                "required_next_actions": [
+                    "Keep the baseline summary, triage report, traces, and grade artifacts with the capstone evidence package.",
+                    "Regenerate uv run python scripts/build_capstone_evidence.py.",
+                ],
+            }
 
     return EvalTriageReport(
         status=status,
         generated_at=_utc_timestamp() if generated_at is None else generated_at,
+        candidate_commit=candidate_commit,
         results_dir=_path_string(config.results_dir),
         traces_dir=_path_string(config.traces_dir),
         result_files=result_files,

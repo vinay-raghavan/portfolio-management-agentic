@@ -70,8 +70,14 @@ The summary includes `submission_readiness`:
 - `blocked`: preflight skipped because credentials, files, or binaries are missing.
 - `failed`: `agents-cli eval generate` or `agents-cli eval grade` exited non-zero.
 - `artifact_gap`: the baseline completed but no trace or grade-result artifacts were listed.
+- `commit_unbound`: trace and grade artifacts exist, but the summary is not
+  bound to an exact Git candidate commit.
 - `ready_for_triage`: traces and grade results exist; run deterministic triage next.
 - `dry_run`: commands were validated but not executed.
+
+The summary records `candidate_commit` from `GITHUB_SHA`,
+`CANDIDATE_COMMIT`, or the local Git checkout. A value of `unknown` is not
+release-ready.
 
 ## Manual GitHub Workflow
 
@@ -84,7 +90,10 @@ The manual Eval baseline workflow can run the same loop in GitHub Actions:
 Dispatch it from the Actions tab with the desired provider. The workflow uses
 repository secrets for model credentials, runs preflight, runs the baseline,
 executes deterministic triage, and uploads `apps/agent-service/artifacts/evals`
-as an artifact.
+as an artifact named `portfolio-agentic-eval-artifacts-${{ github.sha }}`.
+The CD workflow requires that exact commit-scoped artifact and verifies the
+workflow run that produced it completed successfully before image build or
+publish.
 
 ## Deterministic Triage
 
@@ -115,8 +124,11 @@ The triage report also includes `submission_readiness`:
 - `blocked`: no grade-result artifacts exist yet.
 - `needs_hardening`: one or more eval failures were detected and should become
   instruction, tool-description, deterministic-test, or eval-regression work.
+- `commit_unbound`: passing results exist, but the triage report is not bound
+  to an exact Git candidate commit.
 - `ready_for_capstone_submission`: grade results exist and deterministic triage
-  found no failed metrics.
+  found no failed metrics for the same exact `candidate_commit` as the baseline
+  summary.
 
 The default eval config runs three metrics:
 

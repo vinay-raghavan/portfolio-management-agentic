@@ -41,6 +41,12 @@ def test_cd_workflow_is_release_gated_and_publishes_only_images() -> None:
 
     assert 'tags:\n      - "v*"' in cd
     assert "workflow_dispatch:" in cd
+    assert "actions: read" in cd
+    assert "verify-eval-artifact:" in cd
+    assert "needs: verify-eval-artifact" in cd
+    assert "portfolio-agentic-eval-artifacts-${GITHUB_SHA}" in cd
+    assert "workflow_run.head_sha == env.GITHUB_SHA" in cd
+    assert "Eval artifact workflow run did not conclude successfully" in cd
     assert "packages: write" in cd
     assert "docker/build-push-action" in cd
     assert "portfolio-management-agentic-agent-service" in cd
@@ -60,6 +66,7 @@ def test_eval_baseline_workflow_is_manual_and_uploads_safe_artifacts() -> None:
     assert "scripts/run_agent_evals.py run" in workflow
     assert "scripts/run_agent_evals.py triage --json" in workflow
     assert "actions/upload-artifact" in workflow
+    assert "portfolio-agentic-eval-artifacts-${{ github.sha }}" in workflow
     assert "GOOGLE_API_KEY" in workflow
     assert "ANTHROPIC_API_KEY" in workflow
     assert "OPENAI_API_KEY" in workflow

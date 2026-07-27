@@ -199,8 +199,8 @@ uv run python scripts/run_agent_evals.py run --fail-on-skip
 
 The wrapper writes `apps/agent-service/artifacts/evals/baseline-summary.json`
 by default. The summary records preflight status, command return codes, trace
-and grade-result file names, and next actions without secret values. Generated
-eval artifacts are ignored by Git.
+and grade-result file names, the exact `candidate_commit`, and next actions
+without secret values. Generated eval artifacts are ignored by Git.
 
 Credential-free deterministic triage:
 
@@ -212,7 +212,9 @@ The triage report writes `apps/agent-service/artifacts/evals/triage-report.json`
 and classifies failed eval cases by policy, provider-readiness, paper-trading,
 grounding/citation, tool-trajectory, or response-quality follow-up. The
 `workflow_tool_trajectory_policy` metric checks expected tool calls and ordering
-for key workflow cases after traces are generated.
+for key workflow cases after traces are generated. A passing triage report is
+submission-ready only when it is bound to the same `candidate_commit` as the
+baseline summary.
 
 Capstone evidence manifest:
 
@@ -223,7 +225,10 @@ uv run python scripts/build_capstone_evidence.py
 The manifest writes to `artifacts/capstone/evidence-manifest.json` by default.
 Use `--json` to print it for another tool. For submission, the target eval gate
 is `eval_baseline.submission_readiness.status=ready_for_capstone_submission`
-and the tracked media gate is `submission_assets.status=ready`.
+and the tracked media gate is `submission_assets.status=ready`. CD also requires
+a successful GitHub eval artifact named
+`portfolio-agentic-eval-artifacts-${GITHUB_SHA}` for the exact candidate commit
+before images can build or publish.
 
 ## Container Runtime
 

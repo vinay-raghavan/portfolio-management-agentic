@@ -286,12 +286,14 @@ def test_eval_run_summary_records_artifacts_without_secret_values(tmp_path: Path
             EvalCommandResult("grade", report.commands["grade"], 0),
         ],
         generated_at="2026-06-29T00:00:00Z",
+        candidate_commit="abc123def456",
     )
     payload = summary.to_dict()
     serialized = json.dumps(payload)
 
     assert payload["schema_version"] == "portfolio-agent-eval-baseline/v1"
     assert payload["status"] == "completed"
+    assert payload["candidate_commit"] == "abc123def456"
     assert payload["submission_readiness"] == {
         "status": "ready_for_triage",
         "blocking_reasons": [],
@@ -317,6 +319,41 @@ def test_eval_run_summary_records_artifacts_without_secret_values(tmp_path: Path
     ]
 
 
+def test_eval_run_summary_blocks_completed_artifacts_without_candidate_commit(
+    tmp_path: Path,
+) -> None:
+    config = EvalRunConfig(app_dir=tmp_path)
+    traces_dir = tmp_path / config.traces_dir
+    results_dir = tmp_path / config.results_dir
+    traces_dir.mkdir(parents=True)
+    results_dir.mkdir(parents=True)
+    (traces_dir / "trace_001.json").write_text("{}", encoding="utf-8")
+    (results_dir / "results_001.json").write_text("{}", encoding="utf-8")
+    report = build_preflight(
+        config,
+        env={},
+        agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=False,
+    )
+
+    payload = build_run_summary(
+        mode="run",
+        config=config,
+        preflight=report,
+        status="completed",
+        command_results=[],
+        generated_at="2026-06-29T00:00:00Z",
+        candidate_commit="unknown",
+    ).to_dict()
+
+    assert payload["candidate_commit"] == "unknown"
+    assert payload["submission_readiness"]["status"] == "commit_unbound"
+    assert (
+        "Eval artifacts are not bound to an exact candidate commit."
+        in payload["submission_readiness"]["blocking_reasons"]
+    )
+
+
 def test_write_run_summary_creates_parent_directory(tmp_path: Path) -> None:
     config = EvalRunConfig(app_dir=tmp_path)
     report = build_preflight(
@@ -332,6 +369,7 @@ def test_write_run_summary_creates_parent_directory(tmp_path: Path) -> None:
         status="skipped",
         command_results=[],
         generated_at="2026-06-29T00:00:00Z",
+        candidate_commit="abc123def456",
     )
 
     output = tmp_path / "nested" / "summary.json"
@@ -757,9 +795,13 @@ def test_eval_triage_marks_passing_results_ready_for_capstone(tmp_path: Path) ->
         encoding="utf-8",
     )
 
-    payload = build_triage_report(EvalRunConfig(app_dir=app_dir)).to_dict()
+    payload = build_triage_report(
+        EvalRunConfig(app_dir=app_dir),
+        candidate_commit="abc123def456",
+    ).to_dict()
 
     assert payload["status"] == "passed"
+    assert payload["candidate_commit"] == "abc123def456"
     assert payload["submission_readiness"] == {
         "status": "ready_for_capstone_submission",
         "blocking_reasons": [],
@@ -769,6 +811,48 @@ def test_eval_triage_marks_passing_results_ready_for_capstone(tmp_path: Path) ->
         ],
     }
     assert payload["failures"] == []
+
+
+def test_eval_triage_blocks_passing_results_without_candidate_commit(tmp_path: Path) -> None:
+    app_dir = tmp_path / "apps" / "agent-service"
+    results_dir = app_dir / "artifacts/evals/grade-results"
+    traces_dir = app_dir / "artifacts/evals/traces"
+    results_dir.mkdir(parents=True)
+    traces_dir.mkdir(parents=True)
+    (results_dir / "results_001.json").write_text(
+        json.dumps(
+            {
+                "eval_cases": [
+                    {
+                        "eval_case_id": "pre_market_briefing",
+                        "metrics": {
+                            "portfolio_response_quality": {"score": 5},
+                            "workflow_tool_trajectory_policy": {"score": 1},
+                            "forbidden_action_policy": {"score": 1},
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (traces_dir / "trace_001.json").write_text(
+        json.dumps({"eval_cases": []}),
+        encoding="utf-8",
+    )
+
+    payload = build_triage_report(
+        EvalRunConfig(app_dir=app_dir),
+        candidate_commit="unknown",
+    ).to_dict()
+
+    assert payload["status"] == "passed"
+    assert payload["candidate_commit"] == "unknown"
+    assert payload["submission_readiness"]["status"] == "commit_unbound"
+    assert (
+        "Eval artifacts are not bound to an exact candidate commit."
+        in payload["submission_readiness"]["blocking_reasons"]
+    )
 
 
 def test_eval_triage_reports_no_results_before_credentialed_run(tmp_path: Path) -> None:

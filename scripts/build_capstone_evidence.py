@@ -223,12 +223,16 @@ def _build_eval_baseline(config: CapstoneEvidenceConfig) -> dict[str, Any]:
     grade_result_files = _relative_artifact_names(summary, "grade_result_files")
     failure_count = triage_summary.get("failure_count", 0)
     critical_failure_count = triage_summary.get("critical_failure_count", 0)
+    candidate_commit = str(summary.get("candidate_commit") or "unknown")
+    triage_candidate_commit = str(triage.get("candidate_commit") or "unknown")
 
     return {
         "status": str(summary.get("status") or "not_run"),
         "schema_version": str(summary.get("schema_version") or ""),
+        "candidate_commit": candidate_commit,
         "preflight_status": str(preflight.get("status") or ""),
         "triage_status": str(triage.get("status") or "not_run"),
+        "triage_candidate_commit": triage_candidate_commit,
         "submission_readiness": _eval_submission_readiness(
             baseline_status=str(summary.get("status") or "not_run"),
             summary_readiness=summary_readiness,
@@ -237,6 +241,8 @@ def _build_eval_baseline(config: CapstoneEvidenceConfig) -> dict[str, Any]:
             trace_files=trace_files,
             grade_result_files=grade_result_files,
             failure_count=failure_count,
+            candidate_commit=candidate_commit,
+            triage_candidate_commit=triage_candidate_commit,
         ),
         "missing_environment": [
             str(item) for item in _safe_list(preflight.get("missing_environment"))
@@ -261,6 +267,8 @@ def _eval_submission_readiness(
     trace_files: list[str],
     grade_result_files: list[str],
     failure_count: Any,
+    candidate_commit: str,
+    triage_candidate_commit: str,
 ) -> dict[str, Any]:
     if baseline_status != "completed":
         return {
@@ -289,6 +297,28 @@ def _eval_submission_readiness(
             "blocking_reasons": missing,
             "required_next_actions": [
                 "Inspect agents-cli output and rerun uv run python scripts/run_agent_evals.py run --fail-on-skip."
+            ],
+        }
+    if candidate_commit == "unknown" or triage_candidate_commit == "unknown":
+        return {
+            "status": "commit_unbound",
+            "source": "candidate_commit",
+            "blocking_reasons": [
+                "Eval artifacts are not bound to an exact candidate commit."
+            ],
+            "required_next_actions": [
+                "Rerun uv run python scripts/run_agent_evals.py run --fail-on-skip and uv run python scripts/run_agent_evals.py triage --json from a Git checkout or set CANDIDATE_COMMIT/GITHUB_SHA."
+            ],
+        }
+    if candidate_commit != triage_candidate_commit:
+        return {
+            "status": "commit_mismatch",
+            "source": "candidate_commit",
+            "blocking_reasons": [
+                "Eval baseline and triage report are not bound to the same candidate commit."
+            ],
+            "required_next_actions": [
+                "Rerun uv run python scripts/run_agent_evals.py run --fail-on-skip and uv run python scripts/run_agent_evals.py triage --json for the exact candidate commit."
             ],
         }
     if triage_status == "passed":
@@ -391,6 +421,16 @@ def _remaining_gaps(
                 "id": "eval_artifact_gap",
                 "status": "missing_eval_artifacts",
                 "next_action": "Rerun the credentialed eval and confirm traces plus grade results are listed.",
+            }
+        )
+    elif readiness_status in {"commit_unbound", "commit_mismatch"}:
+        gaps.append(
+            {
+                "id": "eval_commit_binding",
+                "status": "candidate_commit_unbound"
+                if readiness_status == "commit_unbound"
+                else "candidate_commit_mismatch",
+                "next_action": "Rerun the credentialed eval baseline and triage for the exact candidate commit.",
             }
         )
     if not eval_baseline.get("grade_result_files"):

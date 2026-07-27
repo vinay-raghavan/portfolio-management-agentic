@@ -91,6 +91,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: portfolio-agentic-eval-artifacts
+          name: portfolio-agentic-eval-artifacts-${{ github.sha }}
           path: apps/agent-service/artifacts/evals
           if-no-files-found: warn

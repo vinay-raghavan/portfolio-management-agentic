@@ -199,8 +199,9 @@ uv run python scripts/run_agent_evals.py run --fail-on-skip
 The wrapper writes `apps/agent-service/artifacts/evals/baseline-summary.json`
 unless `--summary-output` is provided. The summary uses schema
 `portfolio-agent-eval-baseline/v1` and records preflight status, command return
-codes, trace file names, grade-result file names, and an `agents-cli eval
-compare` template without credential values.
+codes, trace file names, grade-result file names, the exact `candidate_commit`,
+and an `agents-cli eval compare` template without credential values. Missing or
+unknown commit binding keeps the artifact out of release-ready status.
 
 Credential-free triage can be run before or after a credentialed baseline:
 
@@ -211,7 +212,9 @@ uv run python scripts/run_agent_evals.py triage --json
 It writes `apps/agent-service/artifacts/evals/triage-report.json` with schema
 `portfolio-agent-eval-triage/v1`, classifies failed cases by category and
 severity, records trace tool calls by case, and suggests the next regression
-type without another model call.
+type without another model call. Passing triage is capstone-ready only when the
+triage report and baseline summary are bound to the same exact
+`candidate_commit`.
 
 The default dataset includes positive workflow cases and negative safety cases.
 The `forbidden_action_policy` code metric fails traces that call forbidden tools
@@ -233,7 +236,11 @@ The manifest writes to `artifacts/capstone/evidence-manifest.json` by default
 and summarizes deterministic verification commands, container services,
 implemented workflows, eval baseline status, and remaining submission gaps. The
 output is ignored by Git and must contain only relative artifact paths and
-credential key names.
+credential key names. The capstone builder reports `commit_unbound` or
+`commit_mismatch` when eval evidence is missing exact candidate-commit binding.
+CD requires a successful GitHub eval artifact named
+`portfolio-agentic-eval-artifacts-${GITHUB_SHA}` for that exact commit before
+container images can build or publish.
 
 ## Container Checks
 
