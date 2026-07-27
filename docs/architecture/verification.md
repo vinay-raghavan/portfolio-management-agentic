@@ -27,7 +27,9 @@ Current coverage:
   Postgres explicitly through `PORTFOLIO_STORAGE_BACKEND`, redacts database and
   Redis credentials in runtime status payloads, requires migrations, preserves
   SQLite as an offline compatibility backend, and rejects SQLite when
-  production-like readiness is required.
+  production-like readiness is required. Alembic revision-chain contracts also
+  verify a single migration head, no orphaned `down_revision` references, and
+  reversible upgrade/downgrade functions for every migration file.
 - Session-memory contracts verify compact summary-only persistence, tenant and
   actor-scoped Postgres reads/deletes, 2-hour idle and 24-hour absolute TTLs,
   immediate deletion, object-reference-only carryover, and rejection of raw
