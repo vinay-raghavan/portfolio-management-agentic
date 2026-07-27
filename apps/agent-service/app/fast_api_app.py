@@ -56,14 +56,15 @@ if model_provider_path not in sys.path:
 
 from portfolio_domain import (  # noqa: E402
     DatabaseBackend,
+    DeterministicPaperExecutionWorker,
     PaperBatchRequest,
     PaperExecutionDecision,
     PaperExecutionGrant,
     PaperExecutionOrder,
     PaperExecutionPolicyCeiling,
+    PaperExecutionWorkerRequest,
     PostgresPaperExecutionStore,
     evaluate_database_runtime_readiness,
-    evaluate_paper_execution_order,
     issue_paper_execution_grant,
     load_database_runtime_profile,
 )
@@ -832,48 +833,44 @@ def post_paper_order_execute(
         raise HTTPException(status_code=404, detail="paper_policy_not_found")
     used_keys = _used_paper_idempotency_keys(actor, request.idempotency_key)
     current_exposure = _paper_execution_current_exposure(actor, grant, request)
-    decision = evaluate_paper_execution_order(
-        policy=policy,
-        grant=grant,
-        batch_request=batch,
-        order=order,
-        idempotency_key=request.idempotency_key,
-        quote_price=request.quote_price,
-        quote_as_of=request.quote_as_of,
-        now=request.now or datetime.now(UTC),
-        used_idempotency_keys=used_keys,
-        available_cash=request.available_cash,
-        current_gross_notional=current_exposure["gross_notional"],
-        current_net_notional=current_exposure["net_notional"],
-        kill_switch_active=request.kill_switch_active,
+    worker = DeterministicPaperExecutionWorker(
+        record_decision=lambda decision, worker_request: _record_paper_execution_decision(
+            actor,
+            grant=worker_request.grant,
+            batch=worker_request.batch_request,
+            order=worker_request.order,
+            decision=decision,
+            fill_price=worker_request.quote_price,
+            exposure_after=worker_request.exposure_after or {},
+        )
+    )
+    decision = worker.execute(
+        PaperExecutionWorkerRequest(
+            policy=policy,
+            grant=grant,
+            batch_request=batch,
+            order=order,
+            idempotency_key=request.idempotency_key,
+            quote_price=request.quote_price,
+            quote_as_of=request.quote_as_of,
+            now=request.now or datetime.now(UTC),
+            used_idempotency_keys=used_keys,
+            available_cash=request.available_cash,
+            current_gross_notional=current_exposure["gross_notional"],
+            current_net_notional=current_exposure["net_notional"],
+            kill_switch_active=request.kill_switch_active,
+            exposure_after=_paper_execution_exposure_after(
+                current_exposure=current_exposure,
+                order=order,
+                quote_price=request.quote_price,
+            ),
+        )
     )
     _remember_paper_idempotency_key(actor, request.idempotency_key)
     status_code = 200 if decision.status == "accepted" else 409
     if status_code != 200:
         return JSONResponse(
             status_code=status_code,
-            content={
-                "status": "rejected",
-                "decision": decision.to_dict(),
-                "mode": "paper_only",
-            },
-        )
-    decision = _record_paper_execution_decision(
-        actor,
-        grant=grant,
-        batch=batch,
-        order=order,
-        decision=decision,
-        fill_price=request.quote_price,
-        exposure_after=_paper_execution_exposure_after(
-            current_exposure=current_exposure,
-            order=order,
-            quote_price=request.quote_price,
-        ),
-    )
-    if decision.status != "accepted":
-        return JSONResponse(
-            status_code=409,
             content={
                 "status": "rejected",
                 "decision": decision.to_dict(),

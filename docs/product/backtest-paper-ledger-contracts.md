@@ -43,6 +43,10 @@ This slice establishes the safe contract between research, simulation, and the f
   idempotency keys, stale quotes, inactive policies, kill-switch activation,
   tenant/scope mismatches, insufficient paper cash, and quantity/notional
   ceiling violations before returning any fill payload.
+- `DeterministicPaperExecutionWorker` owns the paper-only evaluate-and-record
+  boundary through `PaperExecutionWorkerRequest`. The protected API calls this
+  worker synchronously today, so the same contract can later move behind a
+  queue without giving the model or MCP layer execution authority.
 - `PostgresPaperExecutionStore` persists and reads protected policy ceilings,
   batch requests, execution grants, and idempotent ledger decision rows through
   tenant-scoped Postgres tables created by Alembic. It can revoke active grants
@@ -87,7 +91,8 @@ grant `consumed_capacity`, not request-body `current_gross_notional` or
 `current_net_notional` fields. Successful accepted inserts update
 `paper_execution_grants.consumed_capacity`; conflict rejections do not consume
 capacity. The next production hardening step is moving this write path into a
-dedicated execution worker with serialized grant-capacity reservation.
+dedicated asynchronous execution queue with serialized grant-capacity
+reservation.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.
