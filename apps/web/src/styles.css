@@ -19,14 +19,14 @@
   --signal: #0891b2;
   --signal-soft: #cffafe;
   --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-  --radius: 18px;
-  --radius-xs: 10px;
-  --radius-sm: 14px;
-  --radius-md: 20px;
-  --radius-lg: 28px;
-  --radius-xl: 36px;
+  --radius: 28px;
+  --radius-xs: 14px;
+  --radius-sm: 20px;
+  --radius-md: 28px;
+  --radius-lg: 36px;
+  --radius-xl: 48px;
   --widget-radius: var(--radius-lg);
-  --control-radius: 18px;
+  --control-radius: 24px;
   --pill-radius: 999px;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -490,7 +490,7 @@ p {
 
 .table-row {
   display: grid;
-  grid-template-columns: 90px minmax(78px, 1fr) 58px;
+  grid-template-columns: minmax(88px, 0.72fr) minmax(92px, 1fr) minmax(68px, 0.46fr);
   gap: 8px;
   align-items: center;
   min-height: 42px;
@@ -530,6 +530,7 @@ p {
   position: relative;
   display: flex;
   justify-content: flex-end;
+  min-width: 68px;
   min-height: 20px;
   overflow: hidden;
   padding-right: 5px;
@@ -626,6 +627,20 @@ p {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.screener-panel .import-gate {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.screener-panel .import-gate-stats {
+  grid-template-columns: repeat(2, minmax(86px, 1fr));
+}
+
+.screener-panel .import-gate > .status-pill {
+  justify-self: stretch;
+  justify-content: center;
 }
 
 .allowed-actions {
@@ -1219,7 +1234,7 @@ p {
   max-width: 100%;
   padding: 4px 6px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--control-radius);
   color: #334155;
   background: #f8fafc;
   font-size: 11px;
@@ -1234,7 +1249,7 @@ p {
   padding: 8px;
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #334155;
   background: #f8fafc;
   font-size: 11px;
@@ -1646,14 +1661,14 @@ p {
   --signal: var(--accent-secondary);
   --signal-soft: color-mix(in srgb, var(--accent-secondary) 16%, transparent);
   --shadow: 0 22px 46px -34px rgba(236, 240, 245, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --radius: 22px;
-  --radius-xs: 10px;
-  --radius-sm: 16px;
-  --radius-md: 22px;
-  --radius-lg: 30px;
-  --radius-xl: 40px;
+  --radius: 28px;
+  --radius-xs: 14px;
+  --radius-sm: 20px;
+  --radius-md: 28px;
+  --radius-lg: 36px;
+  --radius-xl: 48px;
   --widget-radius: var(--radius-lg);
-  --control-radius: 18px;
+  --control-radius: 24px;
   --pill-radius: 999px;
   --focus-ring: 0 0 0 2px rgba(124, 173, 247, 0.34), 0 0 0 6px rgba(124, 173, 247, 0.16);
 
@@ -1768,7 +1783,7 @@ input:focus-visible {
   justify-content: center;
   height: 38px;
   padding: 0;
-  border-radius: 16px;
+  border-radius: var(--control-radius);
   color: var(--base-text-weak-default);
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
@@ -1787,9 +1802,9 @@ input:focus-visible {
   position: absolute;
   top: 4px;
   bottom: 4px;
-  left: 0;
-  width: 3px;
-  border-radius: 0 999px 999px 0;
+  left: 5px;
+  width: 4px;
+  border-radius: var(--pill-radius);
   background: var(--accent-primary);
   box-shadow: 0 0 12px color-mix(in srgb, var(--accent-primary) 55%, transparent);
 }
@@ -1804,7 +1819,7 @@ input:focus-visible {
 
 .brand-icon,
 .safety-card {
-  border-radius: 16px;
+  border-radius: var(--control-radius);
 }
 
 .safety-card strong {
@@ -1926,7 +1941,7 @@ input:focus-visible {
   position: relative;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, var(--border));
-  border-radius: var(--radius);
+  border-radius: var(--widget-radius);
   background:
     linear-gradient(145deg, color-mix(in srgb, rgba(24, 31, 42, 0.94) 88%, transparent), color-mix(in srgb, var(--accent-primary) 5%, transparent)),
     color-mix(in srgb, var(--surface) 84%, transparent);
@@ -1993,7 +2008,7 @@ input:focus-visible {
   min-height: 74px;
   padding: 16px 20px;
   border: 1px solid var(--step-color, var(--accent-primary));
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--base-bg-medium-default) 48%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
@@ -2121,7 +2136,7 @@ input:focus-visible {
 
 .page-tab {
   min-height: 42px;
-  border-radius: 14px;
+  border-radius: var(--control-radius);
   border-color: color-mix(in srgb, var(--base-border-weak-default) 84%, transparent);
   color: var(--base-text-medium-default);
 }
@@ -2259,12 +2274,12 @@ input:focus-visible {
 .onboarding-row,
 .preview-row,
 .reconciliation-row {
-  border-radius: var(--radius-md);
+  border-radius: var(--widget-radius);
 }
 
 .candidate-table,
 .template-row pre {
-  border-radius: var(--radius-md);
+  border-radius: var(--widget-radius);
 }
 
 .segment-button,
@@ -2281,13 +2296,13 @@ input:focus-visible {
 }
 
 .table-row:first-child {
-  border-top-left-radius: var(--radius-md);
-  border-top-right-radius: var(--radius-md);
+  border-top-left-radius: var(--widget-radius);
+  border-top-right-radius: var(--widget-radius);
 }
 
 .table-row:last-child {
-  border-bottom-left-radius: var(--radius-md);
-  border-bottom-right-radius: var(--radius-md);
+  border-bottom-left-radius: var(--widget-radius);
+  border-bottom-right-radius: var(--widget-radius);
 }
 
 .workflow-button:hover,
