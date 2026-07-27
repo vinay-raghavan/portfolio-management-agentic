@@ -25,13 +25,17 @@ from urllib.parse import urljoin
 from urllib.request import urlopen
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from google.adk.cli.fast_api import get_fast_api_app
 from google.cloud import logging as google_cloud_logging
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.actor_context import ActorContext, actor_context_dependency
+from app.actor_context import (
+    ActorContext,
+    actor_context_dependency,
+    build_actor_context,
+)
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
 from app.console import (
@@ -74,6 +78,7 @@ from portfolio_model_provider import (  # noqa: E402
     ModelProvider,
     ModelUsageEvent,
     OllamaModelMetadata,
+    PostgresModelUsageStore,
     build_model_capability_report,
     build_model_tuning_plan,
     evaluate_model_usage_event,
@@ -439,8 +444,30 @@ def get_model_tuning_status() -> dict:
     }
 
 
+def optional_actor_context_dependency(
+    x_actor_sub: str | None = Header(default=None, alias="X-Actor-Sub"),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-Id"),
+    x_actor_roles: str | None = Header(default=None, alias="X-Actor-Roles"),
+    x_request_id: str | None = Header(default=None, alias="X-Request-Id"),
+) -> ActorContext | None:
+    if not any((x_actor_sub, x_tenant_id, x_actor_roles, x_request_id)):
+        return None
+    return build_actor_context(
+        x_actor_sub=x_actor_sub,
+        x_tenant_id=x_tenant_id,
+        x_actor_roles=x_actor_roles,
+        x_request_id=x_request_id,
+    )
+
+
 @app.post("/v1/models/usage/events")
-def record_model_usage_event(request: ModelUsageEventRequest) -> dict:
+def record_model_usage_event(
+    request: ModelUsageEventRequest,
+    actor: Annotated[
+        ActorContext | None,
+        Depends(optional_actor_context_dependency),
+    ],
+) -> dict:
     """Record redacted model usage metrics and evaluate route budgets."""
     payload = request.model_dump()
     _reject_sensitive_model_usage_payload(payload)
@@ -458,23 +485,39 @@ def record_model_usage_event(request: ModelUsageEventRequest) -> dict:
         request_id=request.request_id,
     )
     decision = evaluate_model_usage_event(profile, event)
-    events = _model_usage_events()
-    events.append(event)
-    max_events = max(profile.queue_max_depth * 10, 100)
-    if len(events) > max_events:
-        del events[: len(events) - max_events]
+    store = _model_usage_store(actor)
+    if store is not None:
+        store.record(event, decision)
+        stored_event_count = len(store.list_recent(limit=_model_usage_event_limit(profile)))
+    else:
+        events = _model_usage_events()
+        events.append(event)
+        max_events = _model_usage_event_limit(profile)
+        if len(events) > max_events:
+            del events[: len(events) - max_events]
+        stored_event_count = len(events)
     return {
         "status": "recorded",
         "budget_decision": decision.to_dict(),
-        "stored_event_count": len(events),
+        "stored_event_count": stored_event_count,
     }
 
 
 @app.get("/v1/models/usage/summary")
-def get_model_usage_summary() -> dict:
+def get_model_usage_summary(
+    actor: Annotated[
+        ActorContext | None,
+        Depends(optional_actor_context_dependency),
+    ],
+) -> dict:
     """Return aggregate model usage metrics without prompts or responses."""
     profile = load_model_runtime_profile(os.environ)
-    events = tuple(_model_usage_events())
+    store = _model_usage_store(actor)
+    events = (
+        store.list_recent(limit=_model_usage_event_limit(profile))
+        if store is not None
+        else tuple(_model_usage_events())
+    )
     summary = summarize_model_usage_events(profile, events)
     budget_violations: dict[str, int] = {}
     for event in events:
@@ -550,6 +593,44 @@ def _model_usage_events() -> list[ModelUsageEvent]:
         events = []
         app.state.model_usage_events = events
     return events
+
+
+def _model_usage_event_limit(profile) -> int:
+    return max(profile.queue_max_depth * 10, 100)
+
+
+def _model_usage_store(actor: ActorContext | None = None) -> PostgresModelUsageStore | None:
+    profile = load_database_runtime_profile(os.environ)
+    if profile.backend != DatabaseBackend.POSTGRES:
+        return None
+    if not profile.database_url:
+        raise HTTPException(status_code=503, detail="model_usage_postgres_not_configured")
+    if actor is None:
+        raise HTTPException(status_code=401, detail="actor_context_required")
+    return _build_postgres_model_usage_store(
+        tenant_id=actor.tenant_id,
+        database_url=profile.database_url,
+    )
+
+
+def _build_postgres_model_usage_store(
+    *,
+    tenant_id: str,
+    database_url: str,
+) -> PostgresModelUsageStore:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+
+        connection = psycopg.connect(connection_url)
+        connection.execute("SET app.tenant_id = %s", (tenant_id,))
+        return connection
+
+    return PostgresModelUsageStore(
+        tenant_id=tenant_id,
+        connection_factory=connection_factory,
+    )
 
 
 def _aware_utc(value: datetime) -> datetime:
