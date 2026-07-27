@@ -67,7 +67,10 @@ deployments can enable signed OIDC bearer-token validation with
 `OIDC_AUTH_ENABLED=true`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_JSON`,
 `OIDC_TENANT_CLAIM`, and `OIDC_ROLES_CLAIM`; the dependency verifies issuer,
 audience, signature, expiry, immutable `sub`, tenant claim, roles, and optional
-`X-OIDC-Nonce` before any protected route reads or writes state.
+`X-OIDC-Nonce` before any protected route reads or writes state. In Postgres
+mode, storage paths that require an actor foreign key upsert `issuer + sub`
+into `actor_identities` and use the returned UUID, while audit payloads keep
+the immutable subject as the human-readable actor reference.
 
 Set `PORTFOLIO_STORAGE_BACKEND=postgres` with `PORTFOLIO_DATABASE_URL` for
 production-like container runs; the repository Compose file runs Alembic

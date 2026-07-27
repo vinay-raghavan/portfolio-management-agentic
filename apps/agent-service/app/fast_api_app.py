@@ -75,6 +75,7 @@ from portfolio_domain import (  # noqa: E402
     PaperExecutionQueueProcessor,
     PaperExecutionWorkerRequest,
     PaperExecutionWorkItem,
+    PostgresActorIdentityStore,
     PostgresFyersIntegrationStore,
     PostgresPaperExecutionStore,
     PostgresSessionMemoryStore,
@@ -1176,9 +1177,35 @@ def _session_memory_store_for_actor(
         raise HTTPException(status_code=503, detail="session_memory_postgres_not_configured")
     return _build_postgres_session_memory_store(
         tenant_id=actor.tenant_id,
-        actor_identity_id=actor.user_id,
+        actor_identity_id=_postgres_actor_identity_id(
+            actor,
+            database_url=profile.database_url,
+        ),
         database_url=profile.database_url,
     )
+
+
+def _postgres_actor_identity_id(actor: ActorContext, *, database_url: str) -> str:
+    store = _build_postgres_actor_identity_store(database_url=database_url)
+    return store.upsert_identity(
+        issuer=actor.issuer,
+        subject=actor.user_id,
+    ).actor_identity_id
+
+
+def _build_postgres_actor_identity_store(
+    *,
+    database_url: str,
+) -> PostgresActorIdentityStore:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+        from psycopg.rows import dict_row
+
+        return psycopg.connect(connection_url, row_factory=dict_row)
+
+    return PostgresActorIdentityStore(connection_factory=connection_factory)
 
 
 def _build_postgres_session_memory_store(

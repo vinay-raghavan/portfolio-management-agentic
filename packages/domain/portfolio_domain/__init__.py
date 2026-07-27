@@ -89,6 +89,7 @@ from .fyers_integration import (
     actor_hash,
     hash_oauth_state,
 )
+from .actor_identity_store import ActorIdentityRecord, PostgresActorIdentityStore
 from .fyers_integration_store import PostgresFyersIntegrationStore
 from .market_data_store import (
     SQLiteMarketDataStore,
@@ -239,6 +240,7 @@ from .session_memory import (
 
 __all__ = [
     "ApprovalRequest",
+    "ActorIdentityRecord",
     "AuditEvent",
     "BacktestRequest",
     "BacktestResult",
@@ -304,6 +306,7 @@ __all__ = [
     "PatternStore",
     "PostgresResearchSearchPlan",
     "PostgresResearchStore",
+    "PostgresActorIdentityStore",
     "PostgresFyersIntegrationStore",
     "PostgresPaperExecutionStore",
     "PostgresSessionMemoryStore",

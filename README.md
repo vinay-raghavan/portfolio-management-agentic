@@ -324,6 +324,9 @@ credential-free. Production-like mode can set `OIDC_AUTH_ENABLED=true` with
 verify issuer, audience, signature, expiry, subject, tenant claim, roles, and
 optional `X-OIDC-Nonce`, and derive immutable user identity from `sub`.
 OIDC authorization callback state is validated with constant-time comparison.
+When a Postgres-backed store needs an actor foreign key, the service resolves
+`issuer + sub` through `actor_identities` and passes that stable UUID to the
+tenant-scoped table instead of storing raw subjects in UUID fields.
 
 Protected FYERS connection state is Postgres-backed when
 `PORTFOLIO_STORAGE_BACKEND=postgres`: the API stores sanitized
