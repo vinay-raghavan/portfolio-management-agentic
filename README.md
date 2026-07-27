@@ -346,6 +346,11 @@ podman compose up --build
 curl http://localhost:8000/v1/models/ollama/status
 ```
 
+The status endpoint uses configured inventory in CI/offline mode or a short
+private Ollama `/api/tags` probe at runtime. It does not send prompts; it
+reports route budgets, queue limits, capability readiness, model availability,
+and model-digest verification state.
+
 Prompt, routing, retrieval, and budget tuning are the initial optimization
 surface. Fine-tuning remains disabled until the eval harness has enough labeled
 examples and a repeatable residual failure class.

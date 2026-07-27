@@ -7,6 +7,7 @@ from portfolio_model_provider import (
     build_model_tuning_plan,
     load_model_provider_config,
     load_model_runtime_profile,
+    parse_ollama_tags_response,
 )
 
 
@@ -111,6 +112,56 @@ def test_model_capability_report_allows_configured_llama_local_profile() -> None
         "structured_outputs": True,
     }
     assert report.blocking_reasons == []
+
+
+def test_ollama_tags_parser_keeps_inventory_without_prompt_or_secret_payloads() -> None:
+    inventory = parse_ollama_tags_response(
+        {
+            "models": [
+                {
+                    "name": "llama3.1:8b",
+                    "model": "llama3.1:8b",
+                    "digest": "sha256:local-test",
+                    "size": 4_900_000_000,
+                    "modified_at": "2026-07-27T03:00:00Z",
+                },
+                {"name": "", "digest": "ignored"},
+            ]
+        }
+    )
+
+    metadata = inventory["llama3.1:8b"]
+    payload = metadata.to_dict()
+
+    assert set(inventory) == {"llama3.1:8b"}
+    assert metadata.digest == "sha256:local-test"
+    assert payload["digest_available"] is True
+    assert "digest" not in payload
+    assert "prompt" not in payload
+    assert "response" not in payload
+
+
+def test_model_capability_report_blocks_ollama_digest_mismatch() -> None:
+    profile = load_model_runtime_profile(
+        {
+            "LLM_PROVIDER": "ollama",
+            "LLM_MODEL": "llama3.1:8b",
+            "OLLAMA_BASE_URL": "http://host.containers.internal:11434",
+            "OLLAMA_MODEL_DIGEST": "sha256:expected",
+            "MODEL_SUPPORTS_TOOL_USE": "true",
+            "MODEL_SUPPORTS_STRUCTURED_OUTPUTS": "true",
+        }
+    )
+
+    report = build_model_capability_report(
+        profile,
+        available_model_ids={"llama3.1:8b"},
+        available_model_digests={"llama3.1:8b": "sha256:actual"},
+    )
+
+    assert report.startup_allowed is False
+    assert report.model_digest_verified is False
+    assert "model_digest_mismatch" in report.blocking_reasons
 
 
 def test_model_capability_report_does_not_block_default_remote_provider() -> None:
