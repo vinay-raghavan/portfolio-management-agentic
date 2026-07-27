@@ -3,6 +3,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from portfolio_domain import (
+    DatabaseBackend,
+    DatabaseRuntimeProfile,
+    evaluate_database_runtime_readiness,
+    load_database_runtime_profile,
+)
+
 
 REQUIRED_TABLES = {
     "tenants",
@@ -28,6 +35,7 @@ TENANT_SCOPED_TABLES = REQUIRED_TABLES - {"tenants", "actor_identities"}
 def test_postgres_env_defaults_are_documented_for_production_like_testing() -> None:
     env_example = Path(".env.example").read_text()
 
+    assert "PORTFOLIO_STORAGE_BACKEND=postgres" in env_example
     assert "PORTFOLIO_DATABASE_URL=postgresql+psycopg://portfolio:portfolio-dev-password@localhost:5432/portfolio_agentic" in env_example
     assert "POSTGRES_USER=portfolio" in env_example
     assert "POSTGRES_PASSWORD=portfolio-dev-password" in env_example
@@ -49,6 +57,7 @@ def test_compose_has_postgres_redis_and_migration_job() -> None:
     assert "image: redis:${REDIS_IMAGE_TAG:-7-alpine}" in compose
     assert "migrations:" in compose
     assert "uv run alembic -c infra/db/alembic.ini upgrade head" in compose
+    assert "PORTFOLIO_STORAGE_BACKEND: ${PORTFOLIO_STORAGE_BACKEND:-postgres}" in compose
     assert "PORTFOLIO_DATABASE_URL: ${PORTFOLIO_DATABASE_URL:-postgresql+psycopg://portfolio:portfolio-dev-password@postgres:5432/portfolio_agentic}" in compose
     assert "REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}" in compose
     assert "condition: service_healthy" in compose
@@ -98,3 +107,79 @@ def test_initial_postgres_migration_defines_platform_tables_with_tenant_isolatio
     assert "CREATE INDEX ix_paper_execution_grants_tenant_status_expires" in migration
     assert "tsvector" in migration
     assert "jsonb" in migration.lower()
+
+
+def test_database_runtime_profile_uses_postgres_as_production_like_backend() -> None:
+    profile = load_database_runtime_profile(
+        {
+            "PORTFOLIO_DATABASE_URL": "postgresql+psycopg://portfolio:super-secret@db.internal:5432/portfolio_agentic",
+            "REDIS_URL": "redis://:redis-secret@redis.internal:6379/0",
+            "PAPER_LEDGER_DB_PATH": "/data/paper-ledger.db",
+            "MARKET_DATA_DB_PATH": "/data/market-data.db",
+            "PROVIDER_CONFIG_DB_PATH": "/data/provider-config.db",
+        }
+    )
+    readiness = evaluate_database_runtime_readiness(
+        profile,
+        require_production_like=True,
+    )
+
+    assert isinstance(profile, DatabaseRuntimeProfile)
+    assert profile.backend == DatabaseBackend.POSTGRES
+    assert profile.production_like is True
+    assert profile.migrations_required is True
+    assert profile.alembic_config_path == "infra/db/alembic.ini"
+    assert profile.redacted_database_url == (
+        "postgresql+psycopg://portfolio:***@db.internal:5432/portfolio_agentic"
+    )
+    assert profile.redacted_redis_url == "redis://:***@redis.internal:6379/0"
+    assert profile.sqlite_paths == {
+        "paper_ledger": "/data/paper-ledger.db",
+        "market_data": "/data/market-data.db",
+        "provider_config": "/data/provider-config.db",
+    }
+    assert readiness.ready is True
+    assert readiness.blocking_reasons == ()
+    assert "super-secret" not in profile.to_dict().values()
+    assert "redis-secret" not in profile.to_dict().values()
+
+
+def test_database_runtime_profile_keeps_sqlite_as_explicit_offline_backend() -> None:
+    profile = load_database_runtime_profile(
+        {
+            "PAPER_LEDGER_DB_PATH": "data/paper-ledger.db",
+            "MARKET_DATA_DB_PATH": "data/market-data.db",
+            "PROVIDER_CONFIG_DB_PATH": "data/provider-config.db",
+        }
+    )
+    readiness = evaluate_database_runtime_readiness(
+        profile,
+        require_production_like=True,
+    )
+
+    assert profile.backend == DatabaseBackend.SQLITE
+    assert profile.production_like is False
+    assert profile.migrations_required is False
+    assert profile.database_url is None
+    assert profile.redacted_database_url is None
+    assert profile.sqlite_paths == {
+        "paper_ledger": "data/paper-ledger.db",
+        "market_data": "data/market-data.db",
+        "provider_config": "data/provider-config.db",
+    }
+    assert readiness.ready is False
+    assert readiness.blocking_reasons == ("postgres_required_for_production_like_testing",)
+
+
+def test_database_runtime_profile_fails_closed_on_missing_postgres_url() -> None:
+    profile = load_database_runtime_profile({"PORTFOLIO_STORAGE_BACKEND": "postgres"})
+    readiness = evaluate_database_runtime_readiness(
+        profile,
+        require_production_like=True,
+    )
+
+    assert profile.backend == DatabaseBackend.POSTGRES
+    assert profile.production_like is True
+    assert profile.migrations_required is True
+    assert readiness.ready is False
+    assert readiness.blocking_reasons == ("postgres_database_url_missing",)

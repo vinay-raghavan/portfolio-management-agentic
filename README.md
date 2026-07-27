@@ -24,7 +24,7 @@ explicit safety policy.
 - Capstone evidence manifest generation is available through `scripts/build_capstone_evidence.py`; it summarizes deterministic verification, container services, implemented workflow evidence, eval baseline status, eval submission readiness, and remaining submission gaps without local paths or secret values.
 - Agent workflow-routing guidance is embedded in the ADK instruction and eval rubric so pre-market, provider-readiness, candidate explanation, recommendation-to-paper-order, approval-gated fill, reporting, feature-navigation, and forbidden-action requests have explicit safe tool paths before the first credentialed baseline. Model-facing MCP tool descriptions now name policy tiers and high-risk workflow sequencing constraints.
 - Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with paper-order readiness preflight cards, guided configured-source onboarding, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, import-gate visibility on decision pages, provider profiles, refresh readiness, full-refresh controls, per-provider backoff state, and import-job feedback.
-- SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`; SQLite-backed market-data, provider-context, and screener-run persistence is available through `MARKET_DATA_DB_PATH`; provider profile and import-job metadata persistence is available through `PROVIDER_CONFIG_DB_PATH`. Compose mounts a named volume at `/data` for shared local runtime state.
+- Storage mode is explicit through `PORTFOLIO_STORAGE_BACKEND`. Root Compose defaults to `postgres` for production-like testing and runs Alembic migrations before app services start. Local/offline app runs may set `PORTFOLIO_STORAGE_BACKEND=sqlite`; SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`, market-data/provider-context/screener-run persistence through `MARKET_DATA_DB_PATH`, and provider profile/import-job metadata through `PROVIDER_CONFIG_DB_PATH`.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile.
 - A public-safe capstone package includes a presentation deck, 16:9 architecture and workflow visuals, selected product screenshots, a redacted eval summary, a Kaggle writeup, and a sub-five-minute video storyboard under `docs/capstone`.
 - No copied portfolio data.
@@ -228,12 +228,17 @@ flowchart TB
     end
 ```
 
-Current local Compose mode uses shared SQLite databases when `PAPER_LEDGER_DB_PATH`,
-`MARKET_DATA_DB_PATH`, and `PROVIDER_CONFIG_DB_PATH` are set. The Compose
-defaults are `/data/paper-ledger.db`, `/data/market-data.db`, and
-`/data/provider-config.db` on the `paper-ledger-data` volume; the local
-`.env.example` defaults are `data/paper-ledger.db`, `data/market-data.db`, and
-`data/provider-config.db`.
+Compose mode sets `PORTFOLIO_STORAGE_BACKEND=postgres` by default and treats
+Postgres plus Alembic as the production-like storage path. The service runtime
+profile redacts database and Redis credentials in status/readiness payloads and
+fails production-like readiness when Postgres is not selected or the database
+URL is missing. SQLite paths remain available for local/offline compatibility
+while individual stores are ported: `PAPER_LEDGER_DB_PATH`,
+`MARKET_DATA_DB_PATH`, and `PROVIDER_CONFIG_DB_PATH`. Compose defaults for
+those compatibility stores are `/data/paper-ledger.db`,
+`/data/market-data.db`, and `/data/provider-config.db` on the
+`paper-ledger-data` volume; the agent-service-local `.env.example` keeps
+relative `../../data/*.db` paths for fast credential-free tests.
 
 The production-like storage target is Postgres, with tenant-scoped tables for
 sessions, FYERS/provider connections, normalized snapshots, research documents,
