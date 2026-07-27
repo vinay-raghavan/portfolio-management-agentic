@@ -7,7 +7,9 @@ from portfolio_domain import (
     FyersConnection,
     FyersOAuthSession,
     PostgresFyersIntegrationStore,
+    ProviderRefreshJob,
     actor_hash,
+    get_fyers_readonly_connector,
 )
 
 
@@ -223,4 +225,91 @@ def test_postgres_fyers_store_clears_connection_sessions_without_cross_tenant_sc
     assert params["tenant_id"] == TENANT_ID
     assert params["connection_id"] == CONNECTION_ID
     assert params["consumed_at"] == NOW
+    assert connection.committed is True
+
+
+def test_postgres_fyers_store_records_refresh_job_and_normalized_snapshots() -> None:
+    cursor = _FakeCursor()
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+    connector = get_fyers_readonly_connector()
+    quote = connector.get_quote_envelope("INFY")
+    account_snapshot = connector.get_account_snapshot()
+    job = ProviderRefreshJob.created(
+        tenant_id=TENANT_ID,
+        requested_by_actor_id="oidc-subject-1",
+        refresh_type="account_snapshot",
+        now=NOW,
+    ).completed(snapshot_count=2, now=NOW)
+
+    store.record_refresh_result(
+        job=job,
+        connection_id=CONNECTION_ID,
+        snapshots=(quote,),
+        account_snapshot=account_snapshot,
+    )
+
+    refresh_sql, refresh_params = cursor.executed[0]
+    quote_sql, quote_params = cursor.executed[1]
+    account_envelope_sql, account_envelope_params = cursor.executed[2]
+    account_sql, account_params = cursor.executed[3]
+    serialized = f"{cursor.executed}".lower()
+    assert "INSERT INTO provider_refresh_jobs" in refresh_sql
+    assert refresh_params["tenant_id"] == TENANT_ID
+    assert refresh_params["provider"] == "fyers"
+    assert refresh_params["connection_id"] == CONNECTION_ID
+    assert refresh_params["job_type"] == "account_snapshot"
+    assert refresh_params["status"] == "succeeded"
+    assert refresh_params["requested_by"] == "oidc-subject-1"
+    assert refresh_params["error"] is None
+    assert "INSERT INTO provider_snapshot_envelopes" in quote_sql
+    assert quote_params["snapshot_type"] == "quote"
+    assert quote_params["status"] == "fresh"
+    assert quote_params["payload"]["symbol"] == "NSE:INFY-EQ"
+    assert quote_params["provenance"]["fixture_version"] == "fyers-readonly-fixture/v1"
+    assert "INSERT INTO provider_snapshot_envelopes" in account_envelope_sql
+    assert account_envelope_params["snapshot_type"] == "broker_account"
+    assert account_envelope_params["payload"]["positions"][1]["signed_quantity"] == -1
+    assert "INSERT INTO broker_account_snapshots" in account_sql
+    assert account_params["provider_snapshot_id"] == account_envelope_params["snapshot_id"]
+    assert account_params["holdings"][0]["symbol"] == "NSE:INFY-EQ"
+    assert account_params["positions"][1]["signed_quantity"] == -1
+    assert account_params["funds"]["currency"] == "INR"
+    assert connection.committed is True
+    assert "access_token" not in serialized
+    assert "refresh_token" not in serialized
+    assert "client_secret" not in serialized
+    assert "trading_token" not in serialized
+    assert "paper_ledger" not in serialized
+
+
+def test_postgres_fyers_store_records_refresh_errors_without_empty_fallbacks() -> None:
+    cursor = _FakeCursor()
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+    job = ProviderRefreshJob.created(
+        tenant_id=TENANT_ID,
+        requested_by_actor_id="oidc-subject-1",
+        refresh_type="quote",
+        now=NOW,
+    ).completed(snapshot_count=0, errors=("No FYERS fixture quote for NSE:MISSING-EQ",), now=NOW)
+
+    store.record_refresh_result(
+        job=job,
+        connection_id=CONNECTION_ID,
+        snapshots=(),
+        account_snapshot=None,
+    )
+
+    assert len(cursor.executed) == 1
+    sql, params = cursor.executed[0]
+    serialized = f"{sql} {params}".lower()
+    assert "INSERT INTO provider_refresh_jobs" in sql
+    assert params["status"] == "failed"
+    assert params["error"] == {
+        "error_count": 1,
+        "errors": ["No FYERS fixture quote for NSE:MISSING-EQ"],
+    }
+    assert "yahoo" not in serialized
+    assert "empty holdings" not in serialized
     assert connection.committed is True
