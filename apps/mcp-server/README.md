@@ -58,7 +58,11 @@ remove paper-order next actions until refresh/reconciliation is reviewed. Use
 execution. Configured refreshes can import normalized market, universe,
 fundamentals, sentiment, volatility, and macro records into structured local
 storage. Scheduled refresh orchestration reports ready, stale, retry-due, and
-backoff state. Refresh jobs do not store resolved paths or raw provider payloads.
+backoff states. `PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH` /
+`PORTFOLIO_PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH` makes the model-visible
+schedule tool return a blocked result before validation, storage-status checks,
+metadata-job persistence, or imports run.
+Refresh jobs do not store resolved paths or raw provider payloads.
 `create_paper_order_proposal` builds the same readiness evidence into a
 `paper-order-readiness-preflight/v1` snapshot before draft creation. Blocked
 preflights return no paper order; ready preflights are stored on the order and

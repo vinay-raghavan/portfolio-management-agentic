@@ -551,6 +551,11 @@ stale-data readiness, and import configured market and provider-context records
 into tenant-scoped Postgres in production-like mode or into the explicit SQLite
 fallback when `MARKET_DATA_DB_PATH` is configured. They do not store raw
 provider payloads or resolved local paths.
+Set `PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH=true` or
+`PORTFOLIO_PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH=true` on both
+`agent-service` and `mcp-server` to make scheduled configured-provider refresh
+cycles return `blocked` before validation, metadata-job persistence, storage
+status checks, or market/context imports run.
 
 The local Ollama runtime is model-profile driven. The first pilot model is
 `llama3.1:8b`; containers should use a private native host gateway unless a

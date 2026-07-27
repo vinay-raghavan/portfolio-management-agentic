@@ -137,6 +137,40 @@ def test_provider_refresh_schedule_records_backoff_and_staleness(
     assert "private_key" not in combined
 
 
+def test_provider_refresh_schedule_kill_switch_blocks_before_writes(
+    tmp_path,
+) -> None:
+    env = _configured_schedule_env(tmp_path)
+    env["PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH"] = "true"
+
+    result = run_provider_refresh_schedule(
+        env=env,
+        trigger="scheduled_contract",
+        current_at="2026-06-22T09:30:00+05:30",
+    )
+
+    assert result["status"] == "blocked"
+    assert result["provider_refresh_scheduler_kill_switch_active"] is True
+    assert result["blocking_reasons"] == [
+        "provider_refresh_scheduler_kill_switch_active"
+    ]
+    assert result["summary"]["providers_evaluated"] == 0
+    assert result["summary"]["jobs_recorded"] == 0
+    assert result["jobs"] == []
+    assert result["readiness"] == []
+    assert not Path(env[PROVIDER_CONFIG_DB_ENV]).exists()
+    assert not Path(env[MARKET_DATA_DB_ENV]).exists()
+
+    combined = f"{result}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-market-schedule" not in combined
+    assert "private-macro-schedule" not in combined
+    assert "private-sentiment-schedule" not in combined
+    assert "api_key" not in combined
+    assert "token" not in combined
+    assert "private_key" not in combined
+
+
 def test_provider_refresh_schedule_reports_current_run_readiness_without_metadata_db(
     tmp_path,
 ) -> None:

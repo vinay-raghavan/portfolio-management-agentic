@@ -866,6 +866,17 @@ def run_provider_refresh_schedule(
     result = run_domain_provider_refresh_schedule(
         stale_after_seconds=bounded_stale_after,
     )
+    if result["status"] == "blocked":
+        return {
+            "status": result["status"],
+            "policy": decision.to_dict(),
+            "storage": {
+                "status": "not_checked",
+                "reason": "provider_refresh_scheduler_kill_switch_active",
+            },
+            "schedule": result,
+            "next_step": "scheduler_blocked",
+        }
     return {
         "status": result["status"],
         "policy": decision.to_dict(),
