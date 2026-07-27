@@ -4,7 +4,6 @@ configure_monorepo_paths()
 
 from .tools import (  # noqa: E402
     EXPOSED_TOOL_NAMES,
-    approve_paper_order_simulation,
     create_backtest_request,
     create_pre_market_briefing,
     create_paper_order_proposal,
@@ -25,7 +24,6 @@ from .tools import (  # noqa: E402
     get_market_data_snapshot,
     get_pattern_playbook,
     get_paper_portfolio_accounting,
-    get_broker_trading_token,
     get_portfolio_summary,
     get_provider_refresh_readiness,
     get_recommendation_explanation,
@@ -50,7 +48,6 @@ from .tools import (  # noqa: E402
     list_screener_runs,
     list_strategy_drafts,
     list_universes,
-    place_live_order,
     run_screener,
     run_momentum_screener,
     search_curated_research,
@@ -63,7 +60,6 @@ from .tools import (  # noqa: E402
 
 __all__ = [
     "EXPOSED_TOOL_NAMES",
-    "approve_paper_order_simulation",
     "create_backtest_request",
     "create_pre_market_briefing",
     "create_paper_order_proposal",
@@ -84,7 +80,6 @@ __all__ = [
     "get_market_data_snapshot",
     "get_pattern_playbook",
     "get_paper_portfolio_accounting",
-    "get_broker_trading_token",
     "get_portfolio_summary",
     "get_provider_refresh_readiness",
     "get_recommendation_explanation",
@@ -109,7 +104,6 @@ __all__ = [
     "list_screener_runs",
     "list_strategy_drafts",
     "list_universes",
-    "place_live_order",
     "run_screener",
     "run_momentum_screener",
     "search_curated_research",

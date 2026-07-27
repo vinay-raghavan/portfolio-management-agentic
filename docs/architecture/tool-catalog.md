@@ -68,10 +68,13 @@ repository `SKILL.md` workflow instructions.
 
 ## Forbidden Compatibility Traps
 
-These functions exist only for deterministic policy tests and must not be registered as MCP tools:
+These functions exist only for protected server-side paths or deterministic
+policy tests and must not be registered as MCP tools or exported from the
+package-level `portfolio_mcp` public API:
 
 | Tool | Tier | Reason |
 | --- | --- | --- |
+| `approve_paper_order_simulation` | approval-required | Human approval identity belongs to the protected API `ActorContext`, not model-visible MCP. |
 | `place_live_order` | forbidden | Live order placement is out of scope and unsafe. |
 | `get_broker_trading_token` | forbidden | Broker trading-token access is prohibited. |
 

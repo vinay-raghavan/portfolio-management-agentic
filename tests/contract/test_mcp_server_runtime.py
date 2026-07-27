@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
+import portfolio_mcp
 from portfolio_mcp import server as mcp_server
 from portfolio_mcp.tools import EXPOSED_TOOL_NAMES
 
@@ -29,3 +30,15 @@ def test_mcp_server_registers_only_safe_tools() -> None:
     assert "place_live_order" not in tool_names
     assert "get_broker_trading_token" not in tool_names
     assert "approve_paper_order_simulation" not in tool_names
+
+
+def test_mcp_package_public_exports_exclude_human_approval_and_forbidden_traps() -> None:
+    public_exports = set(portfolio_mcp.__all__)
+
+    assert EXPOSED_TOOL_NAMES <= public_exports
+    assert "approve_paper_order_simulation" not in public_exports
+    assert "place_live_order" not in public_exports
+    assert "get_broker_trading_token" not in public_exports
+    assert not hasattr(portfolio_mcp, "approve_paper_order_simulation")
+    assert not hasattr(portfolio_mcp, "place_live_order")
+    assert not hasattr(portfolio_mcp, "get_broker_trading_token")
