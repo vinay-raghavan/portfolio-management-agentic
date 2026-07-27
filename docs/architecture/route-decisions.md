@@ -27,9 +27,23 @@ The router currently returns a `RouteDecision` for:
 - `approve_paper_order_simulation` and `simulate_approved_paper_fill` remain
   outside model-selected approval routes.
 
+## Route tool bundles
+
+`RouteToolBundle` is the least-privilege model-visible tool contract derived
+from a `RouteDecision`. Capability routes receive exactly the selected
+manifest's allowed tools, filtered to tools that are exposed and within the
+manifest's maximum action tier. Forbidden, FYERS refresh/OAuth, and human
+approval routes return an empty model-visible bundle and point callers to the
+protected human API when applicable.
+
+Schema-constrained classification may resolve only read-only capabilities.
+Invalid, unknown, low-confidence, or non-read-only classified capabilities must
+fall back to clarification rather than widening the tool bundle.
+
 ## Integration path
 
-The next runtime slice should call `DeterministicRouter` before constructing a
-model request. If the decision is `needs_classification`, a schema-constrained
-classifier may choose among read-only capabilities and must fall back to
-clarification for invalid or low-confidence output.
+The runtime should call `DeterministicRouter` before constructing a model
+request, then build a `RouteToolBundle` before context packing or model calls.
+If the decision is `needs_classification`, a schema-constrained classifier may
+choose among read-only capabilities and must fall back to clarification for
+invalid or low-confidence output.
