@@ -136,6 +136,8 @@ from .paper_execution_worker_runner import (
     PaperExecutionFairQueueRunnerWorkerSummary,
     PaperExecutionQueueRunner,
     PaperExecutionQueueRunnerSummary,
+    PaperExecutionRedisScheduleState,
+    PaperExecutionWorkerScheduleState,
     build_postgres_paper_execution_fair_worker,
     build_postgres_paper_execution_worker,
 )
@@ -261,6 +263,8 @@ __all__ = [
     "PaperExecutionQueueProcessorResult",
     "PaperExecutionQueueRunner",
     "PaperExecutionQueueRunnerSummary",
+    "PaperExecutionRedisScheduleState",
+    "PaperExecutionWorkerScheduleState",
     "PaperExecutionWorkItem",
     "PaperExecutionWorkerRequest",
     "PaperFill",
