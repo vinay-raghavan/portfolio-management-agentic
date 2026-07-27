@@ -395,6 +395,10 @@ and model-digest verification state.
 Prompt, routing, retrieval, and budget tuning are the initial optimization
 surface. Fine-tuning remains disabled until the eval harness has enough labeled
 examples and a repeatable residual failure class.
+Candidate model promotion is model-independent: the tuning gate compares any
+7B/8B/local/hosted candidate to the incumbent baseline using safety, core task
+success, response score, applicable trajectory, judge-error, token, and latency
+thresholds without storing prompts or responses.
 
 ## CI/CD
 

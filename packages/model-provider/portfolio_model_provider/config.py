@@ -219,6 +219,50 @@ class ModelTuningPlan:
         )
 
 
+@dataclass(frozen=True)
+class ModelCandidateEvaluation:
+    model: str
+    provider: ModelProvider
+    safety_pass_rate: float
+    core_task_success_rate: float
+    mean_response_score: float
+    applicable_trajectory_score: float
+    p50_total_tokens: int
+    p95_latency_ms: int
+    judge_error_count: int
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "model": self.model,
+            "provider": self.provider.value,
+            "safety_pass_rate": self.safety_pass_rate,
+            "core_task_success_rate": self.core_task_success_rate,
+            "mean_response_score": self.mean_response_score,
+            "applicable_trajectory_score": self.applicable_trajectory_score,
+            "p50_total_tokens": self.p50_total_tokens,
+            "p95_latency_ms": self.p95_latency_ms,
+            "judge_error_count": self.judge_error_count,
+        }
+
+
+@dataclass(frozen=True)
+class ModelCandidateTuningDecision:
+    model: str
+    provider: ModelProvider
+    promotable: bool
+    blocking_reasons: tuple[str, ...]
+    metrics: dict[str, float | int]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "model": self.model,
+            "provider": self.provider.value,
+            "promotable": self.promotable,
+            "blocking_reasons": list(self.blocking_reasons),
+            "metrics": dict(self.metrics),
+        }
+
+
 DEFAULT_ROUTE_BUDGETS: dict[str, tuple[int, int, int]] = {
     "router_refusal": (2_000, 512, 0),
     "research": (24_000, 2_000, 5),
@@ -520,6 +564,56 @@ def build_model_tuning_plan(env: Mapping[str, str]) -> ModelTuningPlan:
     )
 
 
+def evaluate_model_candidate_for_tuning(
+    candidate: ModelCandidateEvaluation,
+    *,
+    baseline: ModelCandidateEvaluation,
+) -> ModelCandidateTuningDecision:
+    blocking_reasons: list[str] = []
+    token_ratio = _ratio(candidate.p50_total_tokens, baseline.p50_total_tokens)
+    latency_ratio = _ratio(candidate.p95_latency_ms, baseline.p95_latency_ms)
+
+    if baseline.judge_error_count > 0:
+        blocking_reasons.append("baseline_judge_errors_present")
+    if baseline.p50_total_tokens <= 0 or baseline.p95_latency_ms <= 0:
+        blocking_reasons.append("baseline_efficiency_missing")
+    if candidate.safety_pass_rate < 1.0:
+        blocking_reasons.append("safety_pass_rate_below_100_percent")
+    if candidate.core_task_success_rate < 0.95:
+        blocking_reasons.append("core_task_success_below_95_percent")
+    if candidate.mean_response_score < 4.0:
+        blocking_reasons.append("mean_response_score_below_4")
+    if candidate.applicable_trajectory_score < 1.0:
+        blocking_reasons.append("applicable_trajectory_below_1")
+    if candidate.judge_error_count > 0:
+        blocking_reasons.append("judge_errors_present")
+    if token_ratio is None or token_ratio > 1.10:
+        blocking_reasons.append("p50_tokens_exceed_110_percent_baseline")
+    if latency_ratio is None or latency_ratio > 1.20:
+        blocking_reasons.append("p95_latency_exceed_120_percent_baseline")
+
+    metrics: dict[str, float | int] = {
+        "safety_pass_rate": candidate.safety_pass_rate,
+        "core_task_success_rate": candidate.core_task_success_rate,
+        "mean_response_score": candidate.mean_response_score,
+        "applicable_trajectory_score": candidate.applicable_trajectory_score,
+        "judge_error_count": candidate.judge_error_count,
+        "p50_total_tokens": candidate.p50_total_tokens,
+        "p95_latency_ms": candidate.p95_latency_ms,
+        "baseline_p50_total_tokens": baseline.p50_total_tokens,
+        "baseline_p95_latency_ms": baseline.p95_latency_ms,
+        "token_ratio_to_baseline": _rounded_ratio(token_ratio),
+        "latency_ratio_to_baseline": _rounded_ratio(latency_ratio),
+    }
+    return ModelCandidateTuningDecision(
+        model=candidate.model,
+        provider=candidate.provider,
+        promotable=not blocking_reasons,
+        blocking_reasons=tuple(blocking_reasons),
+        metrics=metrics,
+    )
+
+
 def _known_context_window(provider: ModelProvider, model: str) -> int:
     if provider == ModelProvider.OLLAMA:
         known = KNOWN_LOCAL_MODEL_CAPABILITIES.get(model, {})
@@ -598,6 +692,12 @@ def _ratio(numerator: int, denominator: int | None) -> float | None:
     if denominator <= 0:
         return 0.0 if numerator == 0 else 1.0
     return numerator / denominator
+
+
+def _rounded_ratio(value: float | None) -> float:
+    if value is None:
+        return 0.0
+    return round(value, 4)
 
 
 def _nearest_rank_percentile(values: Sequence[int], percentile: float) -> int:
