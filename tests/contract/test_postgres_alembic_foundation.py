@@ -42,6 +42,7 @@ def test_postgres_env_defaults_are_documented_for_production_like_testing() -> N
     assert "PAPER_EXECUTION_WORKER_ID=paper-execution-worker-1" in env_example
     assert "PAPER_EXECUTION_WORKER_MAX_ITEMS=100" in env_example
     assert "PAPER_EXECUTION_WORKER_IDLE_SLEEP_SECONDS=5" in env_example
+    assert "PAPER_EXECUTION_WORKER_SCHEDULE_BACKOFF_SECONDS=30" in env_example
     assert "POSTGRES_USER=portfolio" in env_example
     assert "POSTGRES_PASSWORD=portfolio-dev-password" in env_example
     assert "POSTGRES_DB=portfolio_agentic" in env_example
@@ -67,6 +68,7 @@ def test_compose_has_postgres_redis_and_migration_job() -> None:
     assert "PORTFOLIO_TENANT_IDS: ${PORTFOLIO_TENANT_IDS:-}" in compose
     assert "PORTFOLIO_TENANT_ID: ${PORTFOLIO_TENANT_ID:-11111111-1111-1111-1111-111111111111}" in compose
     assert "PAPER_EXECUTION_WORKER_ID: ${PAPER_EXECUTION_WORKER_ID:-paper-execution-worker-1}" in compose
+    assert "PAPER_EXECUTION_WORKER_SCHEDULE_BACKOFF_SECONDS: ${PAPER_EXECUTION_WORKER_SCHEDULE_BACKOFF_SECONDS:-30}" in compose
     assert "uv run alembic -c infra/db/alembic.ini upgrade head" in compose
     assert "COPY ./scripts/process_paper_execution_queue.py ./scripts/process_paper_execution_queue.py" in agent_dockerfile
     assert "PORTFOLIO_STORAGE_BACKEND: ${PORTFOLIO_STORAGE_BACKEND:-postgres}" in compose
@@ -76,6 +78,9 @@ def test_compose_has_postgres_redis_and_migration_job() -> None:
     assert "condition: service_completed_successfully" in compose
     assert "postgres-data:" in compose
     assert "redis-data:" in compose
+
+    pyproject = Path("apps/agent-service/pyproject.toml").read_text()
+    assert '"redis>=6.2,<9"' in pyproject
 
 
 def test_alembic_config_and_environment_are_env_driven() -> None:

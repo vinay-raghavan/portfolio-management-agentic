@@ -15,6 +15,7 @@ if str(DOMAIN_PATH) not in sys.path:
     sys.path.insert(0, str(DOMAIN_PATH))
 
 from portfolio_domain import (  # noqa: E402
+    PaperExecutionRedisScheduleState,
     build_postgres_paper_execution_fair_worker,
     load_database_runtime_profile,
 )
@@ -68,6 +69,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Continue polling after idle cycles. Default exits after one idle cycle.",
     )
+    parser.add_argument(
+        "--redis-url",
+        default=os.environ.get("REDIS_URL", ""),
+        help="Redis URL for distributed worker schedule/backoff state.",
+    )
+    parser.add_argument(
+        "--schedule-backoff-seconds",
+        type=int,
+        default=int(
+            os.environ.get("PAPER_EXECUTION_WORKER_SCHEDULE_BACKOFF_SECONDS", "30")
+        ),
+        help="Short Redis backoff duration after a tenant-scoped worker failure.",
+    )
     return parser.parse_args(argv)
 
 
@@ -98,11 +112,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     profile = load_database_runtime_profile(os.environ)
+    schedule_state = build_schedule_state(
+        redis_url=args.redis_url,
+        worker_id=args.worker_id,
+        backoff_seconds=args.schedule_backoff_seconds,
+    )
     runner = build_postgres_paper_execution_fair_worker(
         tenant_ids=tenant_ids,
         database_url=profile.database_url,
         backend=profile.backend,
         worker_id=args.worker_id,
+        schedule_state=schedule_state,
     )
 
     while True:
@@ -131,6 +151,31 @@ def parse_tenant_ids(
         clean.append(tenant_id)
         seen.add(tenant_id)
     return tuple(clean)
+
+
+def build_schedule_state(
+    *,
+    redis_url: str,
+    worker_id: str,
+    backoff_seconds: int = 30,
+    redis_factory=None,
+) -> PaperExecutionRedisScheduleState | None:
+    clean_redis_url = redis_url.strip()
+    if not clean_redis_url:
+        return None
+    if redis_factory is None:
+        from redis import Redis
+
+        redis_factory = Redis.from_url
+    return PaperExecutionRedisScheduleState(
+        redis_client=redis_factory(clean_redis_url),
+        key_prefix=f"portfolio:paper-execution-worker:{_safe_key_part(worker_id)}",
+        backoff_seconds=max(int(backoff_seconds), 1),
+    )
+
+
+def _safe_key_part(value: str) -> str:
+    return value.strip().replace(":", "_") or "worker"
 
 
 if __name__ == "__main__":

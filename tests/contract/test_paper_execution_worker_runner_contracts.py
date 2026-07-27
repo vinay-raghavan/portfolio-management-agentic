@@ -15,6 +15,8 @@ from portfolio_domain import (
     PaperExecutionQueueProcessor,
     PaperExecutionQueueProcessorResult,
     PaperExecutionQueueRunner,
+    PaperExecutionRedisScheduleState,
+    PaperExecutionWorkerScheduleState,
     PaperExecutionWorkItem,
     build_postgres_paper_execution_fair_worker,
     build_postgres_paper_execution_worker,
@@ -152,6 +154,47 @@ class _ScriptedProcessor:
             work_item_id=work_item_id or f"work-{self.worker_id}",
             decision=None,
         )
+
+
+class _FakeScheduleState:
+    def __init__(
+        self,
+        *,
+        backed_off: set[str] | None = None,
+    ) -> None:
+        self.backed_off = backed_off or set()
+        self.marked: list[tuple[str, str]] = []
+
+    def order_worker_ids(self, worker_ids: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(reversed(worker_ids))
+
+    def worker_is_backed_off(self, worker_id: str, *, now: datetime) -> bool:
+        return worker_id in self.backed_off
+
+    def mark_worker_result(
+        self,
+        *,
+        worker_id: str,
+        status: str,
+        now: datetime,
+    ) -> None:
+        self.marked.append((worker_id, status))
+
+
+class _FakeRedisClient:
+    def __init__(self) -> None:
+        self.values: dict[str, bytes] = {}
+        self.expiring: dict[str, tuple[str, int]] = {}
+
+    def get(self, key: str):
+        return self.values.get(key)
+
+    def set(self, key: str, value: str) -> None:
+        self.values[key] = value.encode()
+
+    def setex(self, key: str, seconds: int, value: str) -> None:
+        self.expiring[key] = (value, seconds)
+        self.values[key] = value.encode()
 
 
 def _policy() -> PaperExecutionPolicyCeiling:
@@ -384,3 +427,66 @@ def test_postgres_fair_worker_factory_requires_at_least_one_tenant() -> None:
             database_url="postgresql+psycopg://portfolio:secret@postgres/db",
             backend=DatabaseBackend.POSTGRES,
         )
+
+
+def test_fair_worker_runner_uses_schedule_state_for_order_and_backoff() -> None:
+    call_order: list[str] = []
+    schedule_state = _FakeScheduleState(backed_off={"paper-worker:tenant-a"})
+    runner = PaperExecutionFairQueueRunner(
+        processors=(
+            _ScriptedProcessor(
+                worker_id="paper-worker:tenant-a",
+                statuses=["processed"],
+                call_order=call_order,
+            ),
+            _ScriptedProcessor(
+                worker_id="paper-worker:tenant-b",
+                statuses=["processed"],
+                call_order=call_order,
+            ),
+        ),
+        schedule_state=schedule_state,
+        now=lambda: NOW,
+    )
+
+    summary = runner.run_until_idle(max_items=2)
+
+    assert call_order == ["paper-worker:tenant-b", "paper-worker:tenant-b"]
+    assert summary.processed == 1
+    assert summary.total_attempted == 1
+    assert summary.idle is True
+    assert schedule_state.marked == [("paper-worker:tenant-b", "processed")]
+
+
+def test_redis_schedule_state_rotates_workers_and_records_failure_backoff() -> None:
+    client = _FakeRedisClient()
+    state: PaperExecutionWorkerScheduleState = PaperExecutionRedisScheduleState(
+        redis_client=client,
+        key_prefix="paper:worker",
+        backoff_seconds=30,
+        now=lambda: NOW,
+    )
+    client.set("paper:worker:cursor", "paper-worker:tenant-a")
+
+    assert state.order_worker_ids(
+        ("paper-worker:tenant-a", "paper-worker:tenant-b", "paper-worker:tenant-c")
+    ) == (
+        "paper-worker:tenant-b",
+        "paper-worker:tenant-c",
+        "paper-worker:tenant-a",
+    )
+
+    state.mark_worker_result(
+        worker_id="paper-worker:tenant-b",
+        status="failed",
+        now=NOW,
+    )
+
+    assert client.values["paper:worker:cursor"] == b"paper-worker:tenant-b"
+    assert client.expiring["paper:worker:backoff:paper-worker_tenant-b"] == (
+        (NOW + timedelta(seconds=30)).isoformat(),
+        30,
+    )
+    assert state.worker_is_backed_off("paper-worker:tenant-b", now=NOW) is True
+    assert "secret" not in str(client.values).lower()
+    assert "fyers" not in str(client.values).lower()

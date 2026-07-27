@@ -114,8 +114,11 @@ Compose also deploys `paper-execution-worker`, a bounded Postgres-only queue
 loop around the same processor for background processing. When
 `PORTFOLIO_TENANT_IDS` is configured, the worker builds one tenant-scoped
 processor per tenant and polls them in round-robin order so a busy tenant cannot
-monopolize a local worker cycle. The next production hardening step is moving
-the tenant schedule/backoff state into Redis for distributed workers.
+monopolize a local worker cycle. When `REDIS_URL` is configured, the worker
+stores the tenant scheduling cursor and short-lived failure backoff in Redis so
+distributed workers converge on the same scheduling state without adding any
+model-visible authority. The next production hardening step is adding
+operator-visible worker health and backoff telemetry.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.
