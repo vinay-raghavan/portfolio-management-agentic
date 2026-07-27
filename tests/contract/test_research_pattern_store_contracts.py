@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from portfolio_domain import (
     FileBackedPatternStore,
     FileBackedResearchStore,
@@ -62,3 +64,13 @@ def test_file_backed_research_store_returns_ranked_hits_without_embeddings() -> 
     assert hits[0].source_status == "fresh"
     assert hits[0].metadata["pattern_id"] == "volatility-regime-sizing-v1"
     assert "embedding" not in str([hit.to_dict() for hit in hits]).lower()
+
+
+def test_file_backed_research_store_rejects_urls_and_empty_queries() -> None:
+    store = FileBackedResearchStore.from_pattern_cards(PATTERN_CARDS)
+
+    with pytest.raises(ValueError, match="empty"):
+        store.search("   ")
+
+    with pytest.raises(ValueError, match="arbitrary URLs"):
+        store.search("https://example.com/not-allowlisted")
