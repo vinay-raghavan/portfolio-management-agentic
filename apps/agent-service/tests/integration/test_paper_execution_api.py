@@ -237,6 +237,7 @@ class _FakePostgresPaperStore:
         self.grants = {}
         self.recorded_decisions = []
         self.idempotency_checks = []
+        self.conflict_on_record = False
 
     def upsert_policy_ceiling(self, policy):
         self.policies[policy.policy_id] = policy
@@ -299,6 +300,17 @@ class _FakePostgresPaperStore:
         fill_price: float,
         exposure_after,
     ):
+        if self.conflict_on_record:
+            return fast_api_app.PaperExecutionDecision(
+                status="rejected",
+                reasons=("duplicate_idempotency_key",),
+                fill=None,
+                audit_event={
+                    **decision.audit_event,
+                    "event_type": "paper_execution_rejected",
+                    "reasons": ("duplicate_idempotency_key",),
+                },
+            )
         self.recorded_decisions.append(
             {
                 "grant_id": grant.grant_id,
@@ -454,3 +466,63 @@ def test_paper_api_uses_postgres_ledger_for_duplicate_idempotency_keys(
         set(),
     )
     assert "db-secret" not in str(second_response.json()).lower()
+
+
+def test_paper_api_returns_rejection_when_postgres_ledger_insert_conflicts(
+    monkeypatch,
+) -> None:
+    fake_store = _FakePostgresPaperStore()
+    fake_store.conflict_on_record = True
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setattr(
+        fast_api_app,
+        "_build_postgres_paper_execution_store",
+        lambda *, tenant_id, database_url: fake_store,
+    )
+    client = TestClient(app)
+    policy_id = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+    batch_id = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+
+    client.post(
+        "/v1/paper/policies",
+        headers=_headers("admin-1", "admin"),
+        json=_policy_payload(policy_id),
+    )
+    client.post(
+        "/v1/paper/batches",
+        headers=_headers("analyst-1", "analyst"),
+        json=_batch_payload(batch_id),
+    )
+    approval_response = client.post(
+        f"/v1/paper/batches/{batch_id}/approve",
+        headers=_headers("approver-1", "approver"),
+        json={
+            "policy_id": policy_id,
+            "expires_at": _grant_expiry(),
+        },
+    )
+    grant_id = approval_response.json()["grant"]["grant_id"]
+
+    execute_response = client.post(
+        f"/v1/paper/orders/{quote(f'{batch_id}:0', safe='')}/execute",
+        headers=_headers("analyst-1", "analyst"),
+        json={
+            "grant_id": grant_id,
+            "idempotency_key": "idem-api-conflict",
+            "quote_price": 980,
+            "quote_as_of": (NOW - timedelta(seconds=10)).isoformat(),
+            "now": NOW.isoformat(),
+            "available_cash": 100_000,
+        },
+    )
+
+    assert execute_response.status_code == 409
+    assert execute_response.json()["status"] == "rejected"
+    assert execute_response.json()["decision"]["status"] == "rejected"
+    assert "duplicate_idempotency_key" in execute_response.json()["decision"]["reasons"]
+    assert fake_store.recorded_decisions == []
+    assert "db-secret" not in str(execute_response.json()).lower()

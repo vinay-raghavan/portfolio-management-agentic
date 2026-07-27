@@ -585,11 +585,11 @@ def _record_paper_execution_decision(
     decision: PaperExecutionDecision,
     fill_price: float,
     exposure_after: Mapping[str, object],
-) -> None:
+) -> PaperExecutionDecision:
     store = _paper_execution_store_for_actor(actor)
     if store is None:
-        return
-    store.record_execution_decision(
+        return decision
+    return store.record_execution_decision(
         grant=grant,
         batch_request=batch,
         order=order,
@@ -810,7 +810,7 @@ def post_paper_order_execute(
                 "mode": "paper_only",
             },
         )
-    _record_paper_execution_decision(
+    decision = _record_paper_execution_decision(
         actor,
         grant=grant,
         batch=batch,
@@ -822,6 +822,15 @@ def post_paper_order_execute(
             "net_notional": request.current_net_notional,
         },
     )
+    if decision.status != "accepted":
+        return JSONResponse(
+            status_code=409,
+            content={
+                "status": "rejected",
+                "decision": decision.to_dict(),
+                "mode": "paper_only",
+            },
+        )
     return {
         "status": "accepted",
         "decision": decision.to_dict(),

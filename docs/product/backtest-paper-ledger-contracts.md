@@ -47,9 +47,10 @@ This slice establishes the safe contract between research, simulation, and the f
   batch requests, execution grants, and idempotent ledger decision rows through
   tenant-scoped Postgres tables created by Alembic. It can revoke active grants
   atomically, checks the durable ledger for duplicate idempotency keys before
-  API execution, stores JSON-safe summaries only, and rejects FYERS, broker
-  trading-token, and credential-looking payload contamination before writes or
-  reads return domain contracts.
+  API execution, treats the unique ledger insert result as authoritative if a
+  concurrent request races the pre-check, stores JSON-safe summaries only, and
+  rejects FYERS, broker trading-token, and credential-looking payload
+  contamination before writes or reads return domain contracts.
 - The agent service exposes protected `/v1/paper/policies`,
   `/v1/paper/batches`, `/v1/paper/batches/{id}/approve|revoke`, and
   `/v1/paper/orders/{id}/execute` contracts. These endpoints derive requester
@@ -78,9 +79,11 @@ bound both symbols and future universe scopes without overloading fields.
 The protected HTTP endpoints keep local process state only as the
 SQLite/offline deterministic fallback. In Postgres mode, duplicate
 idempotency-key rejection reads from the tenant-scoped paper ledger instead of
-process memory. The next production hardening step is moving accepted
-execution-decision recording into a dedicated worker queue with durable grant
-capacity reservation.
+process memory, and a skipped `ON CONFLICT DO NOTHING ... RETURNING id` insert
+is returned to the API as a duplicate rejection rather than an accepted fill.
+The next production hardening step is moving accepted execution-decision
+recording into a dedicated worker queue with durable grant capacity
+reservation.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.
