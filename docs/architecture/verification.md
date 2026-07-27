@@ -244,8 +244,14 @@ LLM_MODEL=llama3.1:8b \
 OLLAMA_BASE_URL=http://host.containers.internal:11434 \
 podman compose up --build
 curl http://localhost:8000/v1/models/ollama/status
+curl http://localhost:8000/v1/models/tuning/status
 curl "http://localhost:8000/v1/storage/status?require_production_like=true"
 ```
+
+The model tuning status API is provider-neutral. It reports candidate model
+names, development and sealed holdout set identifiers, prompt/routing/retrieval
+tuning mode, disabled fine-tuning guardrails, and promotion thresholds without
+returning provider secrets, raw prompts, raw responses, or eval examples.
 
 For the optional Compose-managed Ollama profile, run
 `podman compose --profile ollama run --rm ollama-model-prepull` with
