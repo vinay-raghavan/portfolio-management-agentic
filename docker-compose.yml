@@ -66,6 +66,8 @@ services:
       MODEL_TUNING_HOLDOUT_SET: ${MODEL_TUNING_HOLDOUT_SET:-agent-service-sealed}
       PORTFOLIO_STORAGE_BACKEND: ${PORTFOLIO_STORAGE_BACKEND:-postgres}
       PORTFOLIO_DATABASE_URL: ${PORTFOLIO_DATABASE_URL:-postgresql+psycopg://portfolio:portfolio-dev-password@postgres:5432/portfolio_agentic}
+      PORTFOLIO_RESEARCH_STORE_BACKEND: ${PORTFOLIO_RESEARCH_STORE_BACKEND:-fixture}
+      PORTFOLIO_RESEARCH_TENANT_ID: ${PORTFOLIO_RESEARCH_TENANT_ID:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       ALLOW_ORIGINS: ${ALLOW_ORIGINS:-http://localhost:3000,http://localhost:8000}
       PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}
@@ -121,6 +123,8 @@ services:
       MCP_STATELESS_HTTP: ${MCP_STATELESS_HTTP:-true}
       PORTFOLIO_STORAGE_BACKEND: ${PORTFOLIO_STORAGE_BACKEND:-postgres}
       PORTFOLIO_DATABASE_URL: ${PORTFOLIO_DATABASE_URL:-postgresql+psycopg://portfolio:portfolio-dev-password@postgres:5432/portfolio_agentic}
+      PORTFOLIO_RESEARCH_STORE_BACKEND: ${PORTFOLIO_RESEARCH_STORE_BACKEND:-fixture}
+      PORTFOLIO_RESEARCH_TENANT_ID: ${PORTFOLIO_RESEARCH_TENANT_ID:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}
       MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}

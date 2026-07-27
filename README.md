@@ -280,6 +280,25 @@ The response reports the selected backend, migration requirement, redacted
 database/Redis URLs, SQLite compatibility paths, and readiness blocking
 reasons. It never returns raw database or Redis credentials.
 
+Curated research retrieval remains fixture-backed by default:
+
+```bash
+PORTFOLIO_RESEARCH_STORE_BACKEND=fixture
+```
+
+To use tenant-scoped Postgres full-text retrieval through the MCP
+`search_curated_research` tool, set both:
+
+```bash
+PORTFOLIO_RESEARCH_STORE_BACKEND=postgres
+PORTFOLIO_RESEARCH_TENANT_ID=<tenant-uuid>
+```
+
+Postgres research mode also requires `PORTFOLIO_DATABASE_URL`. If the tenant id
+or database URL is missing, the MCP tool returns an explicit configuration
+error and does not fall back to fixture hits. Runtime database failures return a
+redacted unavailable response.
+
 The default data-provider mode is offline-safe fixtures. To enable configured
 read-only market-data, universe, fundamentals, sentiment, volatility, and macro
 adapters, set:

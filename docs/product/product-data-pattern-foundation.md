@@ -148,8 +148,11 @@ The implementation sequence for this foundation was:
 - Missing data is visible in outputs and lowers confidence where appropriate.
 - RAG tools are read-only and cannot create, authorize, or execute paper or live trades.
 - Curated research search rejects arbitrary URLs, stays tenant/source scoped for
-  runtime Postgres retrieval, and exposes fixture-backed lexical hits until a
-  labeled retrieval benchmark justifies vector/hybrid retrieval.
+  runtime Postgres retrieval, defaults to fixture-backed lexical hits, and can
+  be switched to `PORTFOLIO_RESEARCH_STORE_BACKEND=postgres` only when a tenant
+  id and database URL are configured. Misconfigured Postgres mode fails
+  explicitly instead of falling back to fixtures; vector/hybrid retrieval still
+  requires a labeled benchmark.
 - Paper order proposals require a ready recommendation preflight before entering approval; blocked preflights return no draft order and disclose missing evidence without live-trading or credential affordances.
 - Paper approval and report surfaces show the stored readiness preflight evidence operators need before human approval.
 - Model-backed eval runs write redacted baseline summaries and deterministic triage reports, leave generated traces/results under ignored artifacts, and can be launched through a manual credentialed workflow.
