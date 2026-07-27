@@ -274,6 +274,91 @@ class PaperExecutionWorkerRequest:
     exposure_after: Mapping[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class PaperExecutionWorkItem:
+    """Durable paper-only execution queue item for deterministic workers."""
+
+    work_item_id: str
+    tenant_id: str
+    batch_request_id: str
+    grant_id: str
+    order_id: str
+    requested_by_actor_id: str
+    idempotency_key: str
+    status: str
+    payload: Mapping[str, Any]
+    decision: Mapping[str, Any] | None
+    attempt_count: int
+    available_at: datetime
+    claimed_by: str | None
+    claimed_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    def __post_init__(self) -> None:
+        clean_status = self.status.strip().lower()
+        if clean_status not in {"queued", "claimed", "completed", "failed", "cancelled"}:
+            raise ValueError("Paper execution work item status is invalid")
+        if not self.work_item_id.strip():
+            raise ValueError("work_item_id is required")
+        if not self.tenant_id.strip():
+            raise ValueError("tenant_id is required")
+        if not self.batch_request_id.strip():
+            raise ValueError("batch_request_id is required")
+        if not self.grant_id.strip():
+            raise ValueError("grant_id is required")
+        if not self.order_id.strip():
+            raise ValueError("order_id is required")
+        if not self.requested_by_actor_id.strip():
+            raise ValueError("requested_by_actor_id is required")
+        if not self.idempotency_key.strip():
+            raise ValueError("idempotency_key is required")
+        if self.attempt_count < 0:
+            raise ValueError("attempt_count cannot be negative")
+        object.__setattr__(self, "status", clean_status)
+        object.__setattr__(self, "payload", _safe_mapping(self.payload))
+        object.__setattr__(
+            self,
+            "decision",
+            _safe_mapping(self.decision) if self.decision is not None else None,
+        )
+        object.__setattr__(self, "available_at", _aware_utc(self.available_at))
+        object.__setattr__(
+            self,
+            "claimed_at",
+            _optional_aware_utc(self.claimed_at),
+        )
+        object.__setattr__(
+            self,
+            "completed_at",
+            _optional_aware_utc(self.completed_at),
+        )
+        object.__setattr__(self, "created_at", _aware_utc(self.created_at))
+        object.__setattr__(self, "updated_at", _aware_utc(self.updated_at))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "work_item_id": self.work_item_id,
+            "tenant_id": self.tenant_id,
+            "batch_request_id": self.batch_request_id,
+            "grant_id": self.grant_id,
+            "order_id": self.order_id,
+            "requested_by_actor_id": self.requested_by_actor_id,
+            "idempotency_key": self.idempotency_key,
+            "status": self.status,
+            "payload": _safe_mapping(self.payload),
+            "decision": _safe_mapping(self.decision) if self.decision is not None else None,
+            "attempt_count": self.attempt_count,
+            "available_at": self.available_at.isoformat(),
+            "claimed_by": self.claimed_by,
+            "claimed_at": self.claimed_at.isoformat() if self.claimed_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+
+
 PaperExecutionRecorder = Callable[
     [PaperExecutionDecision, PaperExecutionWorkerRequest],
     PaperExecutionDecision,

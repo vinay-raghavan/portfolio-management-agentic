@@ -44,18 +44,22 @@ This slice establishes the safe contract between research, simulation, and the f
   tenant/scope mismatches, insufficient paper cash, and quantity/notional
   ceiling violations before returning any fill payload.
 - `DeterministicPaperExecutionWorker` owns the paper-only evaluate-and-record
-  boundary through `PaperExecutionWorkerRequest`. The protected API calls this
-  worker synchronously today, so the same contract can later move behind a
-  queue without giving the model or MCP layer execution authority.
+  boundary through `PaperExecutionWorkerRequest`. `PaperExecutionWorkItem`
+  provides the durable queue contract for protected workers; the protected API
+  still calls the worker synchronously today, so later async routing can use the
+  same tenant-scoped queue without giving the model or MCP layer execution
+  authority.
 - `PostgresPaperExecutionStore` persists and reads protected policy ceilings,
-  batch requests, execution grants, and idempotent ledger decision rows through
-  tenant-scoped Postgres tables created by Alembic. It can revoke active grants
-  atomically, checks the durable ledger for duplicate idempotency keys before
-  API execution, treats the unique ledger insert result as authoritative if a
-  concurrent request races the pre-check, updates grant consumed capacity only
-  after a successful accepted ledger insert, stores JSON-safe summaries only,
-  and rejects FYERS, broker trading-token, and credential-looking payload
-  contamination before writes or reads return domain contracts.
+  batch requests, execution grants, durable execution work items, and
+  idempotent ledger decision rows through tenant-scoped Postgres tables created
+  by Alembic. It can revoke active grants atomically, enqueue/claim/complete
+  paper execution work items with `FOR UPDATE SKIP LOCKED`, checks the durable
+  ledger for duplicate idempotency keys before API execution, treats the unique
+  ledger insert result as authoritative if a concurrent request races the
+  pre-check, updates grant consumed capacity only after a successful accepted
+  ledger insert, stores JSON-safe summaries only, and rejects FYERS, broker
+  trading-token, and credential-looking payload contamination before writes or
+  reads return domain contracts.
 - The agent service exposes protected `/v1/paper/policies`,
   `/v1/paper/batches`, `/v1/paper/batches/{id}/approve|revoke`, and
   `/v1/paper/orders/{id}/execute` contracts. These endpoints derive requester
@@ -78,9 +82,11 @@ strategy, backtest, and paper-ledger state with `PAPER_LEDGER_DB_PATH`.
 
 Production-like runtimes use the Postgres platform schema and the protected API
 store adapter for bounded paper execution state. Alembic migration
-`20260727_0003` adds explicit
-`permitted_symbols` to `paper_execution_policy_ceilings` so policy ceilings can
-bound both symbols and future universe scopes without overloading fields.
+`20260727_0003` adds explicit `permitted_symbols` to
+`paper_execution_policy_ceilings` so policy ceilings can bound both symbols and
+future universe scopes without overloading fields. Alembic migration
+`20260727_0004` adds the tenant-scoped `paper_execution_work_items` queue table
+with idempotency uniqueness, worker-claim indexes, and row-level security.
 The protected HTTP endpoints keep local process state only as the
 SQLite/offline deterministic fallback. In Postgres mode, duplicate
 idempotency-key rejection reads from the tenant-scoped paper ledger instead of
@@ -90,9 +96,9 @@ Postgres execution limit checks derive current exposure from the persisted
 grant `consumed_capacity`, not request-body `current_gross_notional` or
 `current_net_notional` fields. Successful accepted inserts update
 `paper_execution_grants.consumed_capacity`; conflict rejections do not consume
-capacity. The next production hardening step is moving this write path into a
-dedicated asynchronous execution queue with serialized grant-capacity
-reservation.
+capacity. The next production hardening step is routing execution requests
+through the durable queue worker loop and serializing grant-capacity reservation
+inside that asynchronous path.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.
