@@ -28,6 +28,10 @@ Current coverage:
   Redis credentials in runtime status payloads, requires migrations, preserves
   SQLite as an offline compatibility backend, and rejects SQLite when
   production-like readiness is required.
+- Session-memory contracts verify compact summary-only persistence, tenant and
+  actor-scoped Postgres reads/deletes, 2-hour idle and 24-hour absolute TTLs,
+  immediate deletion, object-reference-only carryover, and rejection of raw
+  account payloads, provider secrets, private notes, and long-term preferences.
 - Provider refresh orchestration contracts record bounded scheduled refresh cycles, retry/backoff state, and stale-data readiness without exposing local provider paths.
 - Configured-source template contracts expose adapter-valid synthetic JSON shapes for market, universe, fundamentals, sentiment, volatility, and macro sources, and verify each template validates through the same configured-provider adapters without leaking source paths or credential-like values.
 - Guided configured-source onboarding contracts link templates, validation, setup gaps, refresh readiness, and safe next actions without exposing source paths or credential-like values.

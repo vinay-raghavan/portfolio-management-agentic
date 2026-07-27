@@ -246,6 +246,13 @@ paper policies, grants, ledger entries, and immutable audit events. SQLite
 remains useful for offline capstone mode and fast deterministic tests while
 Postgres-backed contract tests are introduced feature-by-feature.
 
+Agent session memory is intentionally compact and short-lived. The runtime
+contract stores only a sanitized task summary plus references to authoritative
+objects, scoped by tenant and actor identity. Defaults are a 2-hour idle TTL and
+24-hour absolute TTL, with immediate tenant-scoped deletion support. Raw FYERS
+or account payloads, provider secrets, private notes, and long-term preferences
+are rejected before persistence.
+
 Postgres schema changes live under `infra/db/alembic`. To validate migrations
 without touching a database, generate offline SQL:
 
