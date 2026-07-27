@@ -156,6 +156,7 @@ class PostgresSessionMemoryStore:
                         deleted_at = NULL,
                         updated_at = %(now)s
                     WHERE agent_sessions.tenant_id = %(tenant_id)s
+                      AND agent_sessions.actor_identity_id = %(actor_identity_id)s
                     RETURNING
                         id,
                         tenant_id,

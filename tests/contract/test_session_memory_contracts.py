@@ -138,6 +138,8 @@ def test_postgres_session_memory_store_upserts_tenant_scoped_summary_with_ttls()
     assert "tenant_id" in sql
     assert "actor_identity_id" in sql
     assert "ON CONFLICT (id)" in sql
+    assert "WHERE agent_sessions.tenant_id = %(tenant_id)s" in sql
+    assert "agent_sessions.actor_identity_id = %(actor_identity_id)s" in sql
     assert params["tenant_id"] == "tenant-a"
     assert params["actor_identity_id"] == "actor-1"
     assert params["idle_expires_at"] == NOW + timedelta(hours=2)
