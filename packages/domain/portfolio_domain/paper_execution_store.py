@@ -504,6 +504,32 @@ class PostgresPaperExecutionStore:
                     params,
                 )
                 row = _fetch_one_mapping(cursor)
+                if row is not None and decision.status == "accepted":
+                    cursor.execute(
+                        """
+                        UPDATE paper_execution_grants
+                        SET
+                            consumed_capacity = jsonb_build_object(
+                                'order_count',
+                                COALESCE((consumed_capacity->>'order_count')::numeric, 0)
+                                    + %(order_count_delta)s,
+                                'gross_notional',
+                                COALESCE((consumed_capacity->>'gross_notional')::numeric, 0)
+                                    + %(gross_notional_delta)s,
+                                'net_notional',
+                                COALESCE((consumed_capacity->>'net_notional')::numeric, 0)
+                                    + %(net_notional_delta)s
+                            ),
+                            updated_at = %(now)s
+                        WHERE tenant_id = %(tenant_id)s
+                          AND id = %(grant_id)s
+                          AND status = 'active'
+                        """.strip(),
+                        {
+                            **params,
+                            **_grant_capacity_delta(order, decision),
+                        },
+                    )
             connection.commit()
         if row is None:
             return _duplicate_idempotency_decision(decision)
@@ -540,6 +566,19 @@ def _duplicate_idempotency_decision(
         fill=None,
         audit_event=audit_event,
     )
+
+
+def _grant_capacity_delta(
+    order: PaperExecutionOrder,
+    decision: PaperExecutionDecision,
+) -> dict[str, float | int]:
+    notional = float(decision.audit_event.get("notional", 0.0))
+    net_notional = notional if order.side == "buy" else -notional
+    return {
+        "order_count_delta": 1,
+        "gross_notional_delta": abs(notional),
+        "net_notional_delta": net_notional,
+    }
 
 
 def _fetch_one_mapping(cursor: Any) -> dict[str, Any] | None:
