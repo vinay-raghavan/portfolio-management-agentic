@@ -14,14 +14,17 @@
 import json
 import logging
 import os
+import secrets
 import sys
+from base64 import urlsafe_b64encode
 from collections.abc import Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from typing import Annotated
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
 from urllib.request import urlopen
 from uuid import uuid4
 
@@ -61,6 +64,8 @@ if model_provider_path not in sys.path:
 from portfolio_domain import (  # noqa: E402
     DatabaseBackend,
     DeterministicPaperExecutionWorker,
+    FyersConnection,
+    FyersOAuthSession,
     PaperBatchRequest,
     PaperExecutionDecision,
     PaperExecutionGrant,
@@ -70,7 +75,10 @@ from portfolio_domain import (  # noqa: E402
     PaperExecutionWorkerRequest,
     PaperExecutionWorkItem,
     PostgresPaperExecutionStore,
+    ProviderRefreshJob,
     evaluate_database_runtime_readiness,
+    get_fyers_readonly_connector,
+    hash_oauth_state,
     issue_paper_execution_grant,
     load_database_runtime_profile,
 )
@@ -135,6 +143,20 @@ class ModelUsageEventRequest(BaseModel):
     request_id: str = Field(min_length=1, max_length=120)
 
     model_config = ConfigDict(extra="forbid")
+
+
+class FyersOAuthCallbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: str = Field(min_length=16, max_length=256)
+    auth_code: str = Field(min_length=1, max_length=512)
+
+
+class FyersRefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    refresh_type: str = Field(default="account_snapshot", min_length=1, max_length=80)
+    symbols: list[str] = Field(default_factory=lambda: ["INFY"])
 
 
 class PaperFillRequest(BaseModel):
@@ -217,6 +239,8 @@ _PAPER_POLICIES: dict[tuple[str, str], PaperExecutionPolicyCeiling] = {}
 _PAPER_BATCHES: dict[tuple[str, str], PaperBatchRequest] = {}
 _PAPER_GRANTS: dict[tuple[str, str], PaperExecutionGrant] = {}
 _PAPER_IDEMPOTENCY_KEYS: dict[str, set[str]] = {}
+_FYERS_CONNECTIONS: dict[tuple[str, str], FyersConnection] = {}
+_FYERS_OAUTH_STATES: dict[tuple[str, str], FyersOAuthSession] = {}
 
 
 def cloud_telemetry_enabled() -> bool:
@@ -547,6 +571,133 @@ def get_storage_status(require_production_like: bool = False) -> dict:
     }
 
 
+@app.post("/v1/integrations/fyers/oauth/start")
+def post_fyers_oauth_start(
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Start a protected FYERS data-only OAuth flow without exposing secrets."""
+    _require_any_role(actor, {"viewer", "analyst", "admin"})
+    connection = _get_or_create_fyers_connection(actor)
+    state = secrets.token_urlsafe(32)
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = _pkce_challenge(code_verifier)
+    session = FyersOAuthSession.create(
+        tenant_id=actor.tenant_id,
+        connection_id=connection.connection_id,
+        state=state,
+        code_challenge=code_challenge,
+    )
+    connection = connection.oauth_started(expires_at=session.expires_at)
+    _store_fyers_connection(actor, connection)
+    _FYERS_OAUTH_STATES[(actor.tenant_id, session.state_hash)] = session
+    return {
+        "status": "authorization_required",
+        "connection": connection.to_dict(),
+        "oauth": {
+            "authorize_url": _fyers_authorize_url(
+                state=state,
+                code_challenge=code_challenge,
+            ),
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+            "expires_at": session.expires_at.isoformat(),
+            "daily_auth_required": True,
+        },
+        "mode": "human_api_only",
+    }
+
+
+@app.post("/v1/integrations/fyers/oauth/callback")
+def post_fyers_oauth_callback(
+    request: FyersOAuthCallbackRequest,
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Record a FYERS OAuth callback without accepting provider tokens."""
+    _require_any_role(actor, {"viewer", "analyst", "admin"})
+    session = _pop_fyers_oauth_session(actor, request.state)
+    if session is None:
+        raise HTTPException(status_code=409, detail="fyers_oauth_state_unknown_or_expired")
+    connection = _get_or_create_fyers_connection(actor).callback_recorded()
+    _store_fyers_connection(actor, connection)
+    return {
+        "status": "reconnect_required",
+        "connection": connection.to_dict(),
+        "next_step": "configure_credential_vault_token_exchange",
+        "mode": "human_api_only",
+    }
+
+
+@app.get("/v1/integrations/fyers/oauth/status")
+def get_fyers_oauth_status(
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Return redacted FYERS connection status for the authenticated actor."""
+    _require_any_role(actor, {"viewer", "analyst", "admin"})
+    connection = _get_or_create_fyers_connection(actor)
+    return {
+        "status": "success",
+        "connection": connection.to_dict(),
+        "health": get_fyers_readonly_connector().connection_health().to_dict(),
+        "mode": "human_api_only",
+    }
+
+
+@app.post("/v1/integrations/fyers/oauth/disconnect")
+def post_fyers_oauth_disconnect(
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Disconnect FYERS read-only connection state without broker mutation."""
+    _require_any_role(actor, {"viewer", "analyst", "admin"})
+    connection = _get_or_create_fyers_connection(actor).disconnected_copy()
+    _store_fyers_connection(actor, connection)
+    _clear_fyers_oauth_sessions(actor)
+    return {
+        "status": "success",
+        "connection": connection.to_dict(),
+        "mode": "human_api_only",
+    }
+
+
+@app.post("/v1/integrations/fyers/refresh")
+@app.post("/v1/integrations/fyers/oauth/refresh")
+def post_fyers_refresh(
+    request: FyersRefreshRequest,
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Run a protected read-only FYERS fixture refresh without live broker calls."""
+    _require_any_role(actor, {"viewer", "analyst", "admin"})
+    _reject_sensitive_fyers_payload(request.model_dump())
+    connector = get_fyers_readonly_connector()
+    job = ProviderRefreshJob.created(
+        tenant_id=actor.tenant_id,
+        requested_by_actor_id=actor.audit_actor,
+        refresh_type=request.refresh_type,
+    )
+    snapshots: list[dict[str, object]] = []
+    errors: list[str] = []
+    for symbol in request.symbols[:20]:
+        try:
+            snapshots.append(connector.get_quote_envelope(symbol).to_dict())
+        except ValueError as exc:
+            errors.append(str(exc))
+    account_snapshot = connector.get_account_snapshot()
+    job = job.completed(
+        snapshot_count=len(snapshots) + 1,
+        errors=tuple(errors),
+    )
+    connection = _get_or_create_fyers_connection(actor)
+    return {
+        "status": "success",
+        "job": job.to_dict(),
+        "connection": connection.to_dict(),
+        "snapshots": snapshots,
+        "account_snapshot": account_snapshot.to_dict(),
+        "mode": "read_only",
+        "source_policy": "fyers_readonly_fixture_no_fallback",
+    }
+
+
 def _require_any_role(actor: ActorContext, allowed_roles: set[str]) -> None:
     if not actor.roles & allowed_roles:
         raise HTTPException(status_code=403, detail="role_required")
@@ -585,6 +736,104 @@ def _reject_sensitive_model_usage_payload(payload: object) -> None:
     )
     if any(fragment in lowered for fragment in forbidden):
         raise HTTPException(status_code=400, detail="model_usage_contains_sensitive_data")
+
+
+def _reject_sensitive_fyers_payload(payload: object) -> None:
+    lowered = str(payload).lower()
+    forbidden = (
+        "access_token",
+        "refresh_token",
+        "client_secret",
+        "api_key",
+        "authorization:",
+        "bearer ",
+        "password",
+        "secret",
+        "trading_token",
+        "place_order",
+        "modify_order",
+        "cancel_order",
+    )
+    if any(fragment in lowered for fragment in forbidden):
+        raise HTTPException(status_code=400, detail="fyers_payload_contains_sensitive_data")
+
+
+def _fyers_connection_key(actor: ActorContext) -> tuple[str, str]:
+    return (actor.tenant_id, actor.audit_actor)
+
+
+def _get_or_create_fyers_connection(actor: ActorContext) -> FyersConnection:
+    key = _fyers_connection_key(actor)
+    connection = _FYERS_CONNECTIONS.get(key)
+    if connection is not None:
+        return connection
+    connection = FyersConnection.disconnected(
+        tenant_id=actor.tenant_id,
+        user_id=actor.audit_actor,
+        connection_id=str(uuid4()),
+    )
+    _FYERS_CONNECTIONS[key] = connection
+    return connection
+
+
+def _store_fyers_connection(
+    actor: ActorContext,
+    connection: FyersConnection,
+) -> FyersConnection:
+    _FYERS_CONNECTIONS[_fyers_connection_key(actor)] = connection
+    return connection
+
+
+def _pop_fyers_oauth_session(
+    actor: ActorContext,
+    state: str,
+) -> FyersOAuthSession | None:
+    key = (actor.tenant_id, hash_oauth_state(state))
+    session = _FYERS_OAUTH_STATES.get(key)
+    connection = _get_or_create_fyers_connection(actor)
+    if (
+        session is None
+        or not session.active()
+        or session.connection_id != connection.connection_id
+    ):
+        return None
+    del _FYERS_OAUTH_STATES[key]
+    return session
+
+
+def _clear_fyers_oauth_sessions(actor: ActorContext) -> None:
+    connection = _get_or_create_fyers_connection(actor)
+    for key in tuple(_FYERS_OAUTH_STATES):
+        session = _FYERS_OAUTH_STATES[key]
+        if (
+            session.tenant_id == actor.tenant_id
+            and session.connection_id == connection.connection_id
+        ):
+            del _FYERS_OAUTH_STATES[key]
+
+
+def _pkce_challenge(code_verifier: str) -> str:
+    digest = sha256(code_verifier.encode("utf-8")).digest()
+    return urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def _fyers_authorize_url(*, state: str, code_challenge: str) -> str:
+    base_url = os.getenv(
+        "FYERS_AUTHORIZE_URL",
+        "https://api-t1.fyers.in/api/v3/generate-authcode",
+    )
+    params = {
+        "client_id": os.getenv("FYERS_CLIENT_ID", "configure-fyers-data-app"),
+        "redirect_uri": os.getenv(
+            "FYERS_REDIRECT_URI",
+            "http://localhost:8000/v1/integrations/fyers/oauth/callback",
+        ),
+        "response_type": "code",
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    }
+    return f"{base_url}?{urlencode(params)}"
 
 
 def _model_usage_events() -> list[ModelUsageEvent]:

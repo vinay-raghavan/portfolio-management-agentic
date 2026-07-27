@@ -23,6 +23,14 @@ Current coverage:
 - Provider import-reconciliation gate contracts disclose source-changed, store-mismatch, pending-refresh, and needs-attention states in configured screeners and recommendations, downgrade confidence, and remove paper-order next actions without leaking local provider paths.
 - Market-data persistence contracts store and reload fixture/configured-provider market snapshots, provider context records, and screener runs in their tool payload shape without exposing database paths or credentials.
 - Provider profile metadata contracts store configured-provider profile and import-refresh job summaries without exposing resolved local paths, file names, credentials, or raw provider payloads.
+- Protected FYERS integration API contracts verify typed `FyersConnection` and
+  `ProviderRefreshJob` public contracts, `ActorContext`-required OAuth
+  start/status/callback/disconnect and refresh routes, OAuth state plus PKCE
+  challenge generation without returning a verifier, callback fail-closed on
+  unknown state, explicit token-exchange-disabled status until the credential
+  vault is wired, read-only normalized fixture refreshes with signed positions,
+  and absence of provider tokens, credential material, broker mutation methods,
+  model-visible OAuth tools, or paper-ledger payload mixing.
 - Postgres/Alembic foundation contracts verify production-like storage selects
   Postgres explicitly through `PORTFOLIO_STORAGE_BACKEND`, redacts database and
   Redis credentials in runtime status payloads, requires migrations, preserves

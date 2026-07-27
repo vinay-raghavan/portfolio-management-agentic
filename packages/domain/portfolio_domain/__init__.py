@@ -82,6 +82,13 @@ from .fyers_readonly import (
     normalize_fyers_symbol,
     parse_fyers_symbol,
 )
+from .fyers_integration import (
+    FyersConnection,
+    FyersOAuthSession,
+    ProviderRefreshJob,
+    actor_hash,
+    hash_oauth_state,
+)
 from .market_data_store import (
     SQLiteMarketDataStore,
     build_market_data_store,
@@ -244,6 +251,7 @@ __all__ = [
     "FileBackedPatternStore",
     "FileBackedResearchStore",
     "FundamentalsSnapshot",
+    "FyersConnection",
     "FyersConnectionHealth",
     "FyersDepthLevel",
     "FyersFunds",
@@ -258,6 +266,7 @@ __all__ = [
     "FyersPosition",
     "FyersQuote",
     "FyersReadOnlyConnector",
+    "FyersOAuthSession",
     "GateResult",
     "Holding",
     "MacroSnapshot",
@@ -303,6 +312,7 @@ __all__ = [
     "ProviderHealth",
     "ProviderImportJob",
     "ProviderImportValidation",
+    "ProviderRefreshJob",
     "ProviderSnapshotEnvelope",
     "RankedScreenerCandidate",
     "RecommendationExplanation",
@@ -347,6 +357,7 @@ __all__ = [
     "SentimentProvider",
     "UniverseProvider",
     "VolatilityProvider",
+    "actor_hash",
     "build_factor_stack_explanation",
     "build_data_provider_registry",
     "build_market_data_store",
@@ -396,6 +407,7 @@ __all__ = [
     "validate_configured_provider_imports",
     "get_market_data_storage_status",
     "get_market_data_store",
+    "hash_oauth_state",
     "list_fixture_approval_queue",
     "list_fixture_audit_events",
     "list_fixture_backtest_requests",

@@ -21,6 +21,14 @@ explicit safety policy.
   signed quantities, funds, and provenance while keeping OAuth, credentials,
   provider administration, and broker mutations outside the model-visible
   surface.
+- Protected FYERS human-facing API contracts are available for
+  `/v1/integrations/fyers/oauth/start`, `/callback`, `/status`,
+  `/disconnect`, and `/v1/integrations/fyers/refresh` (plus the
+  `/oauth/refresh` compatibility alias). They require server-created
+  `ActorContext`, generate OAuth state and PKCE challenge without returning a
+  verifier, keep callback token exchange disabled until a credential vault is
+  wired, and refresh only through the read-only normalized FYERS fixture with
+  no Yahoo fallback, broker mutation, provider token, or paper-ledger mixing.
 - Recommendation explanations join screener/factor evidence, provider refresh readiness, import-reconciliation gates, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with readiness preflight review sections, redacted audit exports, paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require a ready recommendation preflight before paper order proposals enter approval, keep approval and simulated-fill mutation on protected human/API paths, update paper positions/accounting, expose approval queues, and emit redacted audit events with the readiness snapshot.
