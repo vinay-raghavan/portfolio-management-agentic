@@ -19,8 +19,12 @@ The router currently returns a `RouteDecision` for:
 ## Safety boundaries
 
 - Forbidden routes select the toolless `safety` capability.
-- FYERS refresh routes to `/v1/integrations/fyers/refresh`; OAuth and reconnect
-  operations stay outside model-visible tools.
+- FYERS refresh routes to the protected human API
+  `/v1/integrations/fyers/refresh`; OAuth start/callback/status/disconnect use
+  `/v1/integrations/fyers/oauth/*`. These operations stay outside
+  model-visible tools, require server-created `ActorContext`, return no provider
+  tokens or PKCE verifier, and currently mark callbacks
+  `token_exchange_not_configured` until the credential-vault worker lands.
 - Paper approval routes to `/v1/paper/batches/{id}/approve`; approval identity
   must come from server-created `ActorContext` derived from the authenticated
   human API with an explicit tenant id, never from `approved_by` in model
