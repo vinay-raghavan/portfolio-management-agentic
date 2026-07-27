@@ -62,9 +62,12 @@ if model_provider_path not in sys.path:
     sys.path.insert(0, model_provider_path)
 
 from portfolio_domain import (  # noqa: E402
+    BUILTIN_RESEARCH_SOURCES,
+    PATTERN_CARDS,
     BrokerAccountSnapshot,
     DatabaseBackend,
     DeterministicPaperExecutionWorker,
+    FileBackedResearchStore,
     FyersConnection,
     FyersOAuthSession,
     InMemoryFyersPkceVerifierCache,
@@ -79,6 +82,7 @@ from portfolio_domain import (  # noqa: E402
     PostgresActorIdentityStore,
     PostgresFyersIntegrationStore,
     PostgresPaperExecutionStore,
+    PostgresResearchStore,
     PostgresSessionMemoryStore,
     ProviderRefreshJob,
     ProviderSnapshotEnvelope,
@@ -94,6 +98,7 @@ from portfolio_domain import (  # noqa: E402
     issue_paper_execution_grant,
     load_credential_vault_profile,
     load_database_runtime_profile,
+    normalize_research_query,
     sanitize_session_memory_payload,
 )
 from portfolio_model_provider import (  # noqa: E402
@@ -218,6 +223,20 @@ class FyersRefreshRequest(BaseModel):
 
     refresh_type: str = Field(default="account_snapshot", min_length=1, max_length=80)
     symbols: list[str] = Field(default_factory=lambda: ["INFY"])
+
+
+class ResearchSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, max_length=500)
+    normalized_symbol: str | None = Field(default=None, min_length=1, max_length=80)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class ResearchRefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    normalized_query_or_symbol: str = Field(min_length=1, max_length=500)
 
 
 class SessionSummaryRequest(BaseModel):
@@ -454,6 +473,104 @@ def _ollama_inventory(
         {name: item.digest for name, item in inventory.items() if item.digest},
         [item.to_dict() for item in inventory.values()],
     )
+
+
+@app.get("/v1/research/sources")
+def get_research_sources(
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """List admin-registered allowlisted research sources without URLs."""
+    _require_any_role(actor, {"viewer", "analyst", "admin"})
+    return {
+        "status": "success",
+        "source_policy": "admin_allowlist_only",
+        "sources": [source.to_dict() for source in BUILTIN_RESEARCH_SOURCES],
+    }
+
+
+@app.post("/v1/research/search")
+def post_research_search(
+    request: ResearchSearchRequest,
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Search curated research through fixture or tenant-scoped Postgres stores."""
+    _require_any_role(actor, {"viewer", "analyst", "admin"})
+    try:
+        query = normalize_research_query(request.query)
+        normalized_symbol = (
+            normalize_research_query(request.normalized_symbol)
+            if request.normalized_symbol
+            else None
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="research_query_invalid") from exc
+
+    store = _research_store(actor)
+    try:
+        if isinstance(store, PostgresResearchStore):
+            hits = store.search(
+                query,
+                normalized_symbol=normalized_symbol,
+                limit=request.limit,
+            )
+            retrieval = {
+                "mode": "postgres_runtime",
+                "backend": "postgres_full_text",
+                "vector_retrieval": "disabled",
+                "source_policy": "admin_allowlist_only",
+            }
+        else:
+            hits = store.search(query, limit=request.limit)
+            retrieval = {
+                "mode": "file_backed_fixture",
+                "backend": "lexical",
+                "vector_retrieval": "disabled",
+                "source_policy": "admin_allowlist_only",
+            }
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="research_store_unavailable") from exc
+
+    return {
+        "status": "success",
+        "query": query,
+        "normalized_symbol": normalized_symbol,
+        "retrieval": retrieval,
+        "hits": [hit.to_dict() for hit in hits],
+    }
+
+
+@app.post("/v1/research/refresh/{source_id}")
+def post_research_refresh(
+    source_id: str,
+    request: ResearchRefreshRequest,
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Queue a refresh intent by registered source id and normalized query only."""
+    _require_any_role(actor, {"analyst", "admin"})
+    source = _research_source_by_id(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="research_source_not_registered")
+    try:
+        normalized_query_or_symbol = normalize_research_query(
+            request.normalized_query_or_symbol
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="research_query_invalid") from exc
+    job_id = "research-refresh-" + sha256(
+        (
+            f"{actor.tenant_id}:{actor.audit_actor}:"
+            f"{source.source_id}:{normalized_query_or_symbol}"
+        ).encode()
+    ).hexdigest()[:16]
+    return {
+        "status": "queued",
+        "job_id": job_id,
+        "source": source.to_dict(),
+        "normalized_query_or_symbol": normalized_query_or_symbol,
+        "mode": "admin_allowlist_only",
+        "refresh_policy": source.refresh_policy,
+        "requested_by": actor.audit_actor,
+    }
 
 
 @app.get("/v1/models/ollama/status")
@@ -1047,6 +1164,47 @@ def _fyers_connection_key(actor: ActorContext) -> tuple[str, str]:
 
 def _fyers_user_hash(actor: ActorContext) -> str:
     return actor_hash(tenant_id=actor.tenant_id, user_id=actor.audit_actor)
+
+
+def _research_source_by_id(source_id: str):
+    return next(
+        (source for source in BUILTIN_RESEARCH_SOURCES if source.source_id == source_id),
+        None,
+    )
+
+
+def _research_store(actor: ActorContext) -> FileBackedResearchStore | PostgresResearchStore:
+    backend = os.getenv("PORTFOLIO_RESEARCH_STORE_BACKEND", "fixture").strip().lower()
+    if backend == "postgres":
+        database_url = os.getenv("PORTFOLIO_DATABASE_URL", "").strip()
+        if not database_url:
+            raise HTTPException(status_code=503, detail="research_postgres_not_configured")
+        return _build_postgres_research_store(
+            tenant_id=actor.tenant_id,
+            database_url=database_url,
+        )
+    return FileBackedResearchStore.from_pattern_cards(PATTERN_CARDS)
+
+
+def _build_postgres_research_store(
+    *,
+    tenant_id: str,
+    database_url: str,
+) -> PostgresResearchStore:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+        from psycopg.rows import dict_row
+
+        connection = psycopg.connect(connection_url, row_factory=dict_row)
+        connection.execute("SET app.tenant_id = %s", (tenant_id,))
+        return connection
+
+    return PostgresResearchStore(
+        tenant_id=tenant_id,
+        connection_factory=connection_factory,
+    )
 
 
 def _fyers_integration_store(
