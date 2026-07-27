@@ -327,6 +327,9 @@ OIDC authorization callback state is validated with constant-time comparison.
 When a Postgres-backed store needs an actor foreign key, the service resolves
 `issuer + sub` through `actor_identities` and passes that stable UUID to the
 tenant-scoped table instead of storing raw subjects in UUID fields.
+Postgres-backed paper policies, batch requests, execution grants, and queued
+execution work items use those resolved actor UUIDs for their FK columns; local
+offline mode continues to use readable subject strings in process memory.
 
 Protected FYERS connection state is Postgres-backed when
 `PORTFOLIO_STORAGE_BACKEND=postgres`: the API stores sanitized

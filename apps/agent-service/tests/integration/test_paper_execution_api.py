@@ -69,6 +69,20 @@ def _grant_expiry() -> str:
     return datetime(2026, 7, 28, tzinfo=UTC).isoformat()
 
 
+def _patch_postgres_actor_identity_ids(monkeypatch) -> dict[str, str]:
+    actor_ids = {
+        "admin-1": "11111111-1111-1111-1111-111111111111",
+        "analyst-1": "22222222-2222-2222-2222-222222222222",
+        "approver-1": "33333333-3333-3333-3333-333333333333",
+    }
+    monkeypatch.setattr(
+        fast_api_app,
+        "_postgres_actor_identity_id",
+        lambda actor, *, database_url: actor_ids[actor.audit_actor],
+    )
+    return actor_ids
+
+
 def test_paper_policy_api_requires_authenticated_admin_actor() -> None:
     client = TestClient(app)
 
@@ -406,6 +420,7 @@ def test_paper_api_uses_postgres_store_when_storage_backend_is_postgres(
     monkeypatch,
 ) -> None:
     fake_store = _FakePostgresPaperStore()
+    actor_ids = _patch_postgres_actor_identity_ids(monkeypatch)
     monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
     monkeypatch.setenv(
         "PORTFOLIO_DATABASE_URL",
@@ -456,12 +471,15 @@ def test_paper_api_uses_postgres_store_when_storage_backend_is_postgres(
     assert batch_response.status_code == 200
     assert approval_response.status_code == 200
     assert execute_response.status_code == 200
-    assert fake_store.policies[policy_id].created_by_actor_id == "admin-1"
-    assert fake_store.batches[batch_id].requested_by_actor_id == "analyst-1"
-    assert fake_store.grants[grant_id].approved_by_actor_id == "approver-1"
+    assert fake_store.policies[policy_id].created_by_actor_id == actor_ids["admin-1"]
+    assert fake_store.batches[batch_id].requested_by_actor_id == actor_ids["analyst-1"]
+    assert fake_store.grants[grant_id].approved_by_actor_id == actor_ids["approver-1"]
     assert len(fake_store.enqueued_work_items) == 1
     assert fake_store.enqueued_work_items[0].order_id == f"{batch_id}:0"
-    assert fake_store.enqueued_work_items[0].requested_by_actor_id == "analyst-1"
+    assert (
+        fake_store.enqueued_work_items[0].requested_by_actor_id
+        == actor_ids["analyst-1"]
+    )
     assert fake_store.enqueued_work_items[0].payload["quote_price"] == 980
     assert fake_store.claimed_work_items[0].claimed_by == "paper-execution-api"
     assert fake_store.completed_work_items[0].status == "completed"
@@ -484,6 +502,7 @@ def test_paper_api_uses_postgres_ledger_for_duplicate_idempotency_keys(
     monkeypatch,
 ) -> None:
     fake_store = _FakePostgresPaperStore()
+    _patch_postgres_actor_identity_ids(monkeypatch)
     monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
     monkeypatch.setenv(
         "PORTFOLIO_DATABASE_URL",
@@ -558,6 +577,7 @@ def test_paper_api_returns_rejection_when_postgres_ledger_insert_conflicts(
 ) -> None:
     fake_store = _FakePostgresPaperStore()
     fake_store.conflict_on_record = True
+    _patch_postgres_actor_identity_ids(monkeypatch)
     monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
     monkeypatch.setenv(
         "PORTFOLIO_DATABASE_URL",
@@ -623,6 +643,7 @@ def test_paper_api_uses_persisted_grant_capacity_in_postgres_mode(
     monkeypatch,
 ) -> None:
     fake_store = _FakePostgresPaperStore()
+    _patch_postgres_actor_identity_ids(monkeypatch)
     monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
     monkeypatch.setenv(
         "PORTFOLIO_DATABASE_URL",

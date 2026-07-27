@@ -1350,6 +1350,15 @@ def _paper_execution_store_for_actor(
     )
 
 
+def _paper_storage_actor_reference(actor: ActorContext) -> str:
+    profile = load_database_runtime_profile(os.environ)
+    if profile.backend != DatabaseBackend.POSTGRES:
+        return actor.audit_actor
+    if not profile.database_url:
+        raise HTTPException(status_code=503, detail="paper_postgres_not_configured")
+    return _postgres_actor_identity_id(actor, database_url=profile.database_url)
+
+
 def _build_postgres_paper_execution_store(
     *,
     tenant_id: str,
@@ -1381,7 +1390,9 @@ def _store_paper_policy(
 ) -> PaperExecutionPolicyCeiling:
     store = _paper_execution_store_for_actor(actor)
     if store is not None:
-        return store.upsert_policy_ceiling(policy)
+        return store.upsert_policy_ceiling(
+            replace(policy, created_by_actor_id=_paper_storage_actor_reference(actor))
+        )
     _PAPER_POLICIES[_policy_key(actor, policy.policy_id)] = policy
     return policy
 
@@ -1402,7 +1413,9 @@ def _store_paper_batch(
 ) -> PaperBatchRequest:
     store = _paper_execution_store_for_actor(actor)
     if store is not None:
-        return store.create_batch_request(batch)
+        return store.create_batch_request(
+            replace(batch, requested_by_actor_id=_paper_storage_actor_reference(actor))
+        )
     _PAPER_BATCHES[_batch_key(actor, batch.batch_request_id)] = batch
     return batch
 
@@ -1429,7 +1442,7 @@ def _issue_paper_grant(
         return store.issue_grant(
             policy=policy,
             batch_request=batch,
-            approved_by_actor_id=actor.audit_actor,
+            approved_by_actor_id=_paper_storage_actor_reference(actor),
             expires_at=expires_at,
         )
     grant = issue_paper_execution_grant(
@@ -1581,7 +1594,7 @@ def _execute_queued_postgres_paper_order(
         batch_request_id=batch.batch_request_id,
         grant_id=grant.grant_id,
         order_id=order_id,
-        requested_by_actor_id=actor.audit_actor,
+        requested_by_actor_id=_paper_storage_actor_reference(actor),
         idempotency_key=request.idempotency_key,
         status="queued",
         payload={
