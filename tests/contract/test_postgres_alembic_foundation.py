@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -30,6 +31,31 @@ REQUIRED_TABLES = {
 
 
 TENANT_SCOPED_TABLES = REQUIRED_TABLES - {"tenants", "actor_identities"}
+
+
+def _literal_assignment(module: ast.Module, name: str) -> str | tuple[str, ...] | None:
+    for node in module.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+            continue
+        value = ast.literal_eval(node.value)
+        if value is None or isinstance(value, str):
+            return value
+        if isinstance(value, tuple) and all(isinstance(item, str) for item in value):
+            return value
+    raise AssertionError(f"{name} assignment not found")
+
+
+def _revision_modules() -> dict[str, tuple[Path, ast.Module]]:
+    modules: dict[str, tuple[Path, ast.Module]] = {}
+    for path in sorted(Path("infra/db/alembic/versions").glob("*.py")):
+        module = ast.parse(path.read_text())
+        revision = _literal_assignment(module, "revision")
+        assert isinstance(revision, str), f"{path} must define string revision"
+        assert revision not in modules, f"duplicate Alembic revision: {revision}"
+        modules[revision] = (path, module)
+    return modules
 
 
 def test_postgres_env_defaults_are_documented_for_production_like_testing() -> None:
@@ -93,6 +119,49 @@ def test_alembic_config_and_environment_are_env_driven() -> None:
     assert "DATABASE_URL" in env_py
     assert "pool.NullPool" in env_py
     assert "context.run_migrations()" in env_py
+
+
+def test_alembic_revision_chain_has_single_head_and_no_orphans() -> None:
+    revisions = _revision_modules()
+    children_by_parent: dict[str, set[str]] = {revision: set() for revision in revisions}
+    heads = set(revisions)
+    roots = set()
+
+    for revision, (path, module) in revisions.items():
+        down_revision = _literal_assignment(module, "down_revision")
+        parent_revisions = (
+            ()
+            if down_revision is None
+            else (down_revision,)
+            if isinstance(down_revision, str)
+            else down_revision
+        )
+        if not parent_revisions:
+            roots.add(revision)
+        for parent in parent_revisions:
+            assert parent in revisions, f"{path} references missing down_revision {parent}"
+            children_by_parent[parent].add(revision)
+            heads.discard(parent)
+
+    assert roots == {"20260725_0001"}
+    assert heads == {"20260727_0004"}
+    assert all(
+        len(children) <= 1 for children in children_by_parent.values()
+    ), "linear production migration chain expected until an explicit merge migration exists"
+
+
+def test_alembic_revisions_have_reversible_upgrade_contracts() -> None:
+    for path, module in _revision_modules().values():
+        functions = {
+            node.name
+            for node in module.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        content = path.read_text()
+
+        assert {"upgrade", "downgrade"}.issubset(functions), f"{path} must be reversible"
+        assert "from alembic import op" in content
+        assert "pass" not in content
 
 
 def test_initial_postgres_migration_defines_platform_tables_with_tenant_isolation() -> None:
