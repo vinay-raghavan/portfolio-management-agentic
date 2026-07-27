@@ -155,6 +155,15 @@ def test_web_console_exposes_paper_order_readiness_preflight() -> None:
     assert "-proposal-" not in source
 
 
+def test_web_console_does_not_send_approver_identity_in_approval_body() -> None:
+    source = (WEB_ROOT / "src" / "App.tsx").read_text()
+
+    approval_call = source.split("runApproval", 1)[1].split("const runSimulatedFill", 1)[0]
+
+    assert "approval_note" in approval_call
+    assert "approved_by" not in approval_call
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 

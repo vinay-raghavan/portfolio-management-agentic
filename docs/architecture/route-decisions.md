@@ -21,7 +21,8 @@ The router currently returns a `RouteDecision` for:
 - FYERS refresh routes to `/v1/integrations/fyers/refresh`; OAuth and reconnect
   operations stay outside model-visible tools.
 - Paper approval routes to `/v1/paper/batches/{id}/approve`; approval identity
-  must come from the authenticated human API.
+  must come from server-created `ActorContext` derived from the authenticated
+  human API, never from `approved_by` in model output or request JSON.
 - Paper proposal routes may expose only the draft-only
   `paper_proposal_execution` capability tools.
 - `approve_paper_order_simulation` and `simulate_approved_paper_fill` remain
