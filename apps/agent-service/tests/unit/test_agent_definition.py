@@ -261,3 +261,48 @@ def test_before_model_and_tool_callbacks_route_scope_pre_market_briefing() -> No
         )
         is None
     )
+
+
+def test_before_model_callback_classifies_ambiguous_read_only_to_route_bundle() -> None:
+    technical_tools = {
+        tool_name: object()
+        for tool_name in ROUTER.manifests["technical_analysis"].allowed_tools
+    }
+    request = _FakeRequest(
+        {
+            **technical_tools,
+            "create_paper_order_proposal": object(),
+            "get_fyers_account_snapshot": object(),
+        }
+    )
+
+    response = _route_scope_model_request(
+        _FakeContext("Analyze screener candidates and explain the technical factor stack."),
+        request,
+    )
+
+    assert response is None
+    assert set(request.tools_dict) == set(technical_tools)
+    assert "run_screener" in request.tools_dict
+    assert "create_paper_order_proposal" not in request.tools_dict
+    assert "get_fyers_account_snapshot" not in request.tools_dict
+
+
+def test_before_model_callback_fails_closed_when_ambiguous_route_is_unclassified() -> None:
+    request = _FakeRequest(
+        {
+            "get_portfolio_summary": object(),
+            "create_paper_order_proposal": object(),
+            "search_curated_research": object(),
+        }
+    )
+
+    response = _route_scope_model_request(
+        _FakeContext("What looks interesting today?"),
+        request,
+    )
+
+    assert response is not None
+    assert response.error_code == "portfolio_route_clarification_required"
+    assert request.tools_dict == {}
+    assert "clarify" in _extract_text_from_content(response.content).lower()

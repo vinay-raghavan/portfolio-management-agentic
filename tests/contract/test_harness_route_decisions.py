@@ -160,6 +160,67 @@ def test_schema_classified_read_only_route_resolves_to_manifest_bundle() -> None
     assert "simulate_approved_paper_fill" not in bundle.tool_names
 
 
+def test_schema_classification_fails_closed_for_low_confidence_unknown_or_draft() -> None:
+    router = DeterministicRouter()
+
+    low_confidence = router.resolve_classified_capability(
+        "research",
+        confidence=0.49,
+        reason="Classifier was unsure.",
+    )
+    unknown = router.resolve_classified_capability(
+        "unknown_capability",
+        confidence=0.9,
+        reason="Invalid classifier output.",
+    )
+    draft_only = router.resolve_classified_capability(
+        "paper_proposal_execution",
+        confidence=0.9,
+        reason="Classifier tried to choose a draft-only capability.",
+    )
+
+    for decision in (low_confidence, unknown, draft_only):
+        bundle = router.tool_bundle_for(decision, exposed_tool_names=EXPOSED_TOOL_NAMES)
+        assert decision.decision_type == RouteDecisionType.CLARIFICATION_REQUIRED
+        assert decision.allowed_tools == ()
+        assert decision.model_classification_allowed is False
+        assert bundle.model_visible is False
+        assert bundle.tool_names == ()
+
+
+def test_ambiguous_read_only_classifier_routes_obvious_requests_to_manifest_tools() -> None:
+    router = DeterministicRouter()
+
+    provider = router.classify_read_only_request(
+        "Show provider readiness, import reconciliation, and configured data health."
+    )
+    technical = router.classify_read_only_request(
+        "Analyze screener candidates and explain the technical factor stack."
+    )
+    research = router.classify_read_only_request(
+        "Search curated research citations for the breakout continuation pattern."
+    )
+
+    assert provider.capability_name == "provider_readiness"
+    assert technical.capability_name == "technical_analysis"
+    assert research.capability_name == "research"
+    for decision in (provider, technical, research):
+        assert decision.decision_type == RouteDecisionType.CAPABILITY
+        assert decision.model_classification_allowed is True
+        assert decision.confidence >= 0.7
+
+
+def test_ambiguous_read_only_classifier_requires_clarification_when_not_confident() -> None:
+    decision = DeterministicRouter().classify_read_only_request(
+        "What looks interesting today?"
+    )
+
+    assert decision.decision_type == RouteDecisionType.CLARIFICATION_REQUIRED
+    assert decision.capability_name is None
+    assert decision.allowed_tools == ()
+    assert decision.model_classification_allowed is False
+
+
 def test_ambiguous_read_only_request_can_fall_back_to_model_classification() -> None:
     decision = DeterministicRouter().route("Can you explain what looks interesting today?")
 
