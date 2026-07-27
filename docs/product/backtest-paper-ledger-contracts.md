@@ -82,10 +82,12 @@ SQLite/offline deterministic fallback. In Postgres mode, duplicate
 idempotency-key rejection reads from the tenant-scoped paper ledger instead of
 process memory, and a skipped `ON CONFLICT DO NOTHING ... RETURNING id` insert
 is returned to the API as a duplicate rejection rather than an accepted fill.
-Successful accepted inserts update `paper_execution_grants.consumed_capacity`;
-conflict rejections do not consume capacity. The next production hardening step
-is moving this write path into a dedicated execution worker with serialized
-grant-capacity reservation.
+Postgres execution limit checks derive current exposure from the persisted
+grant `consumed_capacity`, not request-body `current_gross_notional` or
+`current_net_notional` fields. Successful accepted inserts update
+`paper_execution_grants.consumed_capacity`; conflict rejections do not consume
+capacity. The next production hardening step is moving this write path into a
+dedicated execution worker with serialized grant-capacity reservation.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.

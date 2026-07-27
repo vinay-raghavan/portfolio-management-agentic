@@ -526,3 +526,73 @@ def test_paper_api_returns_rejection_when_postgres_ledger_insert_conflicts(
     assert "duplicate_idempotency_key" in execute_response.json()["decision"]["reasons"]
     assert fake_store.recorded_decisions == []
     assert "db-secret" not in str(execute_response.json()).lower()
+
+
+def test_paper_api_uses_persisted_grant_capacity_in_postgres_mode(
+    monkeypatch,
+) -> None:
+    fake_store = _FakePostgresPaperStore()
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setattr(
+        fast_api_app,
+        "_build_postgres_paper_execution_store",
+        lambda *, tenant_id, database_url: fake_store,
+    )
+    client = TestClient(app)
+    policy_id = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+    batch_id = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+
+    client.post(
+        "/v1/paper/policies",
+        headers=_headers("admin-1", "admin"),
+        json=_policy_payload(policy_id),
+    )
+    client.post(
+        "/v1/paper/batches",
+        headers=_headers("analyst-1", "analyst"),
+        json=_batch_payload(batch_id),
+    )
+    approval_response = client.post(
+        f"/v1/paper/batches/{batch_id}/approve",
+        headers=_headers("approver-1", "approver"),
+        json={
+            "policy_id": policy_id,
+            "expires_at": _grant_expiry(),
+        },
+    )
+    grant_id = approval_response.json()["grant"]["grant_id"]
+    fake_store.grants[grant_id] = replace(
+        fake_store.grants[grant_id],
+        consumed_capacity={
+            "order_count": 0,
+            "gross_notional": 39_000.0,
+            "net_notional": 39_000.0,
+        },
+    )
+
+    execute_response = client.post(
+        f"/v1/paper/orders/{quote(f'{batch_id}:0', safe='')}/execute",
+        headers=_headers("analyst-1", "analyst"),
+        json={
+            "grant_id": grant_id,
+            "idempotency_key": "idem-api-persisted-capacity",
+            "quote_price": 980,
+            "quote_as_of": (NOW - timedelta(seconds=10)).isoformat(),
+            "now": NOW.isoformat(),
+            "available_cash": 100_000,
+            "current_gross_notional": 0,
+            "current_net_notional": 0,
+        },
+    )
+
+    assert execute_response.status_code == 409
+    assert execute_response.json()["decision"]["status"] == "rejected"
+    assert "gross_notional_limit_exceeded" in execute_response.json()["decision"][
+        "reasons"
+    ]
+    assert fake_store.recorded_decisions == []
+    assert "db-secret" not in str(execute_response.json()).lower()
