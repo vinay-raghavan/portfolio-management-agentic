@@ -9,7 +9,7 @@ Thin React console for the agentic portfolio and paper-trading workbench.
 - Calls only policy-controlled console workflow endpoints for paper strategy drafts, simulated backtest requests, readiness-gated paper order proposals, human approval, simulated paper fills, and sanitized provider profile refreshes. The UI never sends approver identity; approval identity is supplied by the agent-service `ActorContext` boundary.
 - Falls back to deterministic fixture data when the API is unavailable, so local UI checks remain reproducible.
 - Exposes no live-trading or credential workflow.
-- Uses the CapacityForecast-inspired cockpit palette with dark and light modes, but applies a softer rounded-widget treatment across the dashboard, workflow cards, tables, chips, and mobile navigation.
+- Uses the CapacityForecast-inspired cockpit palette with dark and light modes, but intentionally deviates from its square cockpit blocks by applying a softer rounded-widget treatment across the dashboard, dock navigation, workflow trays, table rows, cards, chips, scrollable code blocks, and mobile navigation.
 
 ## Commands
 
