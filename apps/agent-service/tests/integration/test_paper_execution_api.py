@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 from fastapi.testclient import TestClient
 
-from app.fast_api_app import app
+import app.fast_api_app as fast_api_app
+
+app = fast_api_app.app
 
 NOW = datetime(2026, 7, 27, 9, 15, tzinfo=UTC)
 TENANT_ID = "tenant-api"
@@ -225,3 +228,148 @@ def test_paper_execution_api_revokes_grant_and_rejects_later_execution() -> None
     assert execute_response.status_code == 409
     assert execute_response.json()["decision"]["status"] == "rejected"
     assert "grant_revoked" in execute_response.json()["decision"]["reasons"]
+
+
+class _FakePostgresPaperStore:
+    def __init__(self) -> None:
+        self.policies = {}
+        self.batches = {}
+        self.grants = {}
+        self.recorded_decisions = []
+
+    def upsert_policy_ceiling(self, policy):
+        self.policies[policy.policy_id] = policy
+        return policy
+
+    def get_policy_ceiling(self, policy_id: str):
+        return self.policies.get(policy_id)
+
+    def create_batch_request(self, batch_request):
+        self.batches[batch_request.batch_request_id] = batch_request
+        return batch_request
+
+    def get_batch_request(self, batch_request_id: str):
+        return self.batches.get(batch_request_id)
+
+    def issue_grant(
+        self,
+        *,
+        policy,
+        batch_request,
+        approved_by_actor_id: str,
+        expires_at: datetime,
+    ):
+        grant = fast_api_app.issue_paper_execution_grant(
+            policy=policy,
+            batch_request=batch_request,
+            approved_by_actor_id=approved_by_actor_id,
+            expires_at=expires_at,
+            now=NOW,
+            grant_id="77777777-7777-7777-7777-777777777777",
+        )
+        self.grants[grant.grant_id] = grant
+        return grant
+
+    def get_grant(self, grant_id: str):
+        return self.grants.get(grant_id)
+
+    def revoke_grant(self, grant_id: str):
+        grant = self.grants.get(grant_id)
+        if grant is None or grant.status != "active":
+            return None
+        revoked = replace(grant, status="revoked")
+        self.grants[grant_id] = revoked
+        return revoked
+
+    def record_execution_decision(
+        self,
+        *,
+        grant,
+        batch_request,
+        order,
+        decision,
+        fill_price: float,
+        exposure_after,
+    ):
+        self.recorded_decisions.append(
+            {
+                "grant_id": grant.grant_id,
+                "batch_request_id": batch_request.batch_request_id,
+                "symbol": order.symbol,
+                "decision": decision.to_dict(),
+                "fill_price": fill_price,
+                "exposure_after": dict(exposure_after),
+            }
+        )
+        return decision
+
+
+def test_paper_api_uses_postgres_store_when_storage_backend_is_postgres(
+    monkeypatch,
+) -> None:
+    fake_store = _FakePostgresPaperStore()
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setattr(
+        fast_api_app,
+        "_build_postgres_paper_execution_store",
+        lambda *, tenant_id, database_url: fake_store,
+    )
+    client = TestClient(app)
+    policy_id = "88888888-8888-8888-8888-888888888888"
+    batch_id = "99999999-9999-9999-9999-999999999999"
+
+    policy_response = client.post(
+        "/v1/paper/policies",
+        headers=_headers("admin-1", "admin"),
+        json=_policy_payload(policy_id),
+    )
+    batch_response = client.post(
+        "/v1/paper/batches",
+        headers=_headers("analyst-1", "analyst"),
+        json=_batch_payload(batch_id),
+    )
+    approval_response = client.post(
+        f"/v1/paper/batches/{batch_id}/approve",
+        headers=_headers("approver-1", "approver"),
+        json={
+            "policy_id": policy_id,
+            "expires_at": _grant_expiry(),
+        },
+    )
+    grant_id = approval_response.json()["grant"]["grant_id"]
+    execute_response = client.post(
+        f"/v1/paper/orders/{quote(f'{batch_id}:0', safe='')}/execute",
+        headers=_headers("analyst-1", "analyst"),
+        json={
+            "grant_id": grant_id,
+            "idempotency_key": "idem-api-postgres",
+            "quote_price": 980,
+            "quote_as_of": (NOW - timedelta(seconds=10)).isoformat(),
+            "now": NOW.isoformat(),
+            "available_cash": 100_000,
+        },
+    )
+
+    assert policy_response.status_code == 200
+    assert batch_response.status_code == 200
+    assert approval_response.status_code == 200
+    assert execute_response.status_code == 200
+    assert fake_store.policies[policy_id].created_by_actor_id == "admin-1"
+    assert fake_store.batches[batch_id].requested_by_actor_id == "analyst-1"
+    assert fake_store.grants[grant_id].approved_by_actor_id == "approver-1"
+    assert fake_store.recorded_decisions[0]["decision"]["status"] == "accepted"
+    combined_payload = str(
+        [
+            policy_response.json(),
+            batch_response.json(),
+            approval_response.json(),
+            execute_response.json(),
+        ]
+    ).lower()
+    assert "postgresql+psycopg" not in combined_payload
+    assert "db-secret" not in combined_payload
+    assert "fyers" not in combined_payload

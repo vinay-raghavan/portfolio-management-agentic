@@ -28,9 +28,11 @@ explicit safety policy.
   migration for explicit policy symbols and fail-closed rejection of
   FYERS/credential payload contamination.
 - Protected paper-execution HTTP contracts are available under `/v1/paper/*`
-  for local/API validation: admin policy creation, analyst batch proposals,
-  approver-bound grants/revocation, and execution-under-grant decisions derive
-  identity from `ActorContext` headers and reject body-spoofed approver fields.
+  for API validation and production-like Postgres runtimes: admin policy
+  creation, analyst batch proposals, approver-bound grants/revocation, and
+  execution-under-grant decisions derive identity from `ActorContext` headers,
+  reject body-spoofed approver fields, and use the tenant-scoped Postgres paper
+  execution store when `PORTFOLIO_STORAGE_BACKEND=postgres`.
 - Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval infrastructure is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade`, writes redacted baseline summaries, and produces deterministic triage reports for grade-result failures without printing secret values. The eval config combines an LLM response-quality rubric with deterministic forbidden-action and workflow-tool-trajectory code metrics. A manual GitHub Actions workflow can run the credentialed baseline and upload ignored eval artifacts.

@@ -49,11 +49,12 @@ This slice establishes the safe contract between research, simulation, and the f
   atomically, stores JSON-safe summaries only, and rejects FYERS, broker
   trading-token, and credential-looking payload contamination before writes or
   reads return domain contracts.
-- The agent service exposes protected local `/v1/paper/policies`,
+- The agent service exposes protected `/v1/paper/policies`,
   `/v1/paper/batches`, `/v1/paper/batches/{id}/approve|revoke`, and
   `/v1/paper/orders/{id}/execute` contracts. These endpoints derive requester
   and approver identity from server-created `ActorContext`, forbid
-  `approved_by` request-body spoofing, and return paper-only decisions. They
+  `approved_by` request-body spoofing, use `PostgresPaperExecutionStore` when
+  `PORTFOLIO_STORAGE_BACKEND=postgres`, and return paper-only decisions. They
   are API contracts for protected callers, not MCP/model-visible tools.
 - Simulated fills update only the paper ledger and paper positions.
 - Approval cannot authorize live trading.
@@ -68,14 +69,15 @@ The default Python import path remains fixture-backed and in memory when no
 database path is configured. Local and container runtimes can enable durable
 strategy, backtest, and paper-ledger state with `PAPER_LEDGER_DB_PATH`.
 
-Production-like runtimes use the Postgres platform schema for bounded paper
-execution state. Alembic migration `20260727_0003` adds explicit
+Production-like runtimes use the Postgres platform schema and the protected API
+store adapter for bounded paper execution state. Alembic migration
+`20260727_0003` adds explicit
 `permitted_symbols` to `paper_execution_policy_ceilings` so policy ceilings can
 bound both symbols and future universe scopes without overloading fields.
-The current protected HTTP endpoints use local process state for deterministic
-API validation; the next production hardening step is wiring those endpoints to
-the read/write/revoke methods on `PostgresPaperExecutionStore` and the
-execution worker queue.
+The protected HTTP endpoints keep local process state only as the
+SQLite/offline deterministic fallback; the next production hardening step is
+moving accepted execution-decision recording into a dedicated worker queue with
+durable idempotency reservation.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.
