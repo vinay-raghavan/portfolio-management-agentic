@@ -23,7 +23,7 @@ This slice establishes the safe contract between research, simulation, and the f
 - Show redacted audit events for paper-ledger actions.
 - Export audit rows as JSON-ready, redacted report data without writing files.
 - Surface stored readiness preflight status, provider reconciliation, provider refresh, submitted strategy, blocking reasons, paper-only policy, and human approval requirement in report data and the web console.
-- Persist strategy drafts, backtest requests, paper orders, paper positions, approval requests, simulated fills, and audit events in SQLite when `PAPER_LEDGER_DB_PATH` is configured.
+- Persist strategy drafts, backtest requests, paper orders, paper positions, approval requests, simulated fills, and audit events in tenant-scoped Postgres for production-like runs, with SQLite retained only as the explicit local/offline fallback when `PAPER_LEDGER_DB_PATH` is configured.
 
 ## Safety Boundary
 

@@ -136,7 +136,7 @@ Current coverage:
   contracts keep token payloads out of serializable summaries, fail closed on
   disabled or mismatched backends, and reject live-broker trading-token material.
 - Provider adapter contracts expose fixture defaults, provider health, import validation, fixture market snapshots, configured read-only JSON market snapshots, configured read-only JSON universes, configured read-only JSON fundamentals, configured read-only JSON sentiment, configured read-only JSON volatility, configured read-only JSON macro context, and universe membership without credentials or network requirements.
-- Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require readiness preflight before paper order proposals, block incomplete proposal evidence before draft creation, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
+- Strategy, backtest, and paper-ledger contracts persist paper strategy drafts, backtest request history, paper orders, positions, fills, approvals, and audit events through tenant-scoped Postgres in production-like mode, retain explicit SQLite offline coverage, return offline results, require readiness preflight before paper order proposals, block incomplete proposal evidence before draft creation, require approval before simulated fills, update paper positions/accounting, and emit redacted audit events.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared; Ollama runtime profiles include route budgets for every model-visible capability manifest, 80% context-window caps, model digest pinning and verification, private inventory probing without prompts, capability readiness, redacted usage-event schema, deterministic usage-budget decisions, aggregate token/latency/tool summaries, a prompt/routing/retrieval-first tuning gate, and provider-neutral candidate promotion checks for safety, core success, response quality, trajectory, judge errors, token use, and latency.
 - ADK, Codex, Claude Code, Gemini CLI, and generic MCP client profiles use the MCP policy boundary.
 - Harness evaluator contracts define `ContextPack`, `ContextEvaluator`, and
@@ -266,9 +266,11 @@ Compose config also validates the shared `paper-ledger-data` volume and
 `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db`,
 `MARKET_DATA_DB_PATH=/data/market-data.db`, and
 `PROVIDER_CONFIG_DB_PATH=/data/provider-config.db` defaults for durable local
-compatibility state. Market snapshots, screener runs, provider context,
-provider configuration profiles, and provider import-refresh jobs use
-tenant-scoped Postgres when production-like storage is selected. Compose also passes
+compatibility state. Strategy drafts, backtest requests, paper orders,
+positions, fills, approvals, paper-ledger audit events, market snapshots,
+screener runs, provider context, provider configuration profiles, and provider
+import-refresh jobs use tenant-scoped Postgres when production-like storage is
+selected. Compose also passes
 `PORTFOLIO_MARKET_DATA_PROVIDER`,
 `PORTFOLIO_MARKET_DATA_JSON_PATH`, `PORTFOLIO_UNIVERSE_PROVIDER`,
 `PORTFOLIO_UNIVERSE_JSON_PATH`, `PORTFOLIO_FUNDAMENTALS_PROVIDER`,

@@ -123,6 +123,7 @@ from .provider_data_store import (
     count_stored_universe_members,
 )
 from .paper_ledger import (
+    PostgresPaperLedgerStore,
     SQLitePaperLedgerStore,
     approve_fixture_paper_order_simulation,
     build_paper_ledger_store,
@@ -297,6 +298,7 @@ __all__ = [
     "OHLCVBar",
     "PaperAuditExport",
     "PaperBatchRequest",
+    "PostgresPaperLedgerStore",
     "DeterministicPaperExecutionWorker",
     "PaperExecutionDecision",
     "PaperExecutionGrant",
