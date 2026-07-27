@@ -46,8 +46,15 @@ fall back to clarification rather than widening the tool bundle.
 
 ## Integration path
 
-The runtime should call `DeterministicRouter` before constructing a model
-request, then build a `RouteToolBundle` before context packing or model calls.
+The ADK runtime uses `before_model_callback` to call `DeterministicRouter` before
+model generation. Forbidden and protected human-API routes short-circuit with a
+safe response and an empty tool bundle. Draft-only paper proposal routes mutate
+`LlmRequest.tools_dict` to the exact manifest bundle before the model can see or
+call tools. A matching `before_tool_callback` rejects stale or out-of-route tool
+calls as a second guard.
+
 If the decision is `needs_classification`, a schema-constrained classifier may
 choose among read-only capabilities and must fall back to clarification for
-invalid or low-confidence output.
+invalid or low-confidence output. Legacy pre-market briefing remains on the
+static ADK workflow path until it is promoted into a capability manifest; this is
+the remaining blocker before ambiguous prompts can fail closed by default.

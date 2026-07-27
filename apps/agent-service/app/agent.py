@@ -16,16 +16,20 @@
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from google.adk.agents import Agent
 from google.adk.apps import App
 from google.adk.models import Gemini
+from google.adk.models.llm_response import LlmResponse
 from google.genai import types
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 for relative_path in (
     "packages/policy",
     "packages/domain",
+    "packages/capabilities",
+    "packages/harness",
     "packages/model-provider",
     "apps/mcp-server",
 ):
@@ -86,6 +90,10 @@ from portfolio_mcp.tools import (  # noqa: E402
 from portfolio_model_provider import (  # noqa: E402
     ModelProvider,
     load_model_provider_config,
+)
+from portfolio_harness import (  # noqa: E402
+    DeterministicRouter,
+    RouteDecisionType,
 )
 
 
@@ -152,6 +160,104 @@ Workflow routes:
 """
 
 
+ROUTER = DeterministicRouter()
+
+
+def _extract_text_from_content(content: Any) -> str:
+    if content is None:
+        return ""
+    parts = getattr(content, "parts", None) or ()
+    text_parts: list[str] = []
+    for part in parts:
+        text = getattr(part, "text", None)
+        if text:
+            text_parts.append(str(text))
+    return "\n".join(text_parts)
+
+
+def _route_scope_model_request(context: Any, llm_request: Any) -> LlmResponse | None:
+    """Filter model-visible tools to the deterministic route bundle."""
+    user_text = _extract_text_from_content(getattr(context, "user_content", None))
+    decision = ROUTER.route(user_text)
+    tools_dict = getattr(llm_request, "tools_dict", {}) or {}
+    bundle = ROUTER.tool_bundle_for(decision, exposed_tool_names=set(tools_dict))
+
+    if decision.decision_type == RouteDecisionType.FORBIDDEN:
+        llm_request.tools_dict = {}
+        return _safe_route_response(
+            error_code="portfolio_route_forbidden",
+            message=(
+                "I can’t help with live trading, broker-token use, credential "
+                "disclosure, or approval bypass. I can help with the safe "
+                "paper-only workflow instead."
+            ),
+            metadata=bundle.to_dict(),
+        )
+
+    if decision.decision_type == RouteDecisionType.HUMAN_API_REQUIRED:
+        llm_request.tools_dict = {}
+        return _safe_route_response(
+            error_code="portfolio_human_api_required",
+            message=(
+                "That action must go through the authenticated human-facing API "
+                f"{decision.human_api}; it is not model-visible."
+            ),
+            metadata=bundle.to_dict(),
+        )
+
+    if decision.decision_type == RouteDecisionType.CAPABILITY:
+        if not bundle.model_visible:
+            llm_request.tools_dict = {}
+            return _safe_route_response(
+                error_code="portfolio_route_unavailable",
+                message="This route is unavailable because its required tool bundle is incomplete.",
+                metadata=bundle.to_dict(),
+            )
+        llm_request.tools_dict = {
+            tool_name: tools_dict[tool_name]
+            for tool_name in bundle.tool_names
+            if tool_name in tools_dict
+        }
+
+    return None
+
+
+def _route_scope_tool_call(tool: Any, args: dict[str, Any], context: Any) -> dict | None:
+    del args
+    user_text = _extract_text_from_content(getattr(context, "user_content", None))
+    decision = ROUTER.route(user_text)
+    tool_name = getattr(tool, "name", getattr(tool, "__name__", ""))
+
+    if decision.decision_type == RouteDecisionType.NEEDS_CLASSIFICATION:
+        return None
+    if decision.decision_type != RouteDecisionType.CAPABILITY:
+        return {
+            "error": "tool_not_allowed_for_route",
+            "tool": tool_name,
+            "capability": decision.capability_name,
+        }
+    if tool_name not in decision.allowed_tools:
+        return {
+            "error": "tool_not_allowed_for_route",
+            "tool": tool_name,
+            "capability": decision.capability_name,
+        }
+    return None
+
+
+def _safe_route_response(
+    *,
+    error_code: str,
+    message: str,
+    metadata: dict[str, object],
+) -> LlmResponse:
+    return LlmResponse(
+        content=types.Content(role="model", parts=[types.Part(text=message)]),
+        error_code=error_code,
+        custom_metadata={"route_gate": metadata},
+    )
+
+
 root_agent = Agent(
     name="portfolio_management_agent",
     model=build_model(),
@@ -180,6 +286,8 @@ Core rules:
 
 {WORKFLOW_ROUTING_GUIDE}
 """,
+    before_model_callback=_route_scope_model_request,
+    before_tool_callback=_route_scope_tool_call,
     tools=[
         get_portfolio_summary,
         get_watchlist_snapshot,

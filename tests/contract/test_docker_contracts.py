@@ -103,9 +103,11 @@ def test_compose_mounts_paper_ledger_volume() -> None:
     assert "paper-ledger-data:" in compose
 
 
-def test_agent_service_image_includes_shared_model_provider_package() -> None:
+def test_agent_service_image_includes_shared_runtime_packages() -> None:
     dockerfile = Path("apps/agent-service/Dockerfile").read_text()
 
+    assert "COPY ./packages/capabilities ./packages/capabilities" in dockerfile
+    assert "COPY ./packages/harness ./packages/harness" in dockerfile
     assert "COPY ./packages/model-provider ./packages/model-provider" in dockerfile
 
 

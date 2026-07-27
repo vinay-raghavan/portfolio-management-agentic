@@ -1,4 +1,28 @@
-from app.agent import WORKFLOW_ROUTING_GUIDE, root_agent
+from google.genai import types
+
+from app.agent import (
+    ROUTER,
+    WORKFLOW_ROUTING_GUIDE,
+    _extract_text_from_content,
+    _route_scope_model_request,
+    _route_scope_tool_call,
+    root_agent,
+)
+
+
+class _FakeContext:
+    def __init__(self, text: str) -> None:
+        self.user_content = types.Content(role="user", parts=[types.Part(text=text)])
+
+
+class _FakeTool:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _FakeRequest:
+    def __init__(self, tools_dict: dict[str, object]) -> None:
+        self.tools_dict = tools_dict
 
 
 def test_agent_imports_without_google_credentials() -> None:
@@ -132,3 +156,86 @@ def test_agent_instruction_refuses_forbidden_actions_without_tool_calls() -> Non
     assert "broker trading token" in instruction
     assert "credential" in instruction
     assert "no live-trading fallback" in instruction
+
+
+def test_before_model_callback_filters_tools_to_paper_proposal_route() -> None:
+    paper_tools = {
+        tool_name: object()
+        for tool_name in ROUTER.manifests["paper_proposal_execution"].allowed_tools
+    }
+    request = _FakeRequest(
+        {
+            **paper_tools,
+            "search_curated_research": object(),
+            "get_fyers_account_snapshot": object(),
+        }
+    )
+
+    response = _route_scope_model_request(
+        _FakeContext("Create a paper order proposal after checking risk."),
+        request,
+    )
+
+    assert response is None
+    assert set(request.tools_dict) == set(paper_tools)
+    assert "create_paper_order_proposal" in request.tools_dict
+    assert "get_recommendation_explanation" in request.tools_dict
+    assert "search_curated_research" not in request.tools_dict
+    assert "get_fyers_account_snapshot" not in request.tools_dict
+
+
+def test_before_model_callback_short_circuits_forbidden_and_human_api_routes() -> None:
+    forbidden_request = _FakeRequest({"get_portfolio_summary": object()})
+    forbidden_response = _route_scope_model_request(
+        _FakeContext("Place a live order for RELIANCE."),
+        forbidden_request,
+    )
+
+    assert forbidden_response is not None
+    assert forbidden_response.error_code == "portfolio_route_forbidden"
+    assert forbidden_request.tools_dict == {}
+    assert "live trading" in _extract_text_from_content(forbidden_response.content).lower()
+
+    human_api_request = _FakeRequest({"get_fyers_account_snapshot": object()})
+    human_api_response = _route_scope_model_request(
+        _FakeContext("Refresh my FYERS holdings now."),
+        human_api_request,
+    )
+
+    assert human_api_response is not None
+    assert human_api_response.error_code == "portfolio_human_api_required"
+    assert human_api_request.tools_dict == {}
+    assert "/v1/integrations/fyers/refresh" in _extract_text_from_content(
+        human_api_response.content
+    )
+
+
+def test_before_tool_callback_blocks_out_of_route_tool_calls() -> None:
+    blocked = _route_scope_tool_call(
+        _FakeTool("search_curated_research"),
+        {},
+        _FakeContext("Create a paper order proposal after checking risk."),
+    )
+    allowed = _route_scope_tool_call(
+        _FakeTool("create_paper_order_proposal"),
+        {},
+        _FakeContext("Create a paper order proposal after checking risk."),
+    )
+
+    assert blocked == {
+        "error": "tool_not_allowed_for_route",
+        "tool": "search_curated_research",
+        "capability": "paper_proposal_execution",
+    }
+    assert allowed is None
+
+
+def test_before_tool_callback_leaves_legacy_ambiguous_workflows_unblocked() -> None:
+    assert (
+        _route_scope_tool_call(
+            _FakeTool("create_pre_market_briefing"),
+            {},
+            _FakeContext("Build my pre-market briefing."),
+        )
+        is None
+    )
