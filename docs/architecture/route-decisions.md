@@ -22,7 +22,9 @@ The router currently returns a `RouteDecision` for:
   operations stay outside model-visible tools.
 - Paper approval routes to `/v1/paper/batches/{id}/approve`; approval identity
   must come from server-created `ActorContext` derived from the authenticated
-  human API, never from `approved_by` in model output or request JSON.
+  human API with an explicit tenant id, never from `approved_by` in model
+  output or request JSON. Missing actor subject or tenant metadata fails before
+  protected paper state is read or written.
 - Paper proposal routes may expose only the draft-only
   `paper_proposal_execution` capability tools.
 - `approve_paper_order_simulation` and `simulate_approved_paper_fill` remain

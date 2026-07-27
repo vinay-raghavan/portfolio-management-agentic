@@ -73,6 +73,15 @@ def test_paper_policy_api_requires_authenticated_admin_actor() -> None:
     client = TestClient(app)
 
     missing = client.post("/v1/paper/policies", json={"name": "Incomplete"})
+    missing_tenant = client.post(
+        "/v1/paper/policies",
+        headers={
+            "X-Actor-Sub": "admin-without-tenant",
+            "X-Actor-Roles": "admin",
+            "X-Request-Id": "req-missing-tenant",
+        },
+        json={"name": "Incomplete"},
+    )
     viewer = client.post(
         "/v1/paper/policies",
         headers=_headers("viewer-1", "viewer"),
@@ -80,6 +89,8 @@ def test_paper_policy_api_requires_authenticated_admin_actor() -> None:
     )
 
     assert missing.status_code == 401
+    assert missing_tenant.status_code == 401
+    assert missing_tenant.json()["detail"] == "actor_tenant_required"
     assert viewer.status_code == 403
 
 

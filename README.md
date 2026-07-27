@@ -36,9 +36,10 @@ explicit safety policy.
 - Protected paper-execution HTTP contracts are available under `/v1/paper/*`
   for API validation and production-like Postgres runtimes: admin policy
   creation, analyst batch proposals, approver-bound grants/revocation, and
-  execution-under-grant decisions derive identity from `ActorContext` headers,
-  reject body-spoofed approver fields, and use the tenant-scoped Postgres paper
-  execution store when `PORTFOLIO_STORAGE_BACKEND=postgres`. The Postgres path
+  execution-under-grant decisions derive identity and explicit tenant scope from
+  trusted `ActorContext` headers, reject body-spoofed approver fields, and use
+  the tenant-scoped Postgres paper execution store when
+  `PORTFOLIO_STORAGE_BACKEND=postgres`. The Postgres path
   enqueues durable `PaperExecutionWorkItem` records and processes them through
   the standalone deterministic `PaperExecutionQueueProcessor`, giving the API
   and deployed `paper-execution-worker` the same fail-closed execution
