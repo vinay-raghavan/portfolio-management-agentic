@@ -3045,6 +3045,166 @@ body:has(.app-shell[data-theme="light"]) {
   color: var(--base-text-medium-default);
 }
 
+/* Rounded cockpit polish: final CapacityForecast-inspired pass that makes
+   page sections, lists, rows, and controls feel like soft dashboard widgets. */
+:root {
+  --widget-surface-halo:
+    0 22px 48px -38px color-mix(in srgb, var(--accent-secondary) 34%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--base-text-default) 7%, transparent);
+  --widget-inset-radius: max(24px, calc(var(--widget-radius) - 18px));
+}
+
+.topbar,
+.mission-band,
+.operating-model,
+.panel,
+.metric-tile,
+.page-strip {
+  background-clip: padding-box;
+}
+
+.workflow-list,
+.provider-list,
+.validation-stack,
+.readiness-stack,
+.source-setup-stack,
+.template-guidance-stack,
+.onboarding-stack,
+.detail-list,
+.source-list,
+.template-list,
+.preview-list,
+.reconciliation-list,
+.report-stack {
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--base-border-weak-default) 34%, transparent);
+  border-radius: var(--widget-radius);
+  background:
+    radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-primary) 8%, transparent), transparent 34%),
+    color-mix(in srgb, var(--base-bg-medium-default) 18%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--base-text-default) 4%, transparent);
+}
+
+.workflow-button,
+.provider-row,
+.validation-row,
+.readiness-row,
+.profile-row,
+.source-row,
+.template-row,
+.onboarding-row,
+.preview-row,
+.reconciliation-row,
+.factor-card,
+.detail-row,
+.approval-card,
+.paper-order-card,
+.index-strip div,
+.workflow-summary div,
+.result-band,
+.paper-preflight,
+.selected-workflow,
+.preflight-grid div,
+.preflight-policy,
+.preflight-blockers {
+  overflow: hidden;
+  border-radius: var(--widget-inset-radius);
+  background-clip: padding-box;
+  box-shadow: var(--widget-surface-halo);
+}
+
+.page-tab,
+.segment-button,
+.command-button,
+.theme-toggle,
+.status-pill,
+.score-bar,
+.allowed-actions span,
+.action-chip-list span,
+.setup-gap-list span,
+.env-chip-list code {
+  background-clip: padding-box;
+}
+
+.table-row,
+.table-head {
+  border-radius: var(--widget-inset-radius);
+}
+
+.candidate-table {
+  padding: 8px;
+}
+
+.app-shell[data-theme="light"] .workflow-list,
+.app-shell[data-theme="light"] .provider-list,
+.app-shell[data-theme="light"] .validation-stack,
+.app-shell[data-theme="light"] .readiness-stack,
+.app-shell[data-theme="light"] .source-setup-stack,
+.app-shell[data-theme="light"] .template-guidance-stack,
+.app-shell[data-theme="light"] .onboarding-stack,
+.app-shell[data-theme="light"] .detail-list,
+.app-shell[data-theme="light"] .source-list,
+.app-shell[data-theme="light"] .template-list,
+.app-shell[data-theme="light"] .preview-list,
+.app-shell[data-theme="light"] .reconciliation-list,
+.app-shell[data-theme="light"] .report-stack {
+  border-color: rgba(14, 56, 82, 0.1);
+  background:
+    radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-primary) 7%, transparent), transparent 34%),
+    rgba(255, 255, 255, 0.42);
+}
+
+.app-shell[data-theme="light"] .workflow-button,
+.app-shell[data-theme="light"] .provider-row,
+.app-shell[data-theme="light"] .validation-row,
+.app-shell[data-theme="light"] .readiness-row,
+.app-shell[data-theme="light"] .profile-row,
+.app-shell[data-theme="light"] .source-row,
+.app-shell[data-theme="light"] .template-row,
+.app-shell[data-theme="light"] .onboarding-row,
+.app-shell[data-theme="light"] .preview-row,
+.app-shell[data-theme="light"] .reconciliation-row,
+.app-shell[data-theme="light"] .factor-card,
+.app-shell[data-theme="light"] .detail-row,
+.app-shell[data-theme="light"] .approval-card,
+.app-shell[data-theme="light"] .paper-order-card,
+.app-shell[data-theme="light"] .index-strip div,
+.app-shell[data-theme="light"] .workflow-summary div,
+.app-shell[data-theme="light"] .result-band,
+.app-shell[data-theme="light"] .paper-preflight,
+.app-shell[data-theme="light"] .selected-workflow,
+.app-shell[data-theme="light"] .preflight-grid div,
+.app-shell[data-theme="light"] .preflight-policy,
+.app-shell[data-theme="light"] .preflight-blockers {
+  box-shadow:
+    0 20px 42px -36px rgba(14, 56, 82, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    --widget-radius: 36px;
+    --widget-radius-soft: 46px;
+    --widget-inset-radius: 28px;
+  }
+
+  .workflow-list,
+  .provider-list,
+  .validation-stack,
+  .readiness-stack,
+  .source-setup-stack,
+  .template-guidance-stack,
+  .onboarding-stack,
+  .detail-list,
+  .source-list,
+  .template-list,
+  .preview-list,
+  .reconciliation-list,
+  .report-stack {
+    padding: 6px;
+  }
+}
+
 @media (max-width: 1180px) {
   .operating-model__flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));

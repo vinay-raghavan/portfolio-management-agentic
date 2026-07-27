@@ -220,6 +220,30 @@ def test_web_console_uses_uniform_widget_rounding_for_rows_and_controls() -> Non
     assert "border-left-width: 1px;" in rounded_refinement
 
 
+def test_web_console_uses_pillowed_widget_polish_for_both_themes() -> None:
+    styles = (WEB_ROOT / "src" / "styles.css").read_text()
+    polish = styles.split("/* Rounded cockpit polish", 1)[1]
+
+    for expected in (
+        "--widget-surface-halo",
+        "--widget-inset-radius",
+        "background-clip: padding-box;",
+        ".workflow-list",
+        ".provider-list",
+        ".validation-stack",
+        ".detail-list",
+        ".app-shell[data-theme=\"light\"] .workflow-list",
+        "@media (max-width: 760px)",
+        "--widget-radius-soft: 46px;",
+    ):
+        assert expected in polish
+
+    assert "--widget-inset-radius: max(24px, calc(var(--widget-radius) - 18px));" in polish
+    assert "border-radius: var(--widget-inset-radius);" in polish
+    assert "border-radius: 4px" not in polish
+    assert "border-radius: 0" not in polish
+
+
 def test_compose_exposes_web_console_without_secrets() -> None:
     compose = Path("docker-compose.yml").read_text()
 
