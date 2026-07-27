@@ -19,14 +19,14 @@
   --signal: #0891b2;
   --signal-soft: #cffafe;
   --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-  --radius: 32px;
-  --radius-xs: 18px;
-  --radius-sm: 24px;
-  --radius-md: 32px;
-  --radius-lg: 40px;
-  --radius-xl: 56px;
+  --radius: 34px;
+  --radius-xs: 22px;
+  --radius-sm: 28px;
+  --radius-md: 34px;
+  --radius-lg: 44px;
+  --radius-xl: 60px;
   --widget-radius: var(--radius-lg);
-  --control-radius: 28px;
+  --control-radius: 30px;
   --pill-radius: 999px;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -1661,14 +1661,14 @@ p {
   --signal: var(--accent-secondary);
   --signal-soft: color-mix(in srgb, var(--accent-secondary) 16%, transparent);
   --shadow: 0 24px 54px -36px rgba(236, 240, 245, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --radius: 32px;
-  --radius-xs: 18px;
-  --radius-sm: 24px;
-  --radius-md: 32px;
-  --radius-lg: 40px;
-  --radius-xl: 56px;
+  --radius: 34px;
+  --radius-xs: 22px;
+  --radius-sm: 28px;
+  --radius-md: 34px;
+  --radius-lg: 44px;
+  --radius-xl: 60px;
   --widget-radius: var(--radius-lg);
-  --control-radius: 28px;
+  --control-radius: 30px;
   --pill-radius: 999px;
   --focus-ring: 0 0 0 2px rgba(124, 173, 247, 0.34), 0 0 0 6px rgba(124, 173, 247, 0.16);
 
@@ -2792,9 +2792,10 @@ body:has(.app-shell[data-theme="light"]) {
   display: grid;
   gap: 8px;
   overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--base-border-weak-default) 40%, transparent);
+  border-radius: var(--widget-radius);
+  background: color-mix(in srgb, var(--base-bg-medium-default) 18%, transparent);
 }
 
 .table-row {
@@ -2842,6 +2843,21 @@ body:has(.app-shell[data-theme="light"]) {
 
 .preflight-head {
   padding: 2px 4px;
+}
+
+.selected-workflow {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--base-border-weak-default) 72%, transparent);
+  border-radius: var(--widget-radius);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, rgba(24, 31, 42, 0.9) 90%, transparent), color-mix(in srgb, rgba(11, 17, 24, 0.86) 94%, transparent)),
+    color-mix(in srgb, var(--surface) 90%, transparent);
+}
+
+.app-shell[data-theme="light"] .selected-workflow {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, rgba(255, 255, 255, 0.92) 90%, transparent), color-mix(in srgb, rgba(232, 242, 250, 0.86) 94%, transparent)),
+    color-mix(in srgb, var(--surface) 90%, transparent);
 }
 
 .segment-button,
