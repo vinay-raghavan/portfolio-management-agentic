@@ -169,6 +169,7 @@ def _workflow_evidence() -> list[dict[str, Any]]:
                 "explain_candidate_evidence",
                 "explain_factor_stack",
                 "search_pattern_library",
+                "search_curated_research",
                 "cite_strategy_evidence",
             ],
         },

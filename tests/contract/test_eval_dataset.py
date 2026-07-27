@@ -70,7 +70,7 @@ def test_eval_rubric_matches_agent_workflow_routes() -> None:
         "create_pre_market_briefing",
         "provider catalog and health tools",
         "import validation, onboarding, import preview, reconciliation",
-        "candidate-evidence, pattern-library, citation, or factor-stack tools",
+        "candidate-evidence, pattern-library, curated-research, citation, or factor-stack tools",
         "recommendation explanation before drafting paper order proposals",
         "approve the paper simulation before simulating a fill",
         "refuse live trading, live strategy enablement, broker trading-token access",

@@ -77,6 +77,7 @@ from portfolio_mcp.tools import (  # noqa: E402
     list_universes,
     run_screener,
     run_momentum_screener,
+    search_curated_research,
     search_pattern_library,
     simulate_approved_paper_fill,
     refresh_provider_import_profile,
@@ -142,7 +143,7 @@ WORKFLOW_ROUTING_GUIDE = """
 Workflow routes:
 - Pre-market briefing: prefer create_pre_market_briefing. If composing manually, call get_portfolio_summary, get_watchlist_snapshot, get_signal_summary, get_research_digest, and get_risk_review before answering. Return review actions only.
 - Provider readiness: call list_data_providers and get_data_provider_health before claiming configured data is available. Use validate_data_provider_imports, list_provider_source_onboarding, list_provider_import_previews, list_provider_import_reconciliation, list_provider_import_jobs, get_provider_refresh_readiness, refresh_provider_import_profile, and run_provider_refresh_schedule for setup, preview, reconciliation, backoff, and refresh questions. Never expose file paths or credential values.
-- Candidate explanation: use list_universes or get_universe_members when universe context matters, run_screener or run_momentum_screener for candidates, explain_candidate_evidence for factor details, search_pattern_library/get_pattern_playbook/cite_strategy_evidence for citations, and explain_factor_stack for the final evidence stack.
+- Candidate explanation: use list_universes or get_universe_members when universe context matters, run_screener or run_momentum_screener for candidates, explain_candidate_evidence for factor details, search_pattern_library/search_curated_research/get_pattern_playbook/cite_strategy_evidence for citations, and explain_factor_stack for the final evidence stack.
 - Recommendation to paper order: call get_recommendation_explanation first. If the user asks for paper execution, create or inspect simulated backtest evidence with create_backtest_request, get_backtest_request, get_backtest_result, and list_backtest_requests, then call create_paper_order_proposal only when the readiness preflight can stay pending approval. Show get_approval_queue and get_audit_events after proposal attempts.
 - Approval-gated simulated fill: approval must come from the verified human approval API before any simulated fill. The model cannot approve orders or supply approver identity. Use get_approval_queue, simulate_approved_paper_fill, list_paper_orders, list_paper_positions, list_paper_fills, get_paper_portfolio_accounting, and get_audit_events when the user explicitly asks to inspect approved simulations.
 - Strategy and backtest history: use draft_paper_strategy for new paper strategy drafts, list_strategy_drafts/get_strategy_draft for stored strategy context, and list_backtest_requests/get_backtest_request/get_backtest_result for stored simulation context.
@@ -165,6 +166,7 @@ Core rules:
 - Use provider source onboarding, dry-run import previews, import reconciliation, profiles, source templates, refresh readiness, and import-job history to explain configured local data readiness without exposing file paths.
 - Use market snapshot and screener-run history tools when users ask what data has been cached or already screened.
 - Use screener, pattern-library, and factor-stack tools when explaining candidate setups.
+- Use curated research search only for allowlisted read-only research context; do not browse or ingest arbitrary URLs.
 - Use recommendation explanations to join screener, factor, strategy-history, backtest, risk, and paper-ledger evidence before proposing next steps.
 - Use strategy draft history, backtest request/result tools, and paper-ledger tools for simulation review, pending approvals, and audit context.
 - Use paper-trading reports for read-only review summaries and redacted audit exports.
@@ -206,6 +208,7 @@ Core rules:
         list_screener_runs,
         explain_candidate_evidence,
         search_pattern_library,
+        search_curated_research,
         get_pattern_playbook,
         cite_strategy_evidence,
         explain_factor_stack,
