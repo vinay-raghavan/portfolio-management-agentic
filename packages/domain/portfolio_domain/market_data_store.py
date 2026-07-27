@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .database_runtime import DatabaseBackend, load_database_runtime_profile
 from .models import (
     GateResult,
     MarketDataSnapshot,
@@ -394,10 +396,269 @@ class SQLiteMarketDataStore(MarketDataStore):
             )
 
 
+class PostgresMarketDataStore(MarketDataStore):
+    """Tenant-scoped Postgres market-data store using JSONB payload columns."""
+
+    def __init__(
+        self,
+        *,
+        tenant_id: str,
+        connection_factory: Callable[[], Any],
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        if not tenant_id.strip():
+            raise ValueError("tenant_id is required for Postgres market-data storage")
+        self._tenant_id = tenant_id.strip()
+        self._connection_factory = connection_factory
+        self._now = now or (lambda: datetime.now(UTC))
+
+    def storage_status(self) -> dict[str, Any]:
+        return {
+            "status": "persisted",
+            "backend": "postgres",
+            "configured": True,
+            "tenant_scoped": True,
+        }
+
+    def record_market_snapshot(
+        self,
+        snapshot: MarketDataSnapshot,
+    ) -> MarketDataSnapshot:
+        params = {
+            "tenant_id": self._tenant_id,
+            "provider_id": snapshot.provider_id,
+            "symbol": snapshot.symbol.upper().strip(),
+            "as_of": snapshot.as_of,
+            "source": snapshot.source,
+            "payload": snapshot.to_dict(),
+            "recorded_at": _aware_utc(self._now()),
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    INSERT INTO market_data_snapshots (
+                        tenant_id,
+                        provider_id,
+                        symbol,
+                        as_of,
+                        source,
+                        payload,
+                        recorded_at
+                    ) VALUES (
+                        %(tenant_id)s,
+                        %(provider_id)s,
+                        %(symbol)s,
+                        %(as_of)s,
+                        %(source)s,
+                        %(payload)s,
+                        %(recorded_at)s
+                    )
+                    ON CONFLICT (tenant_id, provider_id, symbol, as_of)
+                    DO UPDATE SET
+                        source = EXCLUDED.source,
+                        payload = EXCLUDED.payload,
+                        recorded_at = EXCLUDED.recorded_at
+                    """.strip(),
+                    params,
+                )
+            connection.commit()
+        return snapshot
+
+    def get_market_snapshot(
+        self,
+        symbol: str,
+        provider_id: str | None = None,
+    ) -> MarketDataSnapshot:
+        normalized_symbol = symbol.upper().strip()
+        query = """
+            SELECT payload
+            FROM market_data_snapshots
+            WHERE tenant_id = %(tenant_id)s
+              AND symbol = %(symbol)s
+        """
+        params: dict[str, Any] = {
+            "tenant_id": self._tenant_id,
+            "symbol": normalized_symbol,
+        }
+        if provider_id is not None:
+            query += " AND provider_id = %(provider_id)s"
+            params["provider_id"] = provider_id
+        query += " ORDER BY as_of DESC, provider_id LIMIT 1"
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(query.strip(), params)
+                row = _cursor_one(cursor)
+        if row is None:
+            raise ValueError(f"Unknown stored market snapshot: {symbol}")
+        return _market_snapshot_from_dict(_payload_from_row(row))
+
+    def list_market_snapshots(
+        self,
+        symbol: str | None = None,
+        limit: int = 20,
+    ) -> list[MarketDataSnapshot]:
+        query = """
+            SELECT payload
+            FROM market_data_snapshots
+            WHERE tenant_id = %(tenant_id)s
+        """
+        params: dict[str, Any] = {
+            "tenant_id": self._tenant_id,
+            "limit": max(0, limit),
+        }
+        if symbol:
+            query += " AND symbol = %(symbol)s"
+            params["symbol"] = symbol.upper().strip()
+        query += " ORDER BY as_of, provider_id, symbol LIMIT %(limit)s"
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(query.strip(), params)
+                rows = _cursor_rows(cursor)
+        return [_market_snapshot_from_dict(_payload_from_row(row)) for row in rows]
+
+    def count_market_snapshots(self, provider_id: str | None = None) -> int:
+        query = """
+            SELECT count(*) AS row_count
+            FROM market_data_snapshots
+            WHERE tenant_id = %(tenant_id)s
+        """
+        params: dict[str, Any] = {"tenant_id": self._tenant_id}
+        if provider_id:
+            query += " AND provider_id = %(provider_id)s"
+            params["provider_id"] = provider_id.strip()
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(query.strip(), params)
+                row = _cursor_one(cursor)
+        return int(row["row_count"] if row is not None else 0)
+
+    def record_screener_run(self, screener_run: ScreenerRunResult) -> ScreenerRunResult:
+        params = {
+            "tenant_id": self._tenant_id,
+            "run_id": screener_run.run_id,
+            "universe_id": screener_run.universe_id,
+            "preset": screener_run.preset.strip().lower(),
+            "mode": screener_run.mode,
+            "source": screener_run.source,
+            "payload": screener_run.to_dict(),
+            "recorded_at": _aware_utc(self._now()),
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    INSERT INTO screener_runs (
+                        tenant_id,
+                        run_id,
+                        universe_id,
+                        preset,
+                        mode,
+                        source,
+                        payload,
+                        recorded_at
+                    ) VALUES (
+                        %(tenant_id)s,
+                        %(run_id)s,
+                        %(universe_id)s,
+                        %(preset)s,
+                        %(mode)s,
+                        %(source)s,
+                        %(payload)s,
+                        %(recorded_at)s
+                    )
+                    ON CONFLICT (tenant_id, run_id)
+                    DO UPDATE SET
+                        universe_id = EXCLUDED.universe_id,
+                        preset = EXCLUDED.preset,
+                        mode = EXCLUDED.mode,
+                        source = EXCLUDED.source,
+                        payload = EXCLUDED.payload,
+                        recorded_at = EXCLUDED.recorded_at
+                    """.strip(),
+                    params,
+                )
+            connection.commit()
+        return screener_run
+
+    def get_screener_run(self, run_id: str) -> ScreenerRunResult:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    SELECT payload
+                    FROM screener_runs
+                    WHERE tenant_id = %(tenant_id)s
+                      AND run_id = %(run_id)s
+                    """.strip(),
+                    {
+                        "tenant_id": self._tenant_id,
+                        "run_id": run_id,
+                    },
+                )
+                row = _cursor_one(cursor)
+        if row is None:
+            raise ValueError(f"Unknown screener run: {run_id}")
+        return _screener_run_from_dict(_payload_from_row(row))
+
+    def list_screener_runs(
+        self,
+        universe_id: str | None = None,
+        preset: str | None = None,
+        limit: int = 20,
+    ) -> list[ScreenerRunResult]:
+        query = """
+            SELECT payload
+            FROM screener_runs
+            WHERE tenant_id = %(tenant_id)s
+        """
+        params: dict[str, Any] = {
+            "tenant_id": self._tenant_id,
+            "limit": max(0, limit),
+        }
+        if universe_id:
+            query += " AND universe_id = %(universe_id)s"
+            params["universe_id"] = universe_id
+        if preset:
+            query += " AND preset = %(preset)s"
+            params["preset"] = preset.strip().lower()
+        query += " ORDER BY universe_id, preset, run_id LIMIT %(limit)s"
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(query.strip(), params)
+                rows = _cursor_rows(cursor)
+        return [_screener_run_from_dict(_payload_from_row(row)) for row in rows]
+
+    def _set_tenant_context(self, cursor: Any) -> None:
+        cursor.execute(
+            "SELECT set_config('app.tenant_id', %(tenant_id)s, true)",
+            {"tenant_id": self._tenant_id},
+        )
+
+
 def build_market_data_store(
     env: Mapping[str, str] | None = None,
-) -> MarketDataStore | SQLiteMarketDataStore:
+) -> MarketDataStore | SQLiteMarketDataStore | PostgresMarketDataStore:
     config = env if env is not None else os.environ
+    profile = load_database_runtime_profile(config)
+    if profile.backend == DatabaseBackend.POSTGRES:
+        database_url = profile.database_url
+        tenant_id = config.get("PORTFOLIO_TENANT_ID", "").strip()
+        if not database_url:
+            raise ValueError("PORTFOLIO_DATABASE_URL is required for Postgres market-data storage")
+        if not tenant_id:
+            raise ValueError("PORTFOLIO_TENANT_ID is required for Postgres market-data storage")
+        return PostgresMarketDataStore(
+            tenant_id=tenant_id,
+            connection_factory=_postgres_connection_factory(database_url),
+        )
     db_path = config.get(MARKET_DATA_DB_ENV, "").strip()
     if db_path:
         return SQLiteMarketDataStore(db_path)
@@ -409,6 +670,10 @@ def count_stored_market_snapshots(
     provider_id: str | None = None,
 ) -> int:
     config = env if env is not None else os.environ
+    profile = load_database_runtime_profile(config)
+    if profile.backend == DatabaseBackend.POSTGRES:
+        return build_market_data_store(config).count_market_snapshots(provider_id)
+
     db_path = config.get(MARKET_DATA_DB_ENV, "").strip()
     if not db_path:
         return _MARKET_DATA_STORE.count_market_snapshots(provider_id)
@@ -431,11 +696,67 @@ def count_stored_market_snapshots(
         return 0
     return int(row["row_count"] if row is not None else 0)
 
+def _postgres_connection_factory(database_url: str) -> Callable[[], Any]:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+
+        return psycopg.connect(connection_url)
+
+    return connection_factory
+
+
+def _psycopg_database_url(database_url: str) -> str:
+    stripped = database_url.strip()
+    if stripped.startswith("postgresql+psycopg://"):
+        return "postgresql://" + stripped.removeprefix("postgresql+psycopg://")
+    return stripped
+
+
+def _cursor_rows(cursor: Any) -> list[dict[str, Any]]:
+    rows = cursor.fetchall()
+    return [_row_mapping(cursor, row) for row in rows]
+
+
+def _cursor_one(cursor: Any) -> dict[str, Any] | None:
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    return _row_mapping(cursor, row)
+
+
+def _row_mapping(cursor: Any, row: Any) -> dict[str, Any]:
+    if isinstance(row, Mapping):
+        return dict(row)
+    if not isinstance(row, Sequence):
+        raise TypeError("Postgres market-data cursor rows must be mappings or sequences")
+    description = getattr(cursor, "description", None)
+    if not description:
+        raise TypeError("Postgres market-data sequence rows require description")
+    keys = [str(column[0]) for column in description]
+    return dict(zip(keys, row, strict=False))
+
+
+def _payload_from_row(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    payload = row["payload"]
+    if isinstance(payload, str):
+        return _from_json(payload)
+    if isinstance(payload, Mapping):
+        return payload
+    raise TypeError("Postgres market-data payload must be a mapping or JSON string")
+
+
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
 
 _MARKET_DATA_STORE = build_market_data_store()
 
 
-def get_market_data_store() -> MarketDataStore | SQLiteMarketDataStore:
+def get_market_data_store() -> MarketDataStore | SQLiteMarketDataStore | PostgresMarketDataStore:
     return _MARKET_DATA_STORE
 
 

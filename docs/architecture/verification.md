@@ -21,7 +21,7 @@ Current coverage:
 - Product data and pattern contracts list fixture/configured universes, run hard-gated deterministic screeners, seed file-backed PatternStore/ResearchStore contracts from versioned pattern cards, reject arbitrary URL research queries in fixture and Postgres modes, execute tenant-scoped PostgresResearchStore full-text retrieval through an injectable connection, retrieve pattern cards, cite strategy evidence, and explain factor stacks without vector retrieval.
 - Provider readiness evidence contracts disclose stale, backoff, pending, or retry-due provider state in configured screener and recommendation explanations without creating paper orders or leaking local provider paths.
 - Provider import-reconciliation gate contracts disclose source-changed, store-mismatch, pending-refresh, and needs-attention states in configured screeners and recommendations, downgrade confidence, and remove paper-order next actions without leaking local provider paths.
-- Market-data persistence contracts store and reload fixture/configured-provider market snapshots, provider context records, and screener runs in their tool payload shape without exposing database paths or credentials.
+- Market-data persistence contracts store and reload fixture/configured-provider market snapshots and screener runs through tenant-scoped Postgres in production-like mode, retain explicit SQLite offline coverage, and avoid exposing database paths or credentials. Provider context records remain covered on the SQLite compatibility path until that store is ported.
 - Provider profile metadata contracts store configured-provider profile and import-refresh job summaries without exposing resolved local paths, file names, credentials, or raw provider payloads.
 - Protected FYERS integration API contracts verify typed `FyersConnection` and
   `ProviderRefreshJob` public contracts, `ActorContext`-required OAuth
@@ -266,7 +266,8 @@ Compose config also validates the shared `paper-ledger-data` volume and
 `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db`,
 `MARKET_DATA_DB_PATH=/data/market-data.db`, and
 `PROVIDER_CONFIG_DB_PATH=/data/provider-config.db` defaults for durable local
-ledger, market-data, and provider-profile metadata state. It also passes
+compatibility state. Market snapshots and screener runs use tenant-scoped
+Postgres when production-like storage is selected. Compose also passes
 `PORTFOLIO_MARKET_DATA_PROVIDER`,
 `PORTFOLIO_MARKET_DATA_JSON_PATH`, `PORTFOLIO_UNIVERSE_PROVIDER`,
 `PORTFOLIO_UNIVERSE_JSON_PATH`, `PORTFOLIO_FUNDAMENTALS_PROVIDER`,
@@ -286,9 +287,11 @@ or needs-attention states downgrade configured evidence and block paper-order
 next actions until refresh/reconciliation is reviewed. Provider profile refresh jobs persist sanitized
 validation and execution summaries, source env key names, import counts,
 retry/backoff state, and stale-data readiness. Configured refreshes can import
-normalized snapshots into
-`market_data_snapshots`, `provider_universe_members`, and
-`provider_factor_snapshots` when `MARKET_DATA_DB_PATH` is configured.
+normalized market snapshots into tenant-scoped Postgres
+`market_data_snapshots` in production-like mode, or into the SQLite fallback
+when `MARKET_DATA_DB_PATH` is configured. Provider universe and factor records
+still write to the compatibility `provider_universe_members` and
+`provider_factor_snapshots` stores while that path is ported.
 
 The local LLM profile uses native private Ollama by default. The first pilot
 model is `llama3.1:8b`; the runtime contract remains model-independent:

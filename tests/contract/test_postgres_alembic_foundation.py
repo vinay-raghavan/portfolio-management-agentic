@@ -93,6 +93,9 @@ def test_compose_has_postgres_redis_and_migration_job() -> None:
     assert "uv run python ../../scripts/process_paper_execution_queue.py --daemon" in compose
     assert "PORTFOLIO_TENANT_IDS: ${PORTFOLIO_TENANT_IDS:-}" in compose
     assert "PORTFOLIO_TENANT_ID: ${PORTFOLIO_TENANT_ID:-11111111-1111-1111-1111-111111111111}" in compose
+    assert compose.count(
+        "PORTFOLIO_TENANT_ID: ${PORTFOLIO_TENANT_ID:-11111111-1111-1111-1111-111111111111}"
+    ) >= 3
     assert "PAPER_EXECUTION_WORKER_ID: ${PAPER_EXECUTION_WORKER_ID:-paper-execution-worker-1}" in compose
     assert "PAPER_EXECUTION_WORKER_SCHEDULE_BACKOFF_SECONDS: ${PAPER_EXECUTION_WORKER_SCHEDULE_BACKOFF_SECONDS:-30}" in compose
     assert "uv run alembic -c infra/db/alembic.ini upgrade head" in compose
@@ -144,7 +147,7 @@ def test_alembic_revision_chain_has_single_head_and_no_orphans() -> None:
             heads.discard(parent)
 
     assert roots == {"20260725_0001"}
-    assert heads == {"20260727_0006"}
+    assert heads == {"20260727_0007"}
     assert all(
         len(children) <= 1 for children in children_by_parent.values()
     ), "linear production migration chain expected until an explicit merge migration exists"

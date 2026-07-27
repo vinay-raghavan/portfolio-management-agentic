@@ -103,6 +103,7 @@ from .credential_vault import (
 )
 from .fyers_integration_store import PostgresFyersIntegrationStore
 from .market_data_store import (
+    PostgresMarketDataStore,
     SQLiteMarketDataStore,
     build_market_data_store,
     count_stored_market_snapshots,
@@ -324,6 +325,7 @@ __all__ = [
     "PostgresResearchStore",
     "PostgresActorIdentityStore",
     "PostgresFyersIntegrationStore",
+    "PostgresMarketDataStore",
     "PostgresPaperExecutionStore",
     "PostgresSessionMemoryStore",
     "PortfolioSummary",

@@ -67,8 +67,8 @@ explicit safety policy.
   Worker JSON summaries expose backed-off tenant workers and the sanitized
   schedule-state backend, and operators can run a read-only health snapshot
   without claiming queue items.
-- Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
-- Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
+- Market-data persistence stores fixture/configured-provider market snapshots and screener runs in tenant-scoped Postgres tables for production-like runs, using the same JSON payload shape returned by the tools. `MARKET_DATA_DB_PATH` remains the explicit SQLite offline fallback.
+- Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized market records into tenant-scoped Postgres when `PORTFOLIO_STORAGE_BACKEND=postgres`, or into the SQLite fallback behind `MARKET_DATA_DB_PATH` for offline runs. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval infrastructure is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade`, writes redacted baseline summaries, and produces deterministic triage reports for grade-result failures without printing secret values. The eval config combines an LLM response-quality rubric with deterministic forbidden-action and workflow-tool-trajectory code metrics. A manual GitHub Actions workflow can run the credentialed baseline and upload ignored eval artifacts.
 - Capstone evidence manifest generation is available through `scripts/build_capstone_evidence.py`; it summarizes deterministic verification, container services, implemented workflow evidence, eval baseline status, eval submission readiness, and remaining submission gaps without local paths or secret values.
 - Agent workflow-routing guidance is embedded in the ADK instruction and eval rubric so pre-market, provider-readiness, candidate explanation, recommendation-to-paper-order, reporting, feature-navigation, and forbidden-action requests have explicit safe tool paths before the first credentialed baseline, while approval/fill mutations route to protected human/API paths outside model-visible MCP. Compose runs the ADK agent through the private streamable-HTTP MCP tool boundary by default via `AGENT_TOOL_TRANSPORT=mcp` and `AGENT_MCP_URL=http://mcp-server:8081/mcp`; the in-process adapter remains available for deterministic local/unit tests. Model-facing MCP tool descriptions now name policy tiers and high-risk workflow sequencing constraints.
@@ -307,16 +307,17 @@ profile redacts database and Redis credentials in status/readiness payloads and
 fails production-like readiness when Postgres is not selected or the database
 URL is missing. SQLite paths remain available for local/offline compatibility
 while individual stores are ported: `PAPER_LEDGER_DB_PATH`,
-`MARKET_DATA_DB_PATH`, and `PROVIDER_CONFIG_DB_PATH`. Compose defaults for
-those compatibility stores are `/data/paper-ledger.db`,
+`MARKET_DATA_DB_PATH`, and `PROVIDER_CONFIG_DB_PATH`. Market snapshots and
+screener runs now use tenant-scoped Postgres in production-like mode, while
+the compatibility paths remain `/data/paper-ledger.db`,
 `/data/market-data.db`, and `/data/provider-config.db` on the
 `paper-ledger-data` volume; the agent-service-local `.env.example` keeps
 relative `../../data/*.db` paths for fast credential-free tests.
 
 The production-like storage target is Postgres, with tenant-scoped tables for
 sessions, FYERS/provider connections, normalized snapshots, research documents,
-paper policies, grants, ledger entries, model-usage telemetry, and immutable
-audit events. SQLite remains useful for offline capstone mode and fast
+paper policies, grants, ledger entries, market snapshots, screener runs,
+model-usage telemetry, and immutable audit events. SQLite remains useful for offline capstone mode and fast
 deterministic tests while Postgres-backed contract tests are introduced
 feature-by-feature.
 
@@ -501,8 +502,8 @@ Use `list_provider_profiles`, `get_provider_refresh_readiness`,
 `list_provider_import_jobs` to persist and review provider profile readiness.
 Refresh jobs validate configured sources, store sanitized status, counts,
 sample identifiers, env key names, import metadata, retry/backoff state, and
-stale-data readiness, and import configured market, universe, fundamentals,
-sentiment, volatility, and macro records into structured SQLite tables when
+stale-data readiness, and import configured market records into tenant-scoped
+Postgres in production-like mode or into the explicit SQLite fallback when
 `MARKET_DATA_DB_PATH` is configured. They do not store raw provider payloads or
 resolved local paths.
 
