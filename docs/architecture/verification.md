@@ -77,8 +77,9 @@ Current coverage:
 - Paper-execution worker-runner contracts verify the standalone Postgres-only
   worker loop processes queued items until idle, stops at a configured item
   budget, counts fail-closed items without recording ledger mutations, refuses
-  non-Postgres startup, and is deployed by Compose without exposing a public
-  port or MCP/model-visible authority.
+  non-Postgres startup, parses configured tenant IDs, polls tenant-scoped
+  processors in round-robin order, and is deployed by Compose without exposing a
+  public port or MCP/model-visible authority.
 - Capstone evidence manifest contracts build a repo-safe submission evidence summary without local paths, broker/provider secrets, real account data, or raw provider payloads.
 - Model-backed eval checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, write a redacted baseline summary, produce deterministic failure triage, expose a manual credentialed baseline workflow, and never print secret values.
 - Eval dataset contracts verify the selected metrics include the LLM response-quality rubric plus deterministic forbidden-action and workflow-tool-trajectory code metrics, and execute representative trajectory-policy examples directly from `eval_config.yaml`.

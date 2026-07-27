@@ -37,6 +37,7 @@ def test_postgres_env_defaults_are_documented_for_production_like_testing() -> N
 
     assert "PORTFOLIO_STORAGE_BACKEND=postgres" in env_example
     assert "PORTFOLIO_DATABASE_URL=postgresql+psycopg://portfolio:portfolio-dev-password@localhost:5432/portfolio_agentic" in env_example
+    assert "PORTFOLIO_TENANT_IDS=" in env_example
     assert "PORTFOLIO_TENANT_ID=11111111-1111-1111-1111-111111111111" in env_example
     assert "PAPER_EXECUTION_WORKER_ID=paper-execution-worker-1" in env_example
     assert "PAPER_EXECUTION_WORKER_MAX_ITEMS=100" in env_example
@@ -63,6 +64,7 @@ def test_compose_has_postgres_redis_and_migration_job() -> None:
     assert "migrations:" in compose
     assert "paper-execution-worker:" in compose
     assert "uv run python ../../scripts/process_paper_execution_queue.py --daemon" in compose
+    assert "PORTFOLIO_TENANT_IDS: ${PORTFOLIO_TENANT_IDS:-}" in compose
     assert "PORTFOLIO_TENANT_ID: ${PORTFOLIO_TENANT_ID:-11111111-1111-1111-1111-111111111111}" in compose
     assert "PAPER_EXECUTION_WORKER_ID: ${PAPER_EXECUTION_WORKER_ID:-paper-execution-worker-1}" in compose
     assert "uv run alembic -c infra/db/alembic.ini upgrade head" in compose

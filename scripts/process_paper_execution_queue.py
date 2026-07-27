@@ -15,7 +15,7 @@ if str(DOMAIN_PATH) not in sys.path:
     sys.path.insert(0, str(DOMAIN_PATH))
 
 from portfolio_domain import (  # noqa: E402
-    build_postgres_paper_execution_worker,
+    build_postgres_paper_execution_fair_worker,
     load_database_runtime_profile,
 )
 
@@ -30,7 +30,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--tenant-id",
         default=os.environ.get("PORTFOLIO_TENANT_ID", ""),
-        help="Tenant UUID to process. Defaults to PORTFOLIO_TENANT_ID.",
+        help=(
+            "Single tenant UUID fallback. Defaults to PORTFOLIO_TENANT_ID and "
+            "is ignored when --tenant-ids or PORTFOLIO_TENANT_IDS are set."
+        ),
+    )
+    parser.add_argument(
+        "--tenant-ids",
+        default=os.environ.get("PORTFOLIO_TENANT_IDS", ""),
+        help=(
+            "Comma-separated tenant UUIDs to process in round-robin order. "
+            "Defaults to PORTFOLIO_TENANT_IDS."
+        ),
     )
     parser.add_argument(
         "--worker-id",
@@ -62,7 +73,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    tenant_id = args.tenant_id.strip()
+    tenant_ids = parse_tenant_ids(args.tenant_ids, fallback_tenant_id=args.tenant_id)
     if args.max_items <= 0:
         print(
             json.dumps(
@@ -74,12 +85,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
         return 2
-    if not tenant_id:
+    if not tenant_ids:
         print(
             json.dumps(
                 {
-                    "status": "error",
                     "reason": "tenant_id_required",
+                    "status": "error",
                 },
                 sort_keys=True,
             )
@@ -87,8 +98,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     profile = load_database_runtime_profile(os.environ)
-    runner = build_postgres_paper_execution_worker(
-        tenant_id=tenant_id,
+    runner = build_postgres_paper_execution_fair_worker(
+        tenant_ids=tenant_ids,
         database_url=profile.database_url,
         backend=profile.backend,
         worker_id=args.worker_id,
@@ -101,6 +112,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if summary.idle:
             time.sleep(max(args.idle_sleep_seconds, 0.0))
+
+
+def parse_tenant_ids(
+    raw_tenant_ids: str,
+    *,
+    fallback_tenant_id: str = "",
+) -> tuple[str, ...]:
+    raw_values = raw_tenant_ids.split(",") if raw_tenant_ids.strip() else []
+    if not raw_values and fallback_tenant_id.strip():
+        raw_values = [fallback_tenant_id]
+    clean: list[str] = []
+    seen: set[str] = set()
+    for raw_value in raw_values:
+        tenant_id = raw_value.strip()
+        if not tenant_id or tenant_id in seen:
+            continue
+        clean.append(tenant_id)
+        seen.add(tenant_id)
+    return tuple(clean)
 
 
 if __name__ == "__main__":
