@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from ipaddress import ip_address
-from typing import Any, Mapping
+from math import ceil
+from typing import Any, Mapping, Sequence
 from urllib.parse import urlparse
 
 
@@ -99,6 +100,80 @@ class ModelUsageEvent:
             "latency_ms": self.latency_ms,
             "retries": self.retries,
             "request_id": self.request_id,
+        }
+
+
+@dataclass(frozen=True)
+class ModelUsageBudgetDecision:
+    provider: ModelProvider
+    model: str
+    route: str
+    allowed: bool
+    violations: tuple[str, ...]
+    prompt_budget_tokens: int | None
+    output_budget_tokens: int | None
+    tool_call_budget: int | None
+    context_window_tokens: int
+    max_request_input_tokens: int
+    prompt_utilization: float | None
+    output_utilization: float | None
+    tool_call_utilization: float | None
+    context_utilization: float
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "provider": self.provider.value,
+            "model": self.model,
+            "route": self.route,
+            "allowed": self.allowed,
+            "violations": list(self.violations),
+            "prompt_budget_tokens": self.prompt_budget_tokens,
+            "output_budget_tokens": self.output_budget_tokens,
+            "tool_call_budget": self.tool_call_budget,
+            "context_window_tokens": self.context_window_tokens,
+            "max_request_input_tokens": self.max_request_input_tokens,
+            "prompt_utilization": self.prompt_utilization,
+            "output_utilization": self.output_utilization,
+            "tool_call_utilization": self.tool_call_utilization,
+            "context_utilization": self.context_utilization,
+        }
+
+
+@dataclass(frozen=True)
+class ModelUsageSummary:
+    provider: ModelProvider
+    model: str
+    event_count: int
+    routes: dict[str, int]
+    prompt_tokens: int
+    output_tokens: int
+    total_tokens: int
+    tool_calls: int
+    retries: int
+    queue_wait_p50_ms: int
+    queue_wait_p95_ms: int
+    latency_p50_ms: int
+    latency_p95_ms: int
+    total_tokens_p50: int
+    total_tokens_p95: int
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "provider": self.provider.value,
+            "model": self.model,
+            "event_count": self.event_count,
+            "routes": dict(self.routes),
+            "prompt_tokens": self.prompt_tokens,
+            "output_tokens": self.output_tokens,
+            "total_tokens": self.total_tokens,
+            "tool_calls": self.tool_calls,
+            "retries": self.retries,
+            "queue_wait_p50_ms": self.queue_wait_p50_ms,
+            "queue_wait_p95_ms": self.queue_wait_p95_ms,
+            "latency_p50_ms": self.latency_p50_ms,
+            "latency_p95_ms": self.latency_p95_ms,
+            "total_tokens_p50": self.total_tokens_p50,
+            "total_tokens_p95": self.total_tokens_p95,
         }
 
 
@@ -313,6 +388,116 @@ def parse_ollama_tags_response(payload: Mapping[str, Any]) -> dict[str, OllamaMo
     return inventory
 
 
+def evaluate_model_usage_event(
+    profile: ModelRuntimeProfile,
+    event: ModelUsageEvent,
+) -> ModelUsageBudgetDecision:
+    budget = profile.route_budgets.get(event.route)
+    violations: list[str] = []
+
+    if event.provider != profile.provider:
+        violations.append("provider_mismatch")
+    if event.model != profile.model:
+        violations.append("model_mismatch")
+    if budget is None:
+        violations.append("unknown_route")
+
+    if min(
+        event.prompt_tokens,
+        event.output_tokens,
+        event.tool_calls,
+        event.queue_wait_ms,
+        event.latency_ms,
+        event.retries,
+    ) < 0:
+        violations.append("negative_usage_metric")
+
+    if budget is not None:
+        if event.prompt_tokens > budget.effective_input_tokens:
+            violations.append("prompt_input_budget_exceeded")
+        if event.output_tokens > budget.output_tokens:
+            violations.append("output_budget_exceeded")
+        if event.tool_calls > budget.tool_call_budget:
+            violations.append("tool_call_budget_exceeded")
+
+    if event.prompt_tokens > profile.max_request_input_tokens:
+        violations.append("request_input_budget_exceeded")
+    if event.prompt_tokens + event.output_tokens > profile.context_window_tokens:
+        violations.append("context_window_exceeded")
+
+    return ModelUsageBudgetDecision(
+        provider=event.provider,
+        model=event.model,
+        route=event.route,
+        allowed=not violations,
+        violations=tuple(violations),
+        prompt_budget_tokens=budget.effective_input_tokens if budget is not None else None,
+        output_budget_tokens=budget.output_tokens if budget is not None else None,
+        tool_call_budget=budget.tool_call_budget if budget is not None else None,
+        context_window_tokens=profile.context_window_tokens,
+        max_request_input_tokens=profile.max_request_input_tokens,
+        prompt_utilization=_ratio(
+            event.prompt_tokens,
+            budget.effective_input_tokens if budget is not None else None,
+        ),
+        output_utilization=_ratio(
+            event.output_tokens,
+            budget.output_tokens if budget is not None else None,
+        ),
+        tool_call_utilization=_ratio(
+            event.tool_calls,
+            budget.tool_call_budget if budget is not None else None,
+        ),
+        context_utilization=_ratio(
+            event.prompt_tokens + event.output_tokens,
+            profile.context_window_tokens,
+        )
+        or 0.0,
+    )
+
+
+def summarize_model_usage_events(
+    profile: ModelRuntimeProfile,
+    events: Sequence[ModelUsageEvent],
+) -> ModelUsageSummary:
+    routes: dict[str, int] = {}
+    prompt_tokens = 0
+    output_tokens = 0
+    tool_calls = 0
+    retries = 0
+    queue_wait_values: list[int] = []
+    latency_values: list[int] = []
+    total_token_values: list[int] = []
+
+    for event in events:
+        routes[event.route] = routes.get(event.route, 0) + 1
+        prompt_tokens += event.prompt_tokens
+        output_tokens += event.output_tokens
+        tool_calls += event.tool_calls
+        retries += event.retries
+        queue_wait_values.append(event.queue_wait_ms)
+        latency_values.append(event.latency_ms)
+        total_token_values.append(event.prompt_tokens + event.output_tokens)
+
+    return ModelUsageSummary(
+        provider=profile.provider,
+        model=profile.model,
+        event_count=len(events),
+        routes=routes,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        total_tokens=prompt_tokens + output_tokens,
+        tool_calls=tool_calls,
+        retries=retries,
+        queue_wait_p50_ms=_nearest_rank_percentile(queue_wait_values, 0.50),
+        queue_wait_p95_ms=_nearest_rank_percentile(queue_wait_values, 0.95),
+        latency_p50_ms=_nearest_rank_percentile(latency_values, 0.50),
+        latency_p95_ms=_nearest_rank_percentile(latency_values, 0.95),
+        total_tokens_p50=_nearest_rank_percentile(total_token_values, 0.50),
+        total_tokens_p95=_nearest_rank_percentile(total_token_values, 0.95),
+    )
+
+
 def build_model_tuning_plan(env: Mapping[str, str]) -> ModelTuningPlan:
     candidates = tuple(
         candidate.strip()
@@ -405,3 +590,19 @@ def _is_private_base_url(base_url: str | None) -> bool:
     except ValueError:
         return False
     return address.is_private or address.is_loopback
+
+
+def _ratio(numerator: int, denominator: int | None) -> float | None:
+    if denominator is None:
+        return None
+    if denominator <= 0:
+        return 0.0 if numerator == 0 else 1.0
+    return numerator / denominator
+
+
+def _nearest_rank_percentile(values: Sequence[int], percentile: float) -> int:
+    if not values:
+        return 0
+    ordered = sorted(values)
+    rank = max(1, ceil(percentile * len(ordered)))
+    return ordered[min(rank, len(ordered)) - 1]

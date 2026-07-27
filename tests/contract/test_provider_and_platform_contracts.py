@@ -1,13 +1,17 @@
 from portfolio_agent_platform import AgentPlatform, get_platform_profile
 from portfolio_model_provider import (
     DEFAULT_ROUTE_BUDGETS,
+    ModelUsageBudgetDecision,
     ModelProvider,
     ModelUsageEvent,
+    ModelUsageSummary,
     build_model_capability_report,
     build_model_tuning_plan,
+    evaluate_model_usage_event,
     load_model_provider_config,
     load_model_runtime_profile,
     parse_ollama_tags_response,
+    summarize_model_usage_events,
 )
 
 
@@ -234,5 +238,176 @@ def test_model_usage_event_records_token_latency_and_tool_counts_only() -> None:
         "retries": 1,
         "request_id": "req-123",
     }
+    assert "prompt" not in payload
+    assert "response" not in payload
+
+
+def test_model_usage_budget_decision_allows_in_budget_route_usage() -> None:
+    profile = load_model_runtime_profile(
+        {
+            "LLM_PROVIDER": "ollama",
+            "LLM_MODEL": "llama3.1:8b",
+            "MODEL_CONTEXT_WINDOW_TOKENS": "8192",
+        }
+    )
+    event = ModelUsageEvent(
+        provider=ModelProvider.OLLAMA,
+        model="llama3.1:8b",
+        route="technical_analysis",
+        prompt_tokens=4_000,
+        output_tokens=900,
+        tool_calls=4,
+        queue_wait_ms=50,
+        latency_ms=1_750,
+        retries=0,
+        request_id="req-ok",
+    )
+
+    decision = evaluate_model_usage_event(profile, event)
+    payload = decision.to_dict()
+
+    assert isinstance(decision, ModelUsageBudgetDecision)
+    assert decision.allowed is True
+    assert decision.violations == ()
+    assert decision.prompt_budget_tokens == 6553
+    assert decision.output_budget_tokens == 1500
+    assert decision.tool_call_budget == 5
+    assert payload["allowed"] is True
+    assert "prompt" not in payload
+    assert "response" not in payload
+
+
+def test_model_usage_budget_decision_fails_closed_on_route_profile_and_budget_mismatch() -> None:
+    profile = load_model_runtime_profile(
+        {
+            "LLM_PROVIDER": "ollama",
+            "LLM_MODEL": "llama3.1:8b",
+            "MODEL_CONTEXT_WINDOW_TOKENS": "8192",
+        }
+    )
+    event = ModelUsageEvent(
+        provider=ModelProvider.GEMINI,
+        model="gemini-flash-latest",
+        route="unknown_route",
+        prompt_tokens=7_000,
+        output_tokens=2_500,
+        tool_calls=9,
+        queue_wait_ms=0,
+        latency_ms=3_000,
+        retries=0,
+        request_id="req-bad",
+    )
+
+    decision = evaluate_model_usage_event(profile, event)
+
+    assert decision.allowed is False
+    assert decision.prompt_budget_tokens is None
+    assert decision.output_budget_tokens is None
+    assert decision.tool_call_budget is None
+    assert decision.violations == (
+        "provider_mismatch",
+        "model_mismatch",
+        "unknown_route",
+        "request_input_budget_exceeded",
+        "context_window_exceeded",
+    )
+
+
+def test_model_usage_budget_decision_rejects_route_budget_overages() -> None:
+    profile = load_model_runtime_profile(
+        {
+            "LLM_PROVIDER": "ollama",
+            "LLM_MODEL": "llama3.1:8b",
+            "MODEL_CONTEXT_WINDOW_TOKENS": "8192",
+        }
+    )
+    event = ModelUsageEvent(
+        provider=ModelProvider.OLLAMA,
+        model="llama3.1:8b",
+        route="paper_proposal_execution",
+        prompt_tokens=6_600,
+        output_tokens=1_200,
+        tool_calls=4,
+        queue_wait_ms=10,
+        latency_ms=2_000,
+        retries=0,
+        request_id="req-over",
+    )
+
+    decision = evaluate_model_usage_event(profile, event)
+
+    assert decision.allowed is False
+    assert decision.violations == (
+        "prompt_input_budget_exceeded",
+        "output_budget_exceeded",
+        "tool_call_budget_exceeded",
+        "request_input_budget_exceeded",
+    )
+
+
+def test_model_usage_summary_records_efficiency_without_payloads() -> None:
+    profile = load_model_runtime_profile(
+        {
+            "LLM_PROVIDER": "ollama",
+            "LLM_MODEL": "llama3.1:8b",
+            "MODEL_CONTEXT_WINDOW_TOKENS": "8192",
+        }
+    )
+    events = (
+        ModelUsageEvent(
+            provider=ModelProvider.OLLAMA,
+            model="llama3.1:8b",
+            route="research",
+            prompt_tokens=3_000,
+            output_tokens=800,
+            tool_calls=5,
+            queue_wait_ms=100,
+            latency_ms=2_000,
+            retries=1,
+            request_id="req-1",
+        ),
+        ModelUsageEvent(
+            provider=ModelProvider.OLLAMA,
+            model="llama3.1:8b",
+            route="technical_analysis",
+            prompt_tokens=2_000,
+            output_tokens=600,
+            tool_calls=3,
+            queue_wait_ms=40,
+            latency_ms=1_000,
+            retries=0,
+            request_id="req-2",
+        ),
+        ModelUsageEvent(
+            provider=ModelProvider.OLLAMA,
+            model="llama3.1:8b",
+            route="research",
+            prompt_tokens=4_000,
+            output_tokens=1_000,
+            tool_calls=4,
+            queue_wait_ms=200,
+            latency_ms=4_000,
+            retries=2,
+            request_id="req-3",
+        ),
+    )
+
+    summary = summarize_model_usage_events(profile, events)
+    payload = summary.to_dict()
+
+    assert isinstance(summary, ModelUsageSummary)
+    assert summary.event_count == 3
+    assert summary.routes == {"research": 2, "technical_analysis": 1}
+    assert summary.prompt_tokens == 9_000
+    assert summary.output_tokens == 2_400
+    assert summary.total_tokens == 11_400
+    assert summary.tool_calls == 12
+    assert summary.retries == 3
+    assert summary.latency_p50_ms == 2_000
+    assert summary.latency_p95_ms == 4_000
+    assert summary.total_tokens_p50 == 3_800
+    assert summary.total_tokens_p95 == 5_000
+    assert payload["provider"] == "ollama"
+    assert payload["model"] == "llama3.1:8b"
     assert "prompt" not in payload
     assert "response" not in payload

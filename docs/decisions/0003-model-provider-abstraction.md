@@ -38,6 +38,13 @@ MCP and policy enforcement remain outside the model provider. The model can requ
 Local runtime profiles declare route budgets, context-window caps, queue
 limits, required tool-use and structured-output capabilities, and model digest
 pinning. A request may use no more than 80% of the active model context window.
+Usage events are evaluated against the active `ModelRuntimeProfile` with a
+deterministic `ModelUsageBudgetDecision`; provider/model mismatches, unknown
+routes, route budget overages, negative counters, and context-window overages
+fail closed before they can be treated as acceptable telemetry. Aggregate
+`ModelUsageSummary` records only route counts, token counts, tool counts,
+latency, queue wait, and retry percentiles. It never stores prompts, responses,
+credentials, or raw model payloads.
 The default local profile targets native Ollama on the host at
 `http://host.containers.internal:11434`; the Compose `ollama` profile is
 optional and does not publish `11434` by default.
