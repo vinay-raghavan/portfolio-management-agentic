@@ -280,6 +280,16 @@ def test_store_records_execution_decision_as_idempotent_paper_ledger_entry() -> 
     assert "live" not in str(params["fill"]).lower()
     assert "fyers" not in str(params).lower()
     assert "token" not in str(params).lower()
+    update_sql, update_params = cursor.executed[1]
+    assert "UPDATE paper_execution_grants" in update_sql
+    assert "consumed_capacity" in update_sql
+    assert "jsonb_build_object" in update_sql
+    assert "status = 'active'" in update_sql
+    assert update_params["tenant_id"] == TENANT_ID
+    assert update_params["grant_id"] == grant.grant_id
+    assert update_params["order_count_delta"] == 1
+    assert update_params["gross_notional_delta"] == 4_900.0
+    assert update_params["net_notional_delta"] == 4_900.0
     assert connection.committed is True
 
 
@@ -327,6 +337,7 @@ def test_store_returns_duplicate_rejection_when_ledger_insert_conflicts() -> Non
     assert decision.reasons == ("duplicate_idempotency_key",)
     assert decision.audit_event["event_type"] == "paper_execution_rejected"
     assert decision.audit_event["idempotency_key"] == "idem-race"
+    assert len(cursor.executed) == 1
     assert connection.committed is True
 
 
