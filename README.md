@@ -458,6 +458,14 @@ Postgres research mode also requires `PORTFOLIO_DATABASE_URL`. If the tenant id
 or database URL is missing, the MCP tool returns an explicit configuration
 error and does not fall back to fixture hits. Runtime database failures return a
 redacted unavailable response.
+The protected agent-service HTTP API exposes the same boundary:
+`GET /v1/research/sources` lists registered allowlisted sources without URLs,
+`POST /v1/research/search` searches fixture or tenant-scoped Postgres research
+stores, and `POST /v1/research/refresh/{source_id}` accepts only a registered
+source id plus a normalized query or symbol. These endpoints require
+`ActorContext`, reject arbitrary URLs, keep source administration outside the
+model-visible surface, and do not use embeddings or store raw prompt/response
+payloads.
 
 The default data-provider mode is offline-safe fixtures. To enable configured
 read-only market-data, universe, fundamentals, sentiment, volatility, and macro
