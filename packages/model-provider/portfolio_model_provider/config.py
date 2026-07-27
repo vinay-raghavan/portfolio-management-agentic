@@ -264,8 +264,13 @@ class ModelCandidateTuningDecision:
 
 
 DEFAULT_ROUTE_BUDGETS: dict[str, tuple[int, int, int]] = {
+    "fyers_data": (12_000, 1_500, 5),
     "router_refusal": (2_000, 512, 0),
+    "pre_market_briefing": (12_000, 1_500, 5),
+    "provider_readiness": (12_000, 1_500, 5),
+    "reporting": (12_000, 2_000, 5),
     "research": (24_000, 2_000, 5),
+    "risk_review": (12_000, 1_500, 5),
     "technical_analysis": (12_000, 1_500, 5),
     "paper_proposal_execution": (8_000, 1_000, 3),
 }

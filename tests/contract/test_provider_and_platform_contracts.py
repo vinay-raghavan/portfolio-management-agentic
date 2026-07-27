@@ -1,4 +1,5 @@
 from portfolio_agent_platform import AgentPlatform, get_platform_profile
+from portfolio_capabilities import load_capability_manifests
 from portfolio_model_provider import (
     DEFAULT_ROUTE_BUDGETS,
     ModelCandidateEvaluation,
@@ -206,11 +207,33 @@ def test_model_tuning_plan_prefers_prompt_and_routing_before_fine_tuning() -> No
         repeatable_residual_failure_class=True,
     ) is True
     assert set(DEFAULT_ROUTE_BUDGETS) == {
+        "fyers_data",
+        "pre_market_briefing",
+        "provider_readiness",
+        "reporting",
         "router_refusal",
         "research",
+        "risk_review",
         "technical_analysis",
         "paper_proposal_execution",
     }
+
+
+def test_model_route_budgets_cover_every_model_visible_capability_manifest() -> None:
+    manifests = load_capability_manifests()
+    expected_routes = {
+        name
+        for name, manifest in manifests.items()
+        if manifest.allowed_tools and manifest.max_action_tier != "forbidden"
+    }
+
+    assert expected_routes <= set(DEFAULT_ROUTE_BUDGETS)
+    for route in expected_routes:
+        input_tokens, output_tokens, tool_calls = DEFAULT_ROUTE_BUDGETS[route]
+        manifest_budget = manifests[route].token_budget
+        assert input_tokens == manifest_budget.input_tokens
+        assert output_tokens == manifest_budget.output_tokens
+        assert tool_calls == manifest_budget.tool_calls
 
 
 def test_model_candidate_tuning_gate_promotes_provider_neutral_candidate() -> None:
