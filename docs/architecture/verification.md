@@ -56,12 +56,13 @@ Current coverage:
   authenticated `ActorContext`, admin policy creation, analyst batch proposal,
   approver-bound grant issuance and revocation, body-spoofed `approved_by`
   rejection, fresh execution-under-grant acceptance, revoked-grant rejection,
-  Postgres-store routing when `PORTFOLIO_STORAGE_BACKEND=postgres`, database
-  URL redaction from responses, duplicate idempotency rejection from the
-  Postgres ledger rather than process-local memory, conflict-race rejection when
-  a unique ledger insert is skipped, accepted-insert grant consumed-capacity
-  updates without consuming capacity on duplicate conflicts, and paper-only
-  response payloads without FYERS or credential fields.
+  Postgres-store routing when `PORTFOLIO_STORAGE_BACKEND=postgres`, durable
+  work-item enqueue/claim/complete routing for Postgres execution, database URL
+  redaction from responses, duplicate idempotency rejection from the Postgres
+  ledger rather than process-local memory, conflict-race rejection when a unique
+  ledger insert is skipped, accepted-insert grant consumed-capacity updates
+  without consuming capacity on duplicate conflicts, and paper-only response
+  payloads without FYERS or credential fields.
 - Paper-execution worker contracts verify `DeterministicPaperExecutionWorker`
   owns the evaluate-and-record boundary, records only accepted decisions, keeps
   rejected decisions mutation-free, and returns the recorder-authoritative

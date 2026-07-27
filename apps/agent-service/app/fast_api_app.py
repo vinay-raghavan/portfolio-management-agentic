@@ -63,6 +63,7 @@ from portfolio_domain import (  # noqa: E402
     PaperExecutionOrder,
     PaperExecutionPolicyCeiling,
     PaperExecutionWorkerRequest,
+    PaperExecutionWorkItem,
     PostgresPaperExecutionStore,
     evaluate_database_runtime_readiness,
     issue_paper_execution_grant,
@@ -661,6 +662,127 @@ def _paper_execution_exposure_after(
     }
 
 
+def _execute_queued_postgres_paper_order(
+    actor: ActorContext,
+    *,
+    store: PostgresPaperExecutionStore,
+    order_id: str,
+    request: PaperExecuteApiRequest,
+    policy: PaperExecutionPolicyCeiling,
+    grant: PaperExecutionGrant,
+    batch: PaperBatchRequest,
+    order: PaperExecutionOrder,
+    used_keys: set[str],
+    current_exposure: Mapping[str, float],
+) -> PaperExecutionDecision:
+    execution_now = request.now or datetime.now(UTC)
+    exposure_after = _paper_execution_exposure_after(
+        current_exposure=current_exposure,
+        order=order,
+        quote_price=request.quote_price,
+    )
+    work_item = PaperExecutionWorkItem(
+        work_item_id=str(uuid4()),
+        tenant_id=actor.tenant_id,
+        batch_request_id=batch.batch_request_id,
+        grant_id=grant.grant_id,
+        order_id=order_id,
+        requested_by_actor_id=actor.audit_actor,
+        idempotency_key=request.idempotency_key,
+        status="queued",
+        payload={
+            "schema_version": "paper-execution-work-item/v1",
+            "quote_price": request.quote_price,
+            "quote_as_of": request.quote_as_of.isoformat(),
+            "now": execution_now.isoformat(),
+            "available_cash": request.available_cash,
+            "current_gross_notional": current_exposure["gross_notional"],
+            "current_net_notional": current_exposure["net_notional"],
+            "kill_switch_active": request.kill_switch_active,
+            "exposure_after": exposure_after,
+        },
+        decision=None,
+        attempt_count=0,
+        available_at=execution_now,
+        claimed_by=None,
+        claimed_at=None,
+        completed_at=None,
+        created_at=execution_now,
+        updated_at=execution_now,
+    )
+    _reject_sensitive_paper_payload(work_item.to_dict())
+    store.enqueue_execution_work_item(work_item)
+    claimed = store.claim_execution_work_item(
+        work_item_id=work_item.work_item_id,
+        worker_id="paper-execution-api",
+        now=execution_now,
+    )
+    if claimed is None:
+        raise HTTPException(
+            status_code=503,
+            detail="paper_execution_queue_unavailable",
+        )
+    worker = DeterministicPaperExecutionWorker(
+        record_decision=lambda decision, worker_request: store.record_execution_decision(
+            grant=worker_request.grant,
+            batch_request=worker_request.batch_request,
+            order=worker_request.order,
+            decision=decision,
+            fill_price=worker_request.quote_price,
+            exposure_after=worker_request.exposure_after or {},
+        )
+    )
+    decision = worker.execute(
+        PaperExecutionWorkerRequest(
+            policy=policy,
+            grant=grant,
+            batch_request=batch,
+            order=order,
+            idempotency_key=request.idempotency_key,
+            quote_price=request.quote_price,
+            quote_as_of=request.quote_as_of,
+            now=execution_now,
+            used_idempotency_keys=used_keys,
+            available_cash=request.available_cash,
+            current_gross_notional=current_exposure["gross_notional"],
+            current_net_notional=current_exposure["net_notional"],
+            kill_switch_active=request.kill_switch_active,
+            exposure_after=exposure_after,
+        )
+    )
+    completed = store.complete_execution_work_item(
+        work_item_id=claimed.work_item_id,
+        decision=decision,
+        now=execution_now,
+    )
+    if completed is None:
+        raise HTTPException(
+            status_code=503,
+            detail="paper_execution_queue_completion_failed",
+        )
+    return decision
+
+
+def _paper_execution_response(
+    decision: PaperExecutionDecision,
+) -> dict | JSONResponse:
+    status_code = 200 if decision.status == "accepted" else 409
+    if status_code != 200:
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "status": "rejected",
+                "decision": decision.to_dict(),
+                "mode": "paper_only",
+            },
+        )
+    return {
+        "status": "accepted",
+        "decision": decision.to_dict(),
+        "mode": "paper_only",
+    }
+
+
 def _float_mapping_value(payload: Mapping[str, object], key: str) -> float:
     value = payload.get(key, 0.0)
     try:
@@ -833,6 +955,21 @@ def post_paper_order_execute(
         raise HTTPException(status_code=404, detail="paper_policy_not_found")
     used_keys = _used_paper_idempotency_keys(actor, request.idempotency_key)
     current_exposure = _paper_execution_current_exposure(actor, grant, request)
+    store = _paper_execution_store_for_actor(actor)
+    if store is not None:
+        decision = _execute_queued_postgres_paper_order(
+            actor,
+            store=store,
+            order_id=order_id,
+            request=request,
+            policy=policy,
+            grant=grant,
+            batch=batch,
+            order=order,
+            used_keys=used_keys,
+            current_exposure=current_exposure,
+        )
+        return _paper_execution_response(decision)
     worker = DeterministicPaperExecutionWorker(
         record_decision=lambda decision, worker_request: _record_paper_execution_decision(
             actor,
@@ -867,21 +1004,7 @@ def post_paper_order_execute(
         )
     )
     _remember_paper_idempotency_key(actor, request.idempotency_key)
-    status_code = 200 if decision.status == "accepted" else 409
-    if status_code != 200:
-        return JSONResponse(
-            status_code=status_code,
-            content={
-                "status": "rejected",
-                "decision": decision.to_dict(),
-                "mode": "paper_only",
-            },
-        )
-    return {
-        "status": "accepted",
-        "decision": decision.to_dict(),
-        "mode": "paper_only",
-    }
+    return _paper_execution_response(decision)
 
 
 @app.get("/console/overview")

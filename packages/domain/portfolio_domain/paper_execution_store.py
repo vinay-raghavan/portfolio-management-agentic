@@ -554,6 +554,80 @@ class PostgresPaperExecutionStore:
         _reject_secret_payload(work_item.to_dict())
         return work_item
 
+    def claim_execution_work_item(
+        self,
+        *,
+        work_item_id: str,
+        worker_id: str,
+        now: datetime | None = None,
+    ) -> PaperExecutionWorkItem | None:
+        clean_work_item_id = work_item_id.strip()
+        clean_worker_id = worker_id.strip()
+        if not clean_work_item_id:
+            raise ValueError("work_item_id is required")
+        if not clean_worker_id:
+            raise ValueError("worker_id is required")
+        current_time = _aware_utc(now or self._now())
+        params = {
+            "tenant_id": self._tenant_id,
+            "work_item_id": clean_work_item_id,
+            "worker_id": clean_worker_id,
+            "now": current_time,
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    WITH selected_work_item AS (
+                        SELECT id
+                        FROM paper_execution_work_items
+                        WHERE tenant_id = %(tenant_id)s
+                          AND id = %(work_item_id)s
+                          AND status = 'queued'
+                          AND available_at <= %(now)s
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    )
+                    UPDATE paper_execution_work_items
+                    SET
+                        status = 'claimed',
+                        claimed_by = %(worker_id)s,
+                        claimed_at = %(now)s,
+                        attempt_count = paper_execution_work_items.attempt_count + 1,
+                        updated_at = %(now)s
+                    FROM selected_work_item
+                    WHERE paper_execution_work_items.id = selected_work_item.id
+                      AND paper_execution_work_items.tenant_id = %(tenant_id)s
+                    RETURNING
+                        paper_execution_work_items.id,
+                        paper_execution_work_items.tenant_id,
+                        paper_execution_work_items.batch_request_id,
+                        paper_execution_work_items.grant_id,
+                        paper_execution_work_items.order_id,
+                        paper_execution_work_items.requested_by_actor_id,
+                        paper_execution_work_items.idempotency_key,
+                        paper_execution_work_items.status,
+                        paper_execution_work_items.payload,
+                        paper_execution_work_items.decision,
+                        paper_execution_work_items.attempt_count,
+                        paper_execution_work_items.available_at,
+                        paper_execution_work_items.claimed_by,
+                        paper_execution_work_items.claimed_at,
+                        paper_execution_work_items.completed_at,
+                        paper_execution_work_items.created_at,
+                        paper_execution_work_items.updated_at
+                    """.strip(),
+                    params,
+                )
+                row = _fetch_one_mapping(cursor)
+            connection.commit()
+        if row is None:
+            return None
+        work_item = _work_item_from_row(row)
+        self._require_tenant(work_item.tenant_id)
+        _reject_secret_payload(work_item.to_dict())
+        return work_item
+
     def complete_execution_work_item(
         self,
         *,

@@ -45,10 +45,10 @@ This slice establishes the safe contract between research, simulation, and the f
   ceiling violations before returning any fill payload.
 - `DeterministicPaperExecutionWorker` owns the paper-only evaluate-and-record
   boundary through `PaperExecutionWorkerRequest`. `PaperExecutionWorkItem`
-  provides the durable queue contract for protected workers; the protected API
-  still calls the worker synchronously today, so later async routing can use the
-  same tenant-scoped queue without giving the model or MCP layer execution
-  authority.
+  provides the durable queue contract for protected workers. In Postgres mode,
+  the protected API enqueues, claims, executes, records, and completes a
+  tenant-scoped work item synchronously today; later async routing can use the
+  same queue without giving the model or MCP layer execution authority.
 - `PostgresPaperExecutionStore` persists and reads protected policy ceilings,
   batch requests, execution grants, durable execution work items, and
   idempotent ledger decision rows through tenant-scoped Postgres tables created
@@ -65,8 +65,9 @@ This slice establishes the safe contract between research, simulation, and the f
   `/v1/paper/orders/{id}/execute` contracts. These endpoints derive requester
   and approver identity from server-created `ActorContext`, forbid
   `approved_by` request-body spoofing, use `PostgresPaperExecutionStore` when
-  `PORTFOLIO_STORAGE_BACKEND=postgres`, and return paper-only decisions. They
-  are API contracts for protected callers, not MCP/model-visible tools.
+  `PORTFOLIO_STORAGE_BACKEND=postgres`, route Postgres execution through the
+  durable work-item queue boundary, and return paper-only decisions. They are
+  API contracts for protected callers, not MCP/model-visible tools.
 - Simulated fills update only the paper ledger and paper positions.
 - Approval cannot authorize live trading.
 - Broker trading-token access and live order placement remain forbidden.
@@ -96,9 +97,12 @@ Postgres execution limit checks derive current exposure from the persisted
 grant `consumed_capacity`, not request-body `current_gross_notional` or
 `current_net_notional` fields. Successful accepted inserts update
 `paper_execution_grants.consumed_capacity`; conflict rejections do not consume
-capacity. The next production hardening step is routing execution requests
-through the durable queue worker loop and serializing grant-capacity reservation
-inside that asynchronous path.
+capacity. In Postgres mode, `/v1/paper/orders/{id}/execute` now creates a
+`PaperExecutionWorkItem`, claims it as `paper-execution-api`, runs the
+deterministic worker, and completes the item as `completed` or `failed`. The
+next production hardening step is moving that synchronous queue lifecycle into
+a standalone asynchronous worker and serializing grant-capacity reservation
+inside that path.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.
