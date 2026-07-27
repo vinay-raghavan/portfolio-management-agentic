@@ -131,8 +131,12 @@ from .paper_execution_queue_processor import (
 )
 from .paper_execution_store import PostgresPaperExecutionStore
 from .paper_execution_worker_runner import (
+    PaperExecutionFairQueueRunner,
+    PaperExecutionFairQueueRunnerSummary,
+    PaperExecutionFairQueueRunnerWorkerSummary,
     PaperExecutionQueueRunner,
     PaperExecutionQueueRunnerSummary,
+    build_postgres_paper_execution_fair_worker,
     build_postgres_paper_execution_worker,
 )
 from .provider_profiles import (
@@ -250,6 +254,9 @@ __all__ = [
     "PaperExecutionGrant",
     "PaperExecutionOrder",
     "PaperExecutionPolicyCeiling",
+    "PaperExecutionFairQueueRunner",
+    "PaperExecutionFairQueueRunnerSummary",
+    "PaperExecutionFairQueueRunnerWorkerSummary",
     "PaperExecutionQueueProcessor",
     "PaperExecutionQueueProcessorResult",
     "PaperExecutionQueueRunner",
@@ -326,6 +333,7 @@ __all__ = [
     "build_market_data_store",
     "build_paper_ledger_store",
     "build_paper_trading_report",
+    "build_postgres_paper_execution_fair_worker",
     "build_provider_data_store",
     "build_postgres_paper_execution_worker",
     "build_postgres_research_search_query",

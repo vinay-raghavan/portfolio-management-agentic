@@ -11,9 +11,12 @@ from portfolio_domain import (
     PaperBatchRequest,
     PaperExecutionOrder,
     PaperExecutionPolicyCeiling,
+    PaperExecutionFairQueueRunner,
     PaperExecutionQueueProcessor,
+    PaperExecutionQueueProcessorResult,
     PaperExecutionQueueRunner,
     PaperExecutionWorkItem,
+    build_postgres_paper_execution_fair_worker,
     build_postgres_paper_execution_worker,
     issue_paper_execution_grant,
 )
@@ -122,6 +125,33 @@ class _FakeQueueStore:
             )
             return completed
         return None
+
+
+class _ScriptedProcessor:
+    def __init__(
+        self,
+        *,
+        worker_id: str,
+        statuses: list[str],
+        call_order: list[str],
+    ) -> None:
+        self.worker_id = worker_id
+        self.statuses = statuses
+        self.call_order = call_order
+
+    def process_once(self, *, work_item_id=None):
+        self.call_order.append(self.worker_id)
+        if not self.statuses:
+            return PaperExecutionQueueProcessorResult(
+                status="no_work",
+                work_item_id=work_item_id,
+                decision=None,
+            )
+        return PaperExecutionQueueProcessorResult(
+            status=self.statuses.pop(0),
+            work_item_id=work_item_id or f"work-{self.worker_id}",
+            decision=None,
+        )
 
 
 def _policy() -> PaperExecutionPolicyCeiling:
@@ -266,3 +296,91 @@ def test_postgres_worker_factory_requires_postgres_storage() -> None:
             backend=DatabaseBackend.SQLITE,
         )
 
+
+def test_fair_worker_runner_processes_tenants_round_robin() -> None:
+    call_order: list[str] = []
+    runner = PaperExecutionFairQueueRunner(
+        processors=(
+            _ScriptedProcessor(
+                worker_id="paper-worker:tenant-a",
+                statuses=["processed", "processed", "processed"],
+                call_order=call_order,
+            ),
+            _ScriptedProcessor(
+                worker_id="paper-worker:tenant-b",
+                statuses=["processed"],
+                call_order=call_order,
+            ),
+        )
+    )
+
+    summary = runner.run_until_idle(max_items=3)
+
+    assert call_order == [
+        "paper-worker:tenant-a",
+        "paper-worker:tenant-b",
+        "paper-worker:tenant-a",
+    ]
+    assert summary.to_dict() == {
+        "schema_version": "paper-execution-fair-worker-runner-summary/v1",
+        "processed": 3,
+        "failed": 0,
+        "idle": False,
+        "total_attempted": 3,
+        "worker_ids": ["paper-worker:tenant-a", "paper-worker:tenant-b"],
+        "per_worker": [
+            {
+                "worker_id": "paper-worker:tenant-a",
+                "processed": 2,
+                "failed": 0,
+                "idle": False,
+                "total_attempted": 2,
+            },
+            {
+                "worker_id": "paper-worker:tenant-b",
+                "processed": 1,
+                "failed": 0,
+                "idle": False,
+                "total_attempted": 1,
+            },
+        ],
+    }
+
+
+def test_fair_worker_runner_reports_idle_only_after_every_tenant_is_idle() -> None:
+    call_order: list[str] = []
+    runner = PaperExecutionFairQueueRunner(
+        processors=(
+            _ScriptedProcessor(
+                worker_id="paper-worker:tenant-a",
+                statuses=["no_work"],
+                call_order=call_order,
+            ),
+            _ScriptedProcessor(
+                worker_id="paper-worker:tenant-b",
+                statuses=["failed", "no_work"],
+                call_order=call_order,
+            ),
+        )
+    )
+
+    summary = runner.run_until_idle(max_items=5)
+
+    assert call_order == [
+        "paper-worker:tenant-a",
+        "paper-worker:tenant-b",
+        "paper-worker:tenant-b",
+    ]
+    assert summary.processed == 0
+    assert summary.failed == 1
+    assert summary.idle is True
+    assert summary.total_attempted == 1
+
+
+def test_postgres_fair_worker_factory_requires_at_least_one_tenant() -> None:
+    with pytest.raises(ValueError, match="tenant_id_required"):
+        build_postgres_paper_execution_fair_worker(
+            tenant_ids=(),
+            database_url="postgresql+psycopg://portfolio:secret@postgres/db",
+            backend=DatabaseBackend.POSTGRES,
+        )
