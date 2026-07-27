@@ -168,11 +168,14 @@ def test_web_console_uses_rounded_widget_design_contract() -> None:
     styles = (WEB_ROOT / "src" / "styles.css").read_text()
     rounded_refinement = styles.split("/* Rounded widget refinement", 1)[1]
 
-    assert "--radius-lg: 44px;" in styles
+    assert "--radius-lg: 52px;" in styles
+    assert "--radius-xl: 72px;" in styles
     assert "--widget-radius: var(--radius-lg);" in styles
-    assert "--control-radius: 30px;" in styles
+    assert "--control-radius: 34px;" in styles
     assert ".candidate-table" in rounded_refinement
+    assert ".flow-step i::after" in styles
     assert "border-radius: var(--widget-radius);" in rounded_refinement
+    assert "border-left: 9px solid" not in styles
     assert ".selected-workflow" in rounded_refinement
     assert "border-radius: 0" not in rounded_refinement
 
