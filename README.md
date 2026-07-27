@@ -38,7 +38,9 @@ explicit safety policy.
   keep callback token exchange disabled until a credential vault is wired, and
   refresh only through the read-only normalized FYERS connector
   surface with no Yahoo fallback, broker mutation, provider token, or
-  paper-ledger mixing.
+  paper-ledger mixing. `FYERS_CONNECTOR_KILL_SWITCH=true` or
+  `PORTFOLIO_FYERS_CONNECTOR_KILL_SWITCH=true` stops protected refreshes before
+  any connector call or refresh-result persistence.
   In production-like Postgres mode, sanitized connection metadata and hashed
   OAuth session state are stored tenant-scoped in Postgres; provider tokens,
   client secrets, trading tokens, and PKCE verifiers are never persisted.
