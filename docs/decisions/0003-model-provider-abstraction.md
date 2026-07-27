@@ -27,6 +27,8 @@ Provider selection should be environment-driven:
 - `LLM_MODEL`
 - `OLLAMA_BASE_URL`
 - `OLLAMA_MODEL_DIGEST`
+- `OLLAMA_STATUS_TIMEOUT_SECONDS`
+- `OLLAMA_AVAILABLE_MODEL_DIGESTS`
 - `MODEL_CONTEXT_WINDOW_TOKENS`
 - `MODEL_TUNING_CANDIDATES`
 - Provider-specific API keys only when required.
@@ -39,6 +41,10 @@ pinning. A request may use no more than 80% of the active model context window.
 The default local profile targets native Ollama on the host at
 `http://host.containers.internal:11434`; the Compose `ollama` profile is
 optional and does not publish `11434` by default.
+The status API uses configured model inventory in CI/offline mode and otherwise
+performs a short private `GET /api/tags` readiness probe against Ollama. It
+never sends prompts and exposes only redacted inventory metadata plus digest
+verification state.
 
 Model tuning is provider-neutral. Initial optimization changes prompts,
 routing, retrieval, route budgets, and tool descriptions against a development
@@ -51,7 +57,7 @@ repeatable residual failure class.
 - The first scaffold can remain ADK/Gemini-friendly.
 - Business logic, tool policy, and evals must not depend on Gemini-specific behavior.
 - Local-provider support starts with deterministic runtime/capability contracts
-  and can later add live Ollama probing behind the same profile interface.
+  plus a bounded Ollama inventory probe behind the same profile interface.
 - Eval coverage must include provider-neutral safety cases, especially live-trading refusal and broker-token refusal.
 - Provider request and response logs must redact secrets and sensitive portfolio data.
 
@@ -59,6 +65,4 @@ repeatable residual failure class.
 
 1. Which provider-neutral eval metric should select the next 7B/8B candidate
    after the `llama3.1:8b` pilot?
-2. Should local-provider readiness probe `ollama /api/tags` at startup or only
-   in a deployment preflight command?
-3. Should local-provider support require native tool calling, or should the agent use a deterministic tool-routing fallback?
+2. Should local-provider support require native tool calling, or should the agent use a deterministic tool-routing fallback?

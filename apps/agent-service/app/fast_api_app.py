@@ -11,10 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import json
 import logging
 import os
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin
+from urllib.request import urlopen
 
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
@@ -42,8 +47,10 @@ if model_provider_path not in sys.path:
 
 from portfolio_model_provider import (  # noqa: E402
     ModelProvider,
+    OllamaModelMetadata,
     build_model_capability_report,
     load_model_runtime_profile,
+    parse_ollama_tags_response,
 )
 
 setup_telemetry()
@@ -161,13 +168,87 @@ def _configured_available_model_ids() -> set[str] | None:
     }
 
 
+def _configured_available_model_digests() -> dict[str, str] | None:
+    raw_value = os.getenv("OLLAMA_AVAILABLE_MODEL_DIGESTS")
+    if not raw_value:
+        return None
+    digests: dict[str, str] = {}
+    for item in raw_value.split(","):
+        model, separator, digest = item.partition("=")
+        if separator and model.strip() and digest.strip():
+            digests[model.strip()] = digest.strip()
+    return digests or None
+
+
+def _positive_float(value: str | None, default: float) -> float:
+    if not value:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _probe_ollama_inventory(
+    base_url: str | None,
+) -> dict[str, OllamaModelMetadata] | None:
+    if not base_url:
+        return None
+    timeout = _positive_float(os.getenv("OLLAMA_STATUS_TIMEOUT_SECONDS"), 1.5)
+    try:
+        tags_url = urljoin(base_url.rstrip("/") + "/", "api/tags")
+        with urlopen(tags_url, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    return parse_ollama_tags_response(payload)
+
+
+def _ollama_inventory(
+    profile_provider: ModelProvider,
+    base_url: str | None,
+) -> tuple[str, set[str] | None, dict[str, str] | None, list[dict[str, object]]]:
+    configured_ids = _configured_available_model_ids()
+    configured_digests = _configured_available_model_digests()
+    if configured_ids is not None or configured_digests is not None:
+        return (
+            "env",
+            configured_ids
+            if configured_ids is not None
+            else set(configured_digests or {}),
+            configured_digests,
+            [],
+        )
+    if profile_provider != ModelProvider.OLLAMA:
+        return ("not_applicable", None, None, [])
+    inventory = _probe_ollama_inventory(base_url)
+    if inventory is None:
+        return ("unavailable", None, None, [])
+    return (
+        "ollama_api",
+        set(inventory),
+        {name: item.digest for name, item in inventory.items() if item.digest},
+        [item.to_dict() for item in inventory.values()],
+    )
+
+
 @app.get("/v1/models/ollama/status")
 def get_ollama_model_status() -> dict:
     """Return redacted model runtime readiness and route-budget status."""
     profile = load_model_runtime_profile(os.environ)
+    inventory_source, available_model_ids, available_model_digests, inventory = (
+        _ollama_inventory(
+            profile.provider,
+            profile.base_url,
+        )
+    )
     report = build_model_capability_report(
         profile,
-        available_model_ids=_configured_available_model_ids(),
+        available_model_ids=available_model_ids,
+        available_model_digests=available_model_digests,
         env=os.environ,
     )
     return {
@@ -196,6 +277,9 @@ def get_ollama_model_status() -> dict:
         "startup_allowed": report.startup_allowed,
         "blocking_reasons": report.blocking_reasons,
         "model_available": report.model_available,
+        "model_digest_verified": report.model_digest_verified,
+        "model_inventory_source": inventory_source,
+        "model_inventory": inventory,
         "applies_to_active_provider": profile.provider == ModelProvider.OLLAMA,
     }
 

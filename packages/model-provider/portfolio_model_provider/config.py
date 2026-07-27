@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from ipaddress import ip_address
-from typing import Mapping
+from typing import Any, Mapping
 from urllib.parse import urlparse
 
 
@@ -69,6 +69,7 @@ class ModelCapabilityReport:
     max_request_input_tokens: int
     base_url_private: bool
     model_available: bool | None
+    model_digest_verified: bool | None
     startup_allowed: bool
     blocking_reasons: list[str]
 
@@ -98,6 +99,22 @@ class ModelUsageEvent:
             "latency_ms": self.latency_ms,
             "retries": self.retries,
             "request_id": self.request_id,
+        }
+
+
+@dataclass(frozen=True)
+class OllamaModelMetadata:
+    name: str
+    digest: str | None
+    size_bytes: int | None
+    modified_at: str | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "digest_available": self.digest is not None,
+            "size_bytes": self.size_bytes,
+            "modified_at": self.modified_at,
         }
 
 
@@ -214,6 +231,7 @@ def load_model_runtime_profile(env: Mapping[str, str]) -> ModelRuntimeProfile:
 def build_model_capability_report(
     profile: ModelRuntimeProfile,
     available_model_ids: set[str] | None = None,
+    available_model_digests: Mapping[str, str] | None = None,
     env: Mapping[str, str] | None = None,
 ) -> ModelCapabilityReport:
     env = {} if env is None else env
@@ -236,6 +254,11 @@ def build_model_capability_report(
     model_available = (
         None if available_model_ids is None else profile.model in available_model_ids
     )
+    model_digest_verified: bool | None = None
+    if profile.model_digest and available_model_digests is not None:
+        actual_digest = available_model_digests.get(profile.model)
+        if actual_digest is not None:
+            model_digest_verified = actual_digest == profile.model_digest
     blocking_reasons: list[str] = []
     if not base_url_private:
         blocking_reasons.append("ollama_base_url_not_private")
@@ -248,6 +271,8 @@ def build_model_capability_report(
         blocking_reasons.append("model_not_available")
     if ollama_profile and profile.model_digest is None:
         blocking_reasons.append("model_digest_not_pinned")
+    if model_digest_verified is False:
+        blocking_reasons.append("model_digest_mismatch")
 
     return ModelCapabilityReport(
         provider=profile.provider,
@@ -259,9 +284,33 @@ def build_model_capability_report(
         max_request_input_tokens=profile.max_request_input_tokens,
         base_url_private=base_url_private,
         model_available=model_available,
+        model_digest_verified=model_digest_verified,
         startup_allowed=not blocking_reasons,
         blocking_reasons=blocking_reasons,
     )
+
+
+def parse_ollama_tags_response(payload: Mapping[str, Any]) -> dict[str, OllamaModelMetadata]:
+    models = payload.get("models", [])
+    if not isinstance(models, list):
+        return {}
+    inventory: dict[str, OllamaModelMetadata] = {}
+    for item in models:
+        if not isinstance(item, Mapping):
+            continue
+        raw_name = item.get("model") or item.get("name")
+        if not isinstance(raw_name, str) or not raw_name.strip():
+            continue
+        digest = item.get("digest")
+        size = item.get("size")
+        modified_at = item.get("modified_at")
+        inventory[raw_name.strip()] = OllamaModelMetadata(
+            name=raw_name.strip(),
+            digest=digest.strip() if isinstance(digest, str) and digest.strip() else None,
+            size_bytes=size if isinstance(size, int) else None,
+            modified_at=modified_at if isinstance(modified_at, str) else None,
+        )
+    return inventory
 
 
 def build_model_tuning_plan(env: Mapping[str, str]) -> ModelTuningPlan:

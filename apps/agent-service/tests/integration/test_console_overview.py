@@ -32,6 +32,7 @@ def test_ollama_model_status_reports_profile_without_secrets(monkeypatch) -> Non
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://host.containers.internal:11434")
     monkeypatch.setenv("OLLAMA_MODEL_DIGEST", "sha256:local-test")
     monkeypatch.setenv("OLLAMA_AVAILABLE_MODELS", "llama3.1:8b")
+    monkeypatch.setenv("OLLAMA_AVAILABLE_MODEL_DIGESTS", "llama3.1:8b=sha256:local-test")
     monkeypatch.setenv("MODEL_CONTEXT_WINDOW_TOKENS", "8192")
     monkeypatch.setenv("MODEL_SUPPORTS_TOOL_USE", "true")
     monkeypatch.setenv("MODEL_SUPPORTS_STRUCTURED_OUTPUTS", "true")
@@ -48,6 +49,9 @@ def test_ollama_model_status_reports_profile_without_secrets(monkeypatch) -> Non
     assert payload["model"] == "llama3.1:8b"
     assert payload["model_digest_pinned"] is True
     assert payload["startup_allowed"] is True
+    assert payload["model_digest_verified"] is True
+    assert payload["model_inventory_source"] == "env"
+    assert payload["model_inventory"] == []
     assert payload["blocking_reasons"] == []
     assert payload["route_budgets"]["research"]["effective_input_tokens"] == 6553
     assert "should-not-be-returned" not in serialized

@@ -6,11 +6,13 @@ from .config import (
     ModelRuntimeProfile,
     ModelTuningPlan,
     ModelUsageEvent,
+    OllamaModelMetadata,
     RouteBudget,
     build_model_capability_report,
     build_model_tuning_plan,
     load_model_provider_config,
     load_model_runtime_profile,
+    parse_ollama_tags_response,
 )
 
 __all__ = [
@@ -21,9 +23,11 @@ __all__ = [
     "ModelRuntimeProfile",
     "ModelTuningPlan",
     "ModelUsageEvent",
+    "OllamaModelMetadata",
     "RouteBudget",
     "build_model_capability_report",
     "build_model_tuning_plan",
     "load_model_provider_config",
     "load_model_runtime_profile",
+    "parse_ollama_tags_response",
 ]
