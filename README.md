@@ -336,7 +336,11 @@ contract stores only a sanitized task summary plus references to authoritative
 objects, scoped by tenant and actor identity. Defaults are a 2-hour idle TTL and
 24-hour absolute TTL, with immediate tenant-scoped deletion support. Raw FYERS
 or account payloads, provider secrets, private notes, and long-term preferences
-are rejected before persistence.
+are rejected before persistence. Protected
+`/v1/sessions/{session_id}/summary` `PUT`, `GET`, and `DELETE` endpoints use
+the tenant-scoped `PostgresSessionMemoryStore` when
+`PORTFOLIO_STORAGE_BACKEND=postgres`; local/offline mode keeps the same
+sanitizer and TTL semantics in process memory only.
 
 Postgres schema changes live under `infra/db/alembic`. To validate migrations
 without touching a database, generate offline SQL:

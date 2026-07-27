@@ -124,6 +124,11 @@ Current coverage:
   duplication, prompt injection, client-secret/provider-token leakage, positive
   token sizes, budget, schema validity, citation existence, tool-output
   agreement, policy statements, uncertainty, and one structured repair attempt.
+- Session-memory API contracts require `ActorContext`, persist compact
+  tenant/actor-scoped summaries through Postgres when configured, keep only
+  process-local fallback state in local mode, enforce 2-hour idle and 24-hour
+  absolute TTLs, support immediate deletion, and reject raw account data,
+  prompts, tokens, secrets, private notes, and long-term preferences.
 - Harness route-decision contracts deterministically route forbidden live
   trading, FYERS refresh, human approval, pre-market briefing, and draft-only
   paper proposal intents before model classification; ambiguous read-only

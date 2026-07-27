@@ -77,14 +77,19 @@ from portfolio_domain import (  # noqa: E402
     PaperExecutionWorkItem,
     PostgresFyersIntegrationStore,
     PostgresPaperExecutionStore,
+    PostgresSessionMemoryStore,
     ProviderRefreshJob,
     ProviderSnapshotEnvelope,
+    SessionMemoryPolicy,
+    SessionMemoryRecord,
+    SessionMemoryValidationError,
     actor_hash,
     evaluate_database_runtime_readiness,
     get_fyers_readonly_connector,
     hash_oauth_state,
     issue_paper_execution_grant,
     load_database_runtime_profile,
+    sanitize_session_memory_payload,
 )
 from portfolio_model_provider import (  # noqa: E402
     ModelCandidateEvaluation,
@@ -199,6 +204,13 @@ class FyersRefreshRequest(BaseModel):
     symbols: list[str] = Field(default_factory=lambda: ["INFY"])
 
 
+class SessionSummaryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(min_length=1, max_length=2_000)
+    object_refs: list[dict[str, object]] = Field(default_factory=list)
+
+
 class PaperFillRequest(BaseModel):
     fill_price: float | None = Field(default=None, gt=0)
 
@@ -281,6 +293,7 @@ _PAPER_GRANTS: dict[tuple[str, str], PaperExecutionGrant] = {}
 _PAPER_IDEMPOTENCY_KEYS: dict[str, set[str]] = {}
 _FYERS_CONNECTIONS: dict[tuple[str, str], FyersConnection] = {}
 _FYERS_OAUTH_STATES: dict[tuple[str, str], FyersOAuthSession] = {}
+_SESSION_MEMORY: dict[tuple[str, str, str], SessionMemoryRecord] = {}
 
 
 def cloud_telemetry_enabled() -> bool:
@@ -642,6 +655,56 @@ def get_model_usage_summary(
         "summary": summary.to_dict(),
         "budget_violations": budget_violations,
         "stored_event_count": len(events),
+    }
+
+
+@app.put("/v1/sessions/{session_id}/summary")
+def upsert_session_summary(
+    session_id: str,
+    request: SessionSummaryRequest,
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Persist compact session memory with tenant/user isolation and TTLs."""
+    try:
+        record = _store_session_summary(
+            actor,
+            session_id=session_id,
+            summary=request.summary,
+            object_refs=request.object_refs,
+        )
+    except (SessionMemoryValidationError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="session_memory_invalid") from exc
+    return {
+        "status": "saved",
+        "memory": _session_memory_response(record),
+    }
+
+
+@app.get("/v1/sessions/{session_id}/summary")
+def get_session_summary(
+    session_id: str,
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Return compact, unexpired session memory for the authenticated actor."""
+    record = _get_session_summary(actor, session_id=session_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="session_memory_not_found")
+    return {
+        "status": "ready",
+        "memory": _session_memory_response(record),
+    }
+
+
+@app.delete("/v1/sessions/{session_id}/summary")
+def delete_session_summary(
+    session_id: str,
+    actor: Annotated[ActorContext, Depends(actor_context_dependency)],
+) -> dict:
+    """Immediately delete compact session memory for the authenticated actor."""
+    _delete_session_summary(actor, session_id=session_id)
+    return {
+        "status": "deleted",
+        "session_id": session_id,
     }
 
 
@@ -1097,6 +1160,135 @@ def _build_postgres_model_usage_store(
         tenant_id=tenant_id,
         connection_factory=connection_factory,
     )
+
+
+def _session_key(actor: ActorContext, session_id: str) -> tuple[str, str, str]:
+    return (actor.tenant_id, actor.user_id, session_id)
+
+
+def _session_memory_store_for_actor(
+    actor: ActorContext,
+) -> PostgresSessionMemoryStore | None:
+    profile = load_database_runtime_profile(os.environ)
+    if profile.backend != DatabaseBackend.POSTGRES:
+        return None
+    if not profile.database_url:
+        raise HTTPException(status_code=503, detail="session_memory_postgres_not_configured")
+    return _build_postgres_session_memory_store(
+        tenant_id=actor.tenant_id,
+        actor_identity_id=actor.user_id,
+        database_url=profile.database_url,
+    )
+
+
+def _build_postgres_session_memory_store(
+    *,
+    tenant_id: str,
+    actor_identity_id: str,
+    database_url: str,
+) -> PostgresSessionMemoryStore:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+        from psycopg.rows import dict_row
+
+        connection = psycopg.connect(connection_url, row_factory=dict_row)
+        connection.execute("SET app.tenant_id = %s", (tenant_id,))
+        return connection
+
+    return PostgresSessionMemoryStore(
+        tenant_id=tenant_id,
+        actor_identity_id=actor_identity_id,
+        connection_factory=connection_factory,
+    )
+
+
+def _store_session_summary(
+    actor: ActorContext,
+    *,
+    session_id: str,
+    summary: str,
+    object_refs: list[dict[str, object]],
+) -> SessionMemoryRecord:
+    store = _session_memory_store_for_actor(actor)
+    if store is not None:
+        return store.upsert_summary(
+            session_id=session_id,
+            request_id=actor.request_id,
+            summary=summary,
+            object_refs=object_refs,
+        )
+
+    policy = SessionMemoryPolicy.default()
+    payload = sanitize_session_memory_payload(
+        summary=summary,
+        object_refs=object_refs,
+        policy=policy,
+    )
+    current_time = datetime.now(UTC)
+    existing = _SESSION_MEMORY.get(_session_key(actor, session_id))
+    record = SessionMemoryRecord(
+        session_id=session_id,
+        tenant_id=actor.tenant_id,
+        actor_identity_id=actor.user_id,
+        request_id=actor.request_id,
+        summary=payload.summary,
+        object_refs=payload.object_refs,
+        idle_expires_at=current_time + policy.idle_ttl,
+        absolute_expires_at=current_time + policy.absolute_ttl,
+        deleted_at=None,
+        created_at=existing.created_at if existing is not None else current_time,
+        updated_at=current_time,
+    )
+    _SESSION_MEMORY[_session_key(actor, session_id)] = record
+    return record
+
+
+def _get_session_summary(
+    actor: ActorContext,
+    *,
+    session_id: str,
+) -> SessionMemoryRecord | None:
+    store = _session_memory_store_for_actor(actor)
+    if store is not None:
+        return store.get(session_id)
+
+    record = _SESSION_MEMORY.get(_session_key(actor, session_id))
+    if record is None:
+        return None
+    current_time = datetime.now(UTC)
+    if (
+        record.deleted_at is not None
+        or record.idle_expires_at <= current_time
+        or record.absolute_expires_at <= current_time
+    ):
+        return None
+    return record
+
+
+def _delete_session_summary(
+    actor: ActorContext,
+    *,
+    session_id: str,
+) -> None:
+    store = _session_memory_store_for_actor(actor)
+    if store is not None:
+        store.delete(session_id)
+        return
+    _SESSION_MEMORY.pop(_session_key(actor, session_id), None)
+
+
+def _session_memory_response(record: SessionMemoryRecord) -> dict:
+    return {
+        "session_id": record.session_id,
+        "request_id": record.request_id,
+        "summary": record.summary,
+        "object_refs": [dict(ref) for ref in record.object_refs],
+        "idle_expires_at": record.idle_expires_at.isoformat(),
+        "absolute_expires_at": record.absolute_expires_at.isoformat(),
+        "deleted_at": record.deleted_at.isoformat() if record.deleted_at else None,
+    }
 
 
 def _aware_utc(value: datetime) -> datetime:
