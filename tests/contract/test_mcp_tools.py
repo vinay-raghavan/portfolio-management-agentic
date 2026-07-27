@@ -540,6 +540,53 @@ def test_provider_refresh_schedule_tool_reports_readiness_without_path_leaks(
     assert "private_key" not in combined
 
 
+def test_provider_refresh_schedule_tool_honors_scheduler_kill_switch(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    metadata_db = tmp_path / "provider-config.db"
+    market_db = tmp_path / "market-data.db"
+    private_path = tmp_path / "private-schedule-macro.json"
+    private_path.write_text(
+        json.dumps(
+            {
+                "macro": [
+                    {
+                        "symbol": "DEMODATA",
+                        "source": str(private_path),
+                        "as_of": "2026-06-22",
+                        "metrics": {"market_regime_score": 0.72},
+                        "notes": ["private-schedule-macro token leak candidate"],
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setenv("PROVIDER_CONFIG_DB_PATH", str(metadata_db))
+    monkeypatch.setenv("MARKET_DATA_DB_PATH", str(market_db))
+    monkeypatch.setenv("PORTFOLIO_MACRO_PROVIDER", "json_file")
+    monkeypatch.setenv("PORTFOLIO_MACRO_JSON_PATH", str(private_path))
+    monkeypatch.setenv("PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH", "true")
+
+    result = run_provider_refresh_schedule()
+
+    assert result["policy"]["tier"] == "draft_only"
+    assert result["status"] == "blocked"
+    assert result["schedule"]["provider_refresh_scheduler_kill_switch_active"] is True
+    assert result["schedule"]["blocking_reasons"] == [
+        "provider_refresh_scheduler_kill_switch_active"
+    ]
+    assert result["schedule"]["summary"]["jobs_recorded"] == 0
+    assert result["schedule"]["jobs"] == []
+    assert not metadata_db.exists()
+    assert not market_db.exists()
+
+    combined = f"{result}".lower()
+    assert str(tmp_path).lower() not in combined
+    assert "private-schedule-macro" not in combined
+    assert "token" not in combined
+
+
 def test_forbidden_compatibility_traps_are_blocked_and_redacted() -> None:
     live_order = place_live_order("INFY", 1, "buy")
     token = get_broker_trading_token("fyers")

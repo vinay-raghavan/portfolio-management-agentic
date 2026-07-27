@@ -59,6 +59,43 @@ SENSITIVE_METRIC_KEY_PARTS = (
     "secret",
     "token",
 )
+PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH_ENVS = (
+    "PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH",
+    "PORTFOLIO_PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH",
+)
+
+
+def _env_flag_enabled(env: Mapping[str, str] | None, *names: str) -> bool:
+    source = os.environ if env is None else env
+    truthy_values = {"1", "true", "yes", "y", "on"}
+    return any(source.get(name, "").strip().lower() in truthy_values for name in names)
+
+
+def _provider_refresh_schedule_summary(
+    *,
+    providers_evaluated: int,
+    jobs_recorded: int,
+    completed: int = 0,
+    needs_attention: int = 0,
+    skipped: int = 0,
+    ready: int = 0,
+    stale: int = 0,
+    backoff: int = 0,
+    retry_due: int = 0,
+    not_configured: int = 0,
+) -> dict[str, int]:
+    return {
+        "providers_evaluated": providers_evaluated,
+        "jobs_recorded": jobs_recorded,
+        "completed": completed,
+        "needs_attention": needs_attention,
+        "skipped": skipped,
+        "ready": ready,
+        "stale": stale,
+        "backoff": backoff,
+        "retry_due": retry_due,
+        "not_configured": not_configured,
+    }
 
 
 def _to_json(value: Any) -> str:
@@ -1380,9 +1417,31 @@ def run_provider_refresh_schedule(
     current_at: str = REFRESH_ORCHESTRATION_TIMESTAMP,
     stale_after_seconds: int = DEFAULT_STALE_AFTER_SECONDS,
 ) -> dict[str, Any]:
+    normalized_trigger = trigger.strip() or "scheduled"
+    bounded_stale_after = max(0, stale_after_seconds)
+    kill_switch_active = _env_flag_enabled(
+        env,
+        *PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH_ENVS,
+    )
+    if kill_switch_active:
+        return {
+            "status": "blocked",
+            "run_id": "provider-refresh-scheduled-20260622-093000",
+            "trigger": normalized_trigger,
+            "current_at": current_at,
+            "stale_after_seconds": bounded_stale_after,
+            "provider_refresh_scheduler_kill_switch_active": True,
+            "blocking_reasons": ["provider_refresh_scheduler_kill_switch_active"],
+            "summary": _provider_refresh_schedule_summary(
+                providers_evaluated=0,
+                jobs_recorded=0,
+            ),
+            "jobs": [],
+            "readiness": [],
+        }
+
     validations = validate_configured_provider_imports(env=env)
     jobs: list[ProviderImportJob] = []
-    normalized_trigger = trigger.strip() or "scheduled"
     for validation in validations:
         if validation.status == "not_configured":
             continue
@@ -1398,32 +1457,32 @@ def run_provider_refresh_schedule(
         validations,
         jobs,
         current_at=current_at,
-        stale_after_seconds=stale_after_seconds,
+        stale_after_seconds=bounded_stale_after,
     )
-    summary = {
-        "providers_evaluated": len(validations),
-        "jobs_recorded": len(jobs),
-        "completed": sum(1 for job in jobs if job.status == "completed"),
-        "needs_attention": sum(1 for job in jobs if job.status == "needs_attention"),
-        "skipped": sum(1 for job in jobs if job.status == "skipped"),
-        "ready": sum(1 for item in readiness if item["readiness_status"] == "ready"),
-        "stale": sum(1 for item in readiness if item["readiness_status"] == "stale"),
-        "backoff": sum(
-            1 for item in readiness if item["readiness_status"] == "backoff"
-        ),
-        "retry_due": sum(
+    summary = _provider_refresh_schedule_summary(
+        providers_evaluated=len(validations),
+        jobs_recorded=len(jobs),
+        completed=sum(1 for job in jobs if job.status == "completed"),
+        needs_attention=sum(1 for job in jobs if job.status == "needs_attention"),
+        skipped=sum(1 for job in jobs if job.status == "skipped"),
+        ready=sum(1 for item in readiness if item["readiness_status"] == "ready"),
+        stale=sum(1 for item in readiness if item["readiness_status"] == "stale"),
+        backoff=sum(1 for item in readiness if item["readiness_status"] == "backoff"),
+        retry_due=sum(
             1 for item in readiness if item["readiness_status"] == "retry_due"
         ),
-        "not_configured": sum(
+        not_configured=sum(
             1 for item in readiness if item["readiness_status"] == "not_configured"
         ),
-    }
+    )
     return {
         "status": "needs_attention" if summary["needs_attention"] > 0 else "completed",
         "run_id": "provider-refresh-scheduled-20260622-093000",
         "trigger": normalized_trigger,
         "current_at": current_at,
-        "stale_after_seconds": max(0, stale_after_seconds),
+        "stale_after_seconds": bounded_stale_after,
+        "provider_refresh_scheduler_kill_switch_active": False,
+        "blocking_reasons": [],
         "summary": summary,
         "jobs": [job.to_dict() for job in jobs],
         "readiness": readiness,
