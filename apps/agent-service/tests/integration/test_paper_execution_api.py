@@ -236,6 +236,7 @@ class _FakePostgresPaperStore:
         self.batches = {}
         self.grants = {}
         self.recorded_decisions = []
+        self.idempotency_checks = []
 
     def upsert_policy_ceiling(self, policy):
         self.policies[policy.policy_id] = policy
@@ -280,6 +281,13 @@ class _FakePostgresPaperStore:
         revoked = replace(grant, status="revoked")
         self.grants[grant_id] = revoked
         return revoked
+
+    def execution_decision_exists(self, idempotency_key: str) -> bool:
+        self.idempotency_checks.append(idempotency_key)
+        return any(
+            item["decision"]["audit_event"]["idempotency_key"] == idempotency_key
+            for item in self.recorded_decisions
+        )
 
     def record_execution_decision(
         self,
@@ -373,3 +381,76 @@ def test_paper_api_uses_postgres_store_when_storage_backend_is_postgres(
     assert "postgresql+psycopg" not in combined_payload
     assert "db-secret" not in combined_payload
     assert "fyers" not in combined_payload
+
+
+def test_paper_api_uses_postgres_ledger_for_duplicate_idempotency_keys(
+    monkeypatch,
+) -> None:
+    fake_store = _FakePostgresPaperStore()
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setattr(
+        fast_api_app,
+        "_build_postgres_paper_execution_store",
+        lambda *, tenant_id, database_url: fake_store,
+    )
+    client = TestClient(app)
+    policy_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    batch_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    idempotency_key = "idem-api-postgres-durable"
+    fast_api_app._PAPER_IDEMPOTENCY_KEYS.get(TENANT_ID, set()).discard(idempotency_key)
+
+    client.post(
+        "/v1/paper/policies",
+        headers=_headers("admin-1", "admin"),
+        json=_policy_payload(policy_id),
+    )
+    client.post(
+        "/v1/paper/batches",
+        headers=_headers("analyst-1", "analyst"),
+        json=_batch_payload(batch_id),
+    )
+    approval_response = client.post(
+        f"/v1/paper/batches/{batch_id}/approve",
+        headers=_headers("approver-1", "approver"),
+        json={
+            "policy_id": policy_id,
+            "expires_at": _grant_expiry(),
+        },
+    )
+    grant_id = approval_response.json()["grant"]["grant_id"]
+    order_url = f"/v1/paper/orders/{quote(f'{batch_id}:0', safe='')}/execute"
+    payload = {
+        "grant_id": grant_id,
+        "idempotency_key": idempotency_key,
+        "quote_price": 980,
+        "quote_as_of": (NOW - timedelta(seconds=10)).isoformat(),
+        "now": NOW.isoformat(),
+        "available_cash": 100_000,
+    }
+
+    first_response = client.post(
+        order_url,
+        headers=_headers("analyst-1", "analyst"),
+        json=payload,
+    )
+    second_response = client.post(
+        order_url,
+        headers=_headers("analyst-1", "analyst"),
+        json=payload,
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 409
+    assert second_response.json()["decision"]["status"] == "rejected"
+    assert "duplicate_idempotency_key" in second_response.json()["decision"]["reasons"]
+    assert fake_store.idempotency_checks == [idempotency_key, idempotency_key]
+    assert len(fake_store.recorded_decisions) == 1
+    assert idempotency_key not in fast_api_app._PAPER_IDEMPOTENCY_KEYS.get(
+        TENANT_ID,
+        set(),
+    )
+    assert "db-secret" not in str(second_response.json()).lower()
