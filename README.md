@@ -439,6 +439,18 @@ podman compose up --build
 curl http://localhost:8000/v1/models/ollama/status
 ```
 
+If you use the optional Compose-managed Ollama service instead of a native host
+daemon, pre-pull the required model into the private `ollama-data` volume before
+starting model traffic:
+
+```bash
+OLLAMA_PREPULL_MODEL=llama3.1:8b \
+podman compose --profile ollama run --rm ollama-model-prepull
+```
+
+The Ollama profile does not publish port `11434`; app containers should still
+use private container networking or the native host gateway.
+
 The status endpoint uses configured inventory in CI/offline mode or a short
 private Ollama `/api/tags` probe at runtime. It does not send prompts; it
 reports route budgets, queue limits, capability readiness, model availability,
