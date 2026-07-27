@@ -106,7 +106,6 @@ EXPOSED_TOOL_NAMES = {
     "list_paper_orders",
     "list_paper_positions",
     "create_paper_order_proposal",
-    "simulate_approved_paper_fill",
     "list_paper_fills",
     "get_paper_portfolio_accounting",
     "get_approval_queue",

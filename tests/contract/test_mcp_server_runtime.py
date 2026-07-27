@@ -30,15 +30,18 @@ def test_mcp_server_registers_only_safe_tools() -> None:
     assert "place_live_order" not in tool_names
     assert "get_broker_trading_token" not in tool_names
     assert "approve_paper_order_simulation" not in tool_names
+    assert "simulate_approved_paper_fill" not in tool_names
 
 
-def test_mcp_package_public_exports_exclude_human_approval_and_forbidden_traps() -> None:
+def test_mcp_package_public_exports_exclude_human_approval_fill_and_forbidden_traps() -> None:
     public_exports = set(portfolio_mcp.__all__)
 
     assert EXPOSED_TOOL_NAMES <= public_exports
     assert "approve_paper_order_simulation" not in public_exports
+    assert "simulate_approved_paper_fill" not in public_exports
     assert "place_live_order" not in public_exports
     assert "get_broker_trading_token" not in public_exports
     assert not hasattr(portfolio_mcp, "approve_paper_order_simulation")
+    assert not hasattr(portfolio_mcp, "simulate_approved_paper_fill")
     assert not hasattr(portfolio_mcp, "place_live_order")
     assert not hasattr(portfolio_mcp, "get_broker_trading_token")

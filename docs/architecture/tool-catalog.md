@@ -2,7 +2,7 @@
 
 This catalog documents the first MCP-style tool slice. The MCP server must expose only tools that are explicitly classified by `packages/policy`.
 
-Tool function docstrings are model-facing descriptions in ADK. Each exposed tool should name its policy tier, and high-risk workflow tools should also describe the safe sequence they support. This prevents future tool additions from weakening provider-readiness checks, recommendation preflights, approval-gated simulated fills, or live-trading refusals before evals can observe the behavior.
+Tool function docstrings are model-facing descriptions in ADK. Each exposed tool should name its policy tier, and high-risk workflow tools should also describe the safe sequence they support. This prevents future tool additions from weakening provider-readiness checks, recommendation preflights, protected human approval/fill boundaries, or live-trading refusals before evals can observe the behavior.
 
 Route-scoped capability manifests live under `capabilities/<name>/` and are
 documented in [Capability Manifests](capability-manifests.md). Those manifests
@@ -55,7 +55,6 @@ repository `SKILL.md` workflow instructions.
 | `list_paper_orders` | read-only | Return paper order proposals and their approval/fill status. |
 | `list_paper_positions` | read-only | Return fixture-backed paper positions for exposure review. |
 | `create_paper_order_proposal` | draft-only | Build a recommendation readiness preflight, block unsafe or incomplete proposals before draft creation, or create a paper order proposal that enters the human approval queue with no fill. |
-| `simulate_approved_paper_fill` | approval-required | Create a simulated paper fill only after verified human approval and update paper positions. |
 | `list_paper_fills` | read-only | Return simulated paper fills without broker access. |
 | `get_paper_portfolio_accounting` | read-only | Summarize paper market value, unrealized PnL, order state, and fill counts. |
 | `get_approval_queue` | read-only | Return pending human approvals for paper-only actions. |
@@ -75,6 +74,7 @@ package-level `portfolio_mcp` public API:
 | Tool | Tier | Reason |
 | --- | --- | --- |
 | `approve_paper_order_simulation` | approval-required | Human approval identity belongs to the protected API `ActorContext`, not model-visible MCP. |
+| `simulate_approved_paper_fill` | approval-required | Paper-ledger mutation belongs to protected human/API or future execution-grant paths, not model-visible MCP. |
 | `place_live_order` | forbidden | Live order placement is out of scope and unsafe. |
 | `get_broker_trading_token` | forbidden | Broker trading-token access is prohibited. |
 
