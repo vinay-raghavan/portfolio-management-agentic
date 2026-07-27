@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from typing import Any
@@ -120,6 +121,47 @@ class PostgresPaperExecutionStore:
             connection.commit()
         return policy
 
+    def get_policy_ceiling(
+        self,
+        policy_id: str,
+    ) -> PaperExecutionPolicyCeiling | None:
+        policy_id = policy_id.strip()
+        if not policy_id:
+            raise ValueError("policy_id is required")
+        params = {"tenant_id": self._tenant_id, "policy_id": policy_id}
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        id,
+                        tenant_id,
+                        created_by_actor_id,
+                        name,
+                        status,
+                        valid_from,
+                        valid_until,
+                        permitted_strategies,
+                        permitted_symbols,
+                        permitted_sides,
+                        permitted_order_types,
+                        limits,
+                        freshness_requirements,
+                        self_approval_permitted
+                    FROM paper_execution_policy_ceilings
+                    WHERE tenant_id = %(tenant_id)s
+                      AND id = %(policy_id)s
+                    """.strip(),
+                    params,
+                )
+                row = _fetch_one_mapping(cursor)
+        if row is None:
+            return None
+        policy = _policy_from_row(row)
+        self._require_tenant(policy.tenant_id)
+        _reject_secret_payload(policy.to_dict())
+        return policy
+
     def create_batch_request(
         self,
         batch_request: PaperBatchRequest,
@@ -171,6 +213,41 @@ class PostgresPaperExecutionStore:
                     params,
                 )
             connection.commit()
+        return batch_request
+
+    def get_batch_request(
+        self,
+        batch_request_id: str,
+    ) -> PaperBatchRequest | None:
+        batch_request_id = batch_request_id.strip()
+        if not batch_request_id:
+            raise ValueError("batch_request_id is required")
+        params = {"tenant_id": self._tenant_id, "batch_request_id": batch_request_id}
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        id,
+                        tenant_id,
+                        requested_by_actor_id,
+                        strategy_key,
+                        status,
+                        orders,
+                        context_refs,
+                        risk_summary
+                    FROM paper_batch_requests
+                    WHERE tenant_id = %(tenant_id)s
+                      AND id = %(batch_request_id)s
+                    """.strip(),
+                    params,
+                )
+                row = _fetch_one_mapping(cursor)
+        if row is None:
+            return None
+        batch_request = _batch_from_row(row)
+        self._require_tenant(batch_request.tenant_id)
+        _reject_secret_payload(batch_request.to_dict())
         return batch_request
 
     def issue_grant(
@@ -240,6 +317,90 @@ class PostgresPaperExecutionStore:
                     params,
                 )
             connection.commit()
+        return grant
+
+    def get_grant(
+        self,
+        grant_id: str,
+    ) -> PaperExecutionGrant | None:
+        grant_id = grant_id.strip()
+        if not grant_id:
+            raise ValueError("grant_id is required")
+        params = {"tenant_id": self._tenant_id, "grant_id": grant_id}
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        id,
+                        tenant_id,
+                        batch_request_id,
+                        policy_ceiling_id,
+                        approved_by_actor_id,
+                        status,
+                        expires_at,
+                        scope,
+                        reserved_capacity,
+                        consumed_capacity
+                    FROM paper_execution_grants
+                    WHERE tenant_id = %(tenant_id)s
+                      AND id = %(grant_id)s
+                    """.strip(),
+                    params,
+                )
+                row = _fetch_one_mapping(cursor)
+        if row is None:
+            return None
+        grant = _grant_from_row(row)
+        self._require_tenant(grant.tenant_id)
+        _reject_secret_payload(grant.to_dict())
+        return grant
+
+    def revoke_grant(
+        self,
+        grant_id: str,
+    ) -> PaperExecutionGrant | None:
+        grant_id = grant_id.strip()
+        if not grant_id:
+            raise ValueError("grant_id is required")
+        params = {
+            "tenant_id": self._tenant_id,
+            "grant_id": grant_id,
+            "now": _aware_utc(self._now()),
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE paper_execution_grants
+                    SET
+                        status = 'revoked',
+                        revoked_at = %(now)s,
+                        updated_at = %(now)s
+                    WHERE tenant_id = %(tenant_id)s
+                      AND id = %(grant_id)s
+                      AND status = 'active'
+                    RETURNING
+                        id,
+                        tenant_id,
+                        batch_request_id,
+                        policy_ceiling_id,
+                        approved_by_actor_id,
+                        status,
+                        expires_at,
+                        scope,
+                        reserved_capacity,
+                        consumed_capacity
+                    """.strip(),
+                    params,
+                )
+                row = _fetch_one_mapping(cursor)
+            connection.commit()
+        if row is None:
+            return None
+        grant = _grant_from_row(row)
+        self._require_tenant(grant.tenant_id)
+        _reject_secret_payload(grant.to_dict())
         return grant
 
     def record_execution_decision(
@@ -338,6 +499,138 @@ def _policy_limits(policy: PaperExecutionPolicyCeiling) -> dict[str, Any]:
         "slippage_bps": policy.slippage_bps,
         "market_hours_only": policy.market_hours_only,
     }
+
+
+def _fetch_one_mapping(cursor: Any) -> dict[str, Any] | None:
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    if isinstance(row, Mapping):
+        return {str(key): value for key, value in row.items()}
+    columns = [str(column[0]) for column in cursor.description]
+    return dict(zip(columns, row, strict=False))
+
+
+def _policy_from_row(row: Mapping[str, Any]) -> PaperExecutionPolicyCeiling:
+    limits = _mapping_value(row.get("limits"))
+    freshness_requirements = _mapping_value(row.get("freshness_requirements"))
+    return PaperExecutionPolicyCeiling(
+        policy_id=str(row.get("id", "")),
+        tenant_id=str(row.get("tenant_id", "")),
+        created_by_actor_id=str(row.get("created_by_actor_id") or ""),
+        name=str(row.get("name", "")),
+        status=str(row.get("status", "")),
+        permitted_strategies=tuple(_list_value(row.get("permitted_strategies"))),
+        permitted_symbols=tuple(_list_value(row.get("permitted_symbols"))),
+        permitted_sides=tuple(_list_value(row.get("permitted_sides"))),
+        permitted_order_types=tuple(_list_value(row.get("permitted_order_types"))),
+        max_orders=_optional_int(limits.get("max_orders")),
+        max_quantity_per_order=_optional_int(limits.get("max_quantity_per_order")),
+        max_notional_per_order=_optional_float(limits.get("max_notional_per_order")),
+        max_gross_notional=_optional_float(limits.get("max_gross_notional")),
+        max_net_notional=_optional_float(limits.get("max_net_notional")),
+        max_loss_limit=_optional_float(limits.get("max_loss_limit")),
+        max_drawdown_limit=_optional_float(limits.get("max_drawdown_limit")),
+        slippage_bps=_optional_int(limits.get("slippage_bps")),
+        quote_freshness_seconds=_optional_int(
+            freshness_requirements.get("quote_freshness_seconds")
+        ),
+        market_hours_only=bool(limits.get("market_hours_only", True)),
+        self_approval_permitted=bool(row.get("self_approval_permitted", False)),
+        valid_from=_optional_datetime(row.get("valid_from")),
+        valid_until=_optional_datetime(row.get("valid_until")),
+    )
+
+
+def _batch_from_row(row: Mapping[str, Any]) -> PaperBatchRequest:
+    orders = tuple(_order_from_payload(order) for order in _list_value(row.get("orders")))
+    return PaperBatchRequest(
+        batch_request_id=str(row.get("id", "")),
+        tenant_id=str(row.get("tenant_id", "")),
+        requested_by_actor_id=str(row.get("requested_by_actor_id") or ""),
+        strategy_key=str(row.get("strategy_key", "")),
+        status=str(row.get("status", "")),
+        orders=orders,
+        context_refs=tuple(_mapping_value(ref) for ref in _list_value(row.get("context_refs"))),
+        risk_summary=_mapping_value(row.get("risk_summary")),
+    )
+
+
+def _order_from_payload(payload: Any) -> PaperExecutionOrder:
+    order = _mapping_value(payload)
+    return PaperExecutionOrder(
+        symbol=str(order.get("symbol", "")),
+        side=str(order.get("side", "")),
+        quantity=int(order.get("quantity", 0)),
+        order_type=str(order.get("order_type", "")),
+        limit_price=_optional_float(order.get("limit_price")),
+    )
+
+
+def _grant_from_row(row: Mapping[str, Any]) -> PaperExecutionGrant:
+    return PaperExecutionGrant(
+        grant_id=str(row.get("id", "")),
+        tenant_id=str(row.get("tenant_id", "")),
+        batch_request_id=str(row.get("batch_request_id", "")),
+        policy_ceiling_id=str(row.get("policy_ceiling_id", "")),
+        approved_by_actor_id=str(row.get("approved_by_actor_id") or ""),
+        status=str(row.get("status", "")),
+        expires_at=_required_datetime(row.get("expires_at")),
+        scope=_mapping_value(row.get("scope")),
+        reserved_capacity=_mapping_value(row.get("reserved_capacity")),
+        consumed_capacity=_mapping_value(row.get("consumed_capacity")),
+    )
+
+
+def _mapping_value(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        value = json.loads(value)
+    if not isinstance(value, Mapping):
+        raise ValueError("Expected mapping payload from paper execution store")
+    return {str(key): _json_safe(item) for key, item in value.items()}
+
+
+def _list_value(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = json.loads(value)
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, list):
+        return value
+    raise ValueError("Expected list payload from paper execution store")
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
+def _required_datetime(value: Any) -> datetime:
+    parsed = _optional_datetime(value)
+    if parsed is None:
+        raise ValueError("Expected datetime payload from paper execution store")
+    return parsed
+
+
+def _optional_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return _aware_utc(value)
+    if isinstance(value, str):
+        return _aware_utc(datetime.fromisoformat(value))
+    raise ValueError("Expected datetime payload from paper execution store")
 
 
 def _json_safe(value: Any) -> Any:

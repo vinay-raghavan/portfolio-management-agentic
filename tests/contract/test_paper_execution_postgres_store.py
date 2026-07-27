@@ -25,8 +25,15 @@ BATCH_ID = "66666666-6666-6666-6666-666666666666"
 
 
 class _FakeCursor:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        rows: list[tuple] | None = None,
+        columns: list[str] | None = None,
+    ) -> None:
         self.executed: list[tuple[str, dict]] = []
+        self._rows = rows or []
+        self.description = [(column,) for column in columns or []]
 
     def __enter__(self):
         return self
@@ -36,6 +43,11 @@ class _FakeCursor:
 
     def execute(self, sql: str, params: dict) -> None:
         self.executed.append((sql, params))
+
+    def fetchone(self):
+        if not self._rows:
+            return None
+        return self._rows.pop(0)
 
 
 class _FakeConnection:
@@ -267,4 +279,270 @@ def test_store_records_execution_decision_as_idempotent_paper_ledger_entry() -> 
     assert "live" not in str(params["fill"]).lower()
     assert "fyers" not in str(params).lower()
     assert "token" not in str(params).lower()
+    assert connection.committed is True
+
+
+def test_store_reads_policy_ceiling_with_tenant_scope() -> None:
+    columns = [
+        "id",
+        "tenant_id",
+        "created_by_actor_id",
+        "name",
+        "status",
+        "valid_from",
+        "valid_until",
+        "permitted_strategies",
+        "permitted_symbols",
+        "permitted_sides",
+        "permitted_order_types",
+        "limits",
+        "freshness_requirements",
+        "self_approval_permitted",
+    ]
+    cursor = _FakeCursor(
+        columns=columns,
+        rows=[
+            (
+                POLICY_ID,
+                TENANT_ID,
+                ADMIN_ID,
+                "Paper sandbox ceiling",
+                "enabled",
+                NOW - timedelta(minutes=1),
+                NOW + timedelta(hours=1),
+                ["breakout-continuation"],
+                ["TATAMOTORS", "SBIN"],
+                ["buy"],
+                ["market", "limit"],
+                {
+                    "max_orders": 3,
+                    "max_quantity_per_order": 10,
+                    "max_notional_per_order": 20_000,
+                    "max_gross_notional": 40_000,
+                    "max_net_notional": 40_000,
+                    "max_loss_limit": 2_500,
+                    "max_drawdown_limit": 3_000,
+                    "slippage_bps": 25,
+                    "market_hours_only": True,
+                },
+                {"quote_freshness_seconds": 30},
+                False,
+            )
+        ],
+    )
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+
+    policy = store.get_policy_ceiling(POLICY_ID)
+
+    sql, params = cursor.executed[0]
+    assert "FROM paper_execution_policy_ceilings" in sql
+    assert "tenant_id = %(tenant_id)s" in sql
+    assert "id = %(policy_id)s" in sql
+    assert params == {"tenant_id": TENANT_ID, "policy_id": POLICY_ID}
+    assert policy is not None
+    assert policy.policy_id == POLICY_ID
+    assert policy.tenant_id == TENANT_ID
+    assert policy.permitted_symbols == ("TATAMOTORS", "SBIN")
+    assert policy.max_orders == 3
+    assert policy.quote_freshness_seconds == 30
+    assert policy.configuration_complete is True
+    assert connection.committed is False
+
+
+def test_store_returns_none_for_missing_policy_without_commit() -> None:
+    cursor = _FakeCursor(columns=["id"])
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+
+    assert store.get_policy_ceiling(POLICY_ID) is None
+
+    sql, params = cursor.executed[0]
+    assert "FROM paper_execution_policy_ceilings" in sql
+    assert params == {"tenant_id": TENANT_ID, "policy_id": POLICY_ID}
+    assert connection.committed is False
+
+
+def test_store_reads_batch_request_orders_without_provider_payloads() -> None:
+    columns = [
+        "id",
+        "tenant_id",
+        "requested_by_actor_id",
+        "strategy_key",
+        "status",
+        "orders",
+        "context_refs",
+        "risk_summary",
+    ]
+    cursor = _FakeCursor(
+        columns=columns,
+        rows=[
+            (
+                BATCH_ID,
+                TENANT_ID,
+                ANALYST_ID,
+                "breakout-continuation",
+                "proposed",
+                [
+                    {
+                        "symbol": "tatamotors",
+                        "side": "BUY",
+                        "quantity": 5,
+                        "order_type": "MARKET",
+                        "limit_price": None,
+                    }
+                ],
+                [{"type": "research_document", "id": "doc-1"}],
+                {"paper_only": True, "live_trading": "forbidden"},
+            )
+        ],
+    )
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+
+    batch = store.get_batch_request(BATCH_ID)
+
+    sql, params = cursor.executed[0]
+    assert "FROM paper_batch_requests" in sql
+    assert "tenant_id = %(tenant_id)s" in sql
+    assert "id = %(batch_request_id)s" in sql
+    assert params == {"tenant_id": TENANT_ID, "batch_request_id": BATCH_ID}
+    assert batch is not None
+    assert batch.batch_request_id == BATCH_ID
+    assert batch.orders[0] == PaperExecutionOrder(
+        symbol="TATAMOTORS",
+        side="buy",
+        quantity=5,
+        order_type="market",
+    )
+    assert batch.context_refs == ({"type": "research_document", "id": "doc-1"},)
+    assert "fyers" not in str(batch.to_dict()).lower()
+
+
+def test_store_rejects_sensitive_batch_payload_on_read() -> None:
+    cursor = _FakeCursor(
+        columns=[
+            "id",
+            "tenant_id",
+            "requested_by_actor_id",
+            "strategy_key",
+            "status",
+            "orders",
+            "context_refs",
+            "risk_summary",
+        ],
+        rows=[
+            (
+                BATCH_ID,
+                TENANT_ID,
+                ANALYST_ID,
+                "breakout-continuation",
+                "proposed",
+                [PaperExecutionOrder("TATAMOTORS", "buy", 5, "market").to_dict()],
+                [{"type": "research_document", "id": "doc-1"}],
+                {"access_token": "must-not-round-trip"},
+            )
+        ],
+    )
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+
+    with pytest.raises(ValueError, match="secrets"):
+        store.get_batch_request(BATCH_ID)
+
+
+def test_store_reads_grant_with_tenant_scope() -> None:
+    columns = [
+        "id",
+        "tenant_id",
+        "batch_request_id",
+        "policy_ceiling_id",
+        "approved_by_actor_id",
+        "status",
+        "expires_at",
+        "scope",
+        "reserved_capacity",
+        "consumed_capacity",
+    ]
+    cursor = _FakeCursor(
+        columns=columns,
+        rows=[
+            (
+                "grant-1",
+                TENANT_ID,
+                BATCH_ID,
+                POLICY_ID,
+                APPROVER_ID,
+                "active",
+                NOW + timedelta(minutes=10),
+                {"symbols": ["TATAMOTORS"], "max_orders": 1},
+                {"order_count": 1, "gross_notional": 4_900.0},
+                {"order_count": 0, "gross_notional": 0.0},
+            )
+        ],
+    )
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+
+    grant = store.get_grant("grant-1")
+
+    sql, params = cursor.executed[0]
+    assert "FROM paper_execution_grants" in sql
+    assert "tenant_id = %(tenant_id)s" in sql
+    assert "id = %(grant_id)s" in sql
+    assert params == {"tenant_id": TENANT_ID, "grant_id": "grant-1"}
+    assert grant is not None
+    assert grant.grant_id == "grant-1"
+    assert grant.tenant_id == TENANT_ID
+    assert grant.approved_by_actor_id == APPROVER_ID
+    assert grant.scope["symbols"] == ["TATAMOTORS"]
+    assert grant.reserved_capacity["order_count"] == 1
+
+
+def test_store_revokes_active_grant_and_returns_revoked_contract() -> None:
+    columns = [
+        "id",
+        "tenant_id",
+        "batch_request_id",
+        "policy_ceiling_id",
+        "approved_by_actor_id",
+        "status",
+        "expires_at",
+        "scope",
+        "reserved_capacity",
+        "consumed_capacity",
+    ]
+    cursor = _FakeCursor(
+        columns=columns,
+        rows=[
+            (
+                "grant-1",
+                TENANT_ID,
+                BATCH_ID,
+                POLICY_ID,
+                APPROVER_ID,
+                "revoked",
+                NOW + timedelta(minutes=10),
+                {"symbols": ["TATAMOTORS"], "max_orders": 1},
+                {"order_count": 1, "gross_notional": 4_900.0},
+                {"order_count": 0, "gross_notional": 0.0},
+            )
+        ],
+    )
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+
+    grant = store.revoke_grant("grant-1")
+
+    sql, params = cursor.executed[0]
+    assert "UPDATE paper_execution_grants" in sql
+    assert "status = 'revoked'" in sql
+    assert "tenant_id = %(tenant_id)s" in sql
+    assert "id = %(grant_id)s" in sql
+    assert "RETURNING" in sql
+    assert params["tenant_id"] == TENANT_ID
+    assert params["grant_id"] == "grant-1"
+    assert params["now"] == NOW
+    assert grant is not None
+    assert grant.status == "revoked"
     assert connection.committed is True
