@@ -36,6 +36,56 @@ class PaperExecutionWorkerScheduleState(Protocol):
     ) -> None: ...
 
 
+def _schedule_state_to_dict(
+    schedule_state: PaperExecutionWorkerScheduleState | None,
+) -> dict[str, object]:
+    if schedule_state is None:
+        return {
+            "schema_version": "paper-execution-schedule-state/v1",
+            "backend": "none",
+        }
+    to_dict = getattr(schedule_state, "to_dict", None)
+    if callable(to_dict):
+        payload = to_dict()
+        if isinstance(payload, dict):
+            return _redact_schedule_payload(payload)
+    return {
+        "schema_version": "paper-execution-schedule-state/v1",
+        "backend": "custom",
+    }
+
+
+def _redact_schedule_payload(payload: dict[str, object]) -> dict[str, object]:
+    redacted: dict[str, object] = {}
+    for key, value in payload.items():
+        if _looks_sensitive(key) or (
+            isinstance(value, str) and _looks_sensitive(value)
+        ):
+            redacted[key] = "[REDACTED]"
+        elif isinstance(value, dict):
+            redacted[key] = _redact_schedule_payload(value)
+        else:
+            redacted[key] = value
+    return redacted
+
+
+def _looks_sensitive(value: str) -> bool:
+    lower_value = value.lower()
+    return any(
+        marker in lower_value
+        for marker in (
+            "redis://",
+            "rediss://",
+            "access_token",
+            "auth_token",
+            "broker_token",
+            "credential",
+            "password",
+            "secret",
+        )
+    )
+
+
 @dataclass(frozen=True)
 class PaperExecutionRedisScheduleState:
     """Redis-backed worker scheduling cursor and short-lived failure backoff."""
@@ -130,10 +180,12 @@ class PaperExecutionFairQueueRunnerWorkerSummary:
     failed: int
     idle: bool
     total_attempted: int
+    backed_off: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return {
             "worker_id": self.worker_id,
+            "backed_off": self.backed_off,
             "processed": self.processed,
             "failed": self.failed,
             "idle": self.idle,
@@ -148,10 +200,15 @@ class PaperExecutionFairQueueRunnerSummary:
     idle: bool
     total_attempted: int
     per_worker: tuple[PaperExecutionFairQueueRunnerWorkerSummary, ...]
+    schedule_state: dict[str, object] | None = None
 
     @property
     def worker_ids(self) -> tuple[str, ...]:
         return tuple(worker.worker_id for worker in self.per_worker)
+
+    @property
+    def skipped_backoff_worker_ids(self) -> tuple[str, ...]:
+        return tuple(worker.worker_id for worker in self.per_worker if worker.backed_off)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -161,7 +218,64 @@ class PaperExecutionFairQueueRunnerSummary:
             "idle": self.idle,
             "total_attempted": self.total_attempted,
             "worker_ids": list(self.worker_ids),
+            "skipped_backoff_worker_ids": list(self.skipped_backoff_worker_ids),
+            "schedule_state": self.schedule_state
+            or {
+                "schema_version": "paper-execution-schedule-state/v1",
+                "backend": "none",
+            },
             "per_worker": [worker.to_dict() for worker in self.per_worker],
+        }
+
+
+@dataclass(frozen=True)
+class PaperExecutionWorkerHealthSnapshot:
+    """Read-only operator telemetry for tenant-scoped paper workers."""
+
+    observed_at: datetime
+    worker_ids: tuple[str, ...]
+    per_worker: tuple[dict[str, object], ...]
+    schedule_state: dict[str, object]
+
+    @classmethod
+    def from_worker_ids(
+        cls,
+        *,
+        worker_ids: tuple[str, ...],
+        schedule_state: PaperExecutionWorkerScheduleState | None = None,
+        observed_at: datetime | None = None,
+    ) -> PaperExecutionWorkerHealthSnapshot:
+        clean_observed_at = _aware_utc(observed_at or _utc_now())
+        clean_worker_ids = tuple(worker_id for worker_id in worker_ids if worker_id)
+        return cls(
+            observed_at=clean_observed_at,
+            worker_ids=clean_worker_ids,
+            schedule_state=_schedule_state_to_dict(schedule_state),
+            per_worker=tuple(
+                {
+                    "worker_id": worker_id,
+                    "backed_off": (
+                        schedule_state.worker_is_backed_off(
+                            worker_id,
+                            now=clean_observed_at,
+                        )
+                        if schedule_state is not None
+                        else False
+                    ),
+                }
+                for worker_id in clean_worker_ids
+            ),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "paper-execution-worker-health/v1",
+            "observed_at": self.observed_at.isoformat(),
+            "worker_ids": list(self.worker_ids),
+            "redaction_status": "redacted",
+            "model_visible": False,
+            "schedule_state": self.schedule_state,
+            "per_worker": list(self.per_worker),
         }
 
 
@@ -225,6 +339,9 @@ class PaperExecutionFairQueueRunner:
         processed_by_worker = {processor.worker_id: 0 for processor in self.processors}
         failed_by_worker = {processor.worker_id: 0 for processor in self.processors}
         idle_by_worker = {processor.worker_id: False for processor in self.processors}
+        backed_off_by_worker = {
+            processor.worker_id: False for processor in self.processors
+        }
         total_attempted = 0
         processors_by_id = {processor.worker_id: processor for processor in self.processors}
 
@@ -237,6 +354,7 @@ class PaperExecutionFairQueueRunner:
                 if idle_by_worker[worker_id]:
                     continue
                 if self._worker_is_backed_off(worker_id):
+                    backed_off_by_worker[worker_id] = True
                     idle_by_worker[worker_id] = True
                     continue
                 processor = processors_by_id[worker_id]
@@ -264,6 +382,7 @@ class PaperExecutionFairQueueRunner:
                     processed_by_worker[processor.worker_id]
                     + failed_by_worker[processor.worker_id]
                 ),
+                backed_off=backed_off_by_worker[processor.worker_id],
             )
             for processor in self.processors
         )
@@ -273,6 +392,14 @@ class PaperExecutionFairQueueRunner:
             idle=all(idle_by_worker.values()),
             total_attempted=total_attempted,
             per_worker=per_worker,
+            schedule_state=_schedule_state_to_dict(self.schedule_state),
+        )
+
+    def describe_health(self) -> PaperExecutionWorkerHealthSnapshot:
+        return PaperExecutionWorkerHealthSnapshot.from_worker_ids(
+            worker_ids=tuple(processor.worker_id for processor in self.processors),
+            schedule_state=self.schedule_state,
+            observed_at=self._current_time(),
         )
 
     def _ordered_worker_ids(self) -> tuple[str, ...]:

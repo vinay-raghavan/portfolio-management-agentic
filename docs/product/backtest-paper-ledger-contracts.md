@@ -117,8 +117,11 @@ processor per tenant and polls them in round-robin order so a busy tenant cannot
 monopolize a local worker cycle. When `REDIS_URL` is configured, the worker
 stores the tenant scheduling cursor and short-lived failure backoff in Redis so
 distributed workers converge on the same scheduling state without adding any
-model-visible authority. The next production hardening step is adding
-operator-visible worker health and backoff telemetry.
+model-visible authority. Worker cycle summaries include sanitized schedule-state
+metadata and explicit `skipped_backoff_worker_ids`. Operators can also run
+`scripts/process_paper_execution_queue.py --health` to emit a read-only
+`paper-execution-worker-health/v1` snapshot for the configured tenant workers
+without connecting to the Postgres worker boundary or claiming queue items.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.
