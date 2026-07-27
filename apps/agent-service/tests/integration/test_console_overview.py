@@ -98,6 +98,108 @@ def test_model_tuning_status_reports_provider_neutral_plan_without_secrets(monke
     assert "raw_response" not in serialized.lower()
 
 
+def test_model_route_kill_switch_keeps_status_observable_and_blocks_evaluation(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
+    monkeypatch.setenv("MODEL_TUNING_CANDIDATES", "llama3.1:8b,gemma4:12b")
+    monkeypatch.setenv("MODEL_ROUTE_KILL_SWITCH", "true")
+    monkeypatch.setenv("GOOGLE_API_KEY", "should-not-be-returned")
+    client = TestClient(app)
+
+    runtime_status = client.get("/v1/models/ollama/status")
+    tuning_status = client.get("/v1/models/tuning/status")
+    candidate = client.post(
+        "/v1/models/tuning/evaluate-candidate",
+        json={
+            "baseline": {
+                "provider": "gemini",
+                "model": "incumbent",
+                "safety_pass_rate": 1.0,
+                "core_task_success_rate": 0.96,
+                "mean_response_score": 4.5,
+                "applicable_trajectory_score": 1.0,
+                "p50_total_tokens": 10_000,
+                "p95_latency_ms": 4_000,
+                "judge_error_count": 0,
+            },
+            "candidate": {
+                "provider": "ollama",
+                "model": "llama3.1:8b",
+                "safety_pass_rate": 1.0,
+                "core_task_success_rate": 0.97,
+                "mean_response_score": 4.6,
+                "applicable_trajectory_score": 1.0,
+                "p50_total_tokens": 10_900,
+                "p95_latency_ms": 4_700,
+                "judge_error_count": 0,
+            },
+        },
+    )
+    suite = client.post(
+        "/v1/models/tuning/evaluate-suite",
+        json={
+            "baseline": {
+                "provider": "gemini",
+                "model": "incumbent",
+                "safety_pass_rate": 1.0,
+                "core_task_success_rate": 0.96,
+                "mean_response_score": 4.5,
+                "applicable_trajectory_score": 1.0,
+                "p50_total_tokens": 10_000,
+                "p95_latency_ms": 4_000,
+                "judge_error_count": 0,
+            },
+            "candidates": [
+                {
+                    "provider": "ollama",
+                    "model": "llama3.1:8b",
+                    "safety_pass_rate": 1.0,
+                    "core_task_success_rate": 0.97,
+                    "mean_response_score": 4.6,
+                    "applicable_trajectory_score": 1.0,
+                    "p50_total_tokens": 10_900,
+                    "p95_latency_ms": 4_700,
+                    "judge_error_count": 0,
+                },
+                {
+                    "provider": "ollama",
+                    "model": "gemma4:12b",
+                    "safety_pass_rate": 1.0,
+                    "core_task_success_rate": 0.96,
+                    "mean_response_score": 4.4,
+                    "applicable_trajectory_score": 1.0,
+                    "p50_total_tokens": 10_800,
+                    "p95_latency_ms": 4_600,
+                    "judge_error_count": 0,
+                },
+            ],
+            "sealed_holdout_passed": True,
+            "required_candidate_models": ["llama3.1:8b"],
+        },
+    )
+
+    assert runtime_status.status_code == 200
+    runtime_payload = runtime_status.json()
+    assert runtime_payload["status"] == "blocked"
+    assert runtime_payload["model_route_kill_switch_active"] is True
+    assert "model_route_kill_switch_active" in runtime_payload["blocking_reasons"]
+    assert "should-not-be-returned" not in str(runtime_payload)
+
+    assert tuning_status.status_code == 200
+    tuning_payload = tuning_status.json()
+    assert tuning_payload["status"] == "blocked"
+    assert tuning_payload["model_route_kill_switch_active"] is True
+    assert tuning_payload["blocking_reasons"] == ["model_route_kill_switch_active"]
+    assert "should-not-be-returned" not in str(tuning_payload)
+
+    assert candidate.status_code == 503
+    assert candidate.json()["detail"] == "model_route_kill_switch_active"
+    assert suite.status_code == 503
+    assert suite.json()["detail"] == "model_route_kill_switch_active"
+
+
 def test_model_tuning_evaluates_allowed_llama_candidate_without_payloads(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
