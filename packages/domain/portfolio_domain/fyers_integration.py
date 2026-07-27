@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
-from typing import Any
+from typing import Any, Protocol
 
 
 def utc_now() -> datetime:
@@ -187,6 +187,223 @@ class FyersOAuthSession:
         return self.expires_at > (now or utc_now())
 
 
+@dataclass(frozen=True, repr=False)
+class FyersPkceVerifierRecord:
+    tenant_id: str
+    connection_id: str
+    state_hash: str
+    code_verifier: str
+    expires_at: datetime
+    created_at: datetime
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        session: FyersOAuthSession,
+        code_verifier: str,
+    ) -> FyersPkceVerifierRecord:
+        if not code_verifier.strip():
+            raise ValueError("FYERS PKCE code_verifier is required")
+        return cls(
+            tenant_id=session.tenant_id,
+            connection_id=session.connection_id,
+            state_hash=session.state_hash,
+            code_verifier=code_verifier,
+            expires_at=session.expires_at,
+            created_at=session.created_at,
+        )
+
+    def __repr__(self) -> str:
+        return (
+            "FyersPkceVerifierRecord("
+            f"tenant_id={self.tenant_id!r}, "
+            f"connection_id={self.connection_id!r}, "
+            f"state_hash={self.state_hash!r}, "
+            "code_verifier=<redacted>, "
+            f"expires_at={self.expires_at.isoformat()!r})"
+        )
+
+    def active(self, *, now: datetime | None = None) -> bool:
+        return self.expires_at > (now or utc_now())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "tenant_id": self.tenant_id,
+            "connection_id": self.connection_id,
+            "state_hash": self.state_hash,
+            "code_verifier_configured": True,
+            "expires_at": self.expires_at.isoformat(),
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+class FyersPkceVerifierCache(Protocol):
+    def store(
+        self,
+        *,
+        session: FyersOAuthSession,
+        code_verifier: str,
+    ) -> FyersPkceVerifierRecord:
+        ...
+
+    def pop(
+        self,
+        *,
+        tenant_id: str,
+        connection_id: str,
+        state_hash: str,
+    ) -> str | None:
+        ...
+
+    def clear_connection(self, *, tenant_id: str, connection_id: str) -> None:
+        ...
+
+    def to_dict(self) -> dict[str, Any]:
+        ...
+
+
+class InMemoryFyersPkceVerifierCache:
+    def __init__(self, *, now: Any | None = None) -> None:
+        self._records: dict[tuple[str, str, str], FyersPkceVerifierRecord] = {}
+        self._now = now or utc_now
+
+    def store(
+        self,
+        *,
+        session: FyersOAuthSession,
+        code_verifier: str,
+    ) -> FyersPkceVerifierRecord:
+        record = FyersPkceVerifierRecord.create(
+            session=session,
+            code_verifier=code_verifier,
+        )
+        self._records[
+            _verifier_key(record.tenant_id, record.connection_id, record.state_hash)
+        ] = record
+        return record
+
+    def pop(
+        self,
+        *,
+        tenant_id: str,
+        connection_id: str,
+        state_hash: str,
+    ) -> str | None:
+        record = self._records.pop(
+            _verifier_key(tenant_id, connection_id, state_hash),
+            None,
+        )
+        if record is None or not record.active(now=self._now()):
+            return None
+        return record.code_verifier
+
+    def clear_connection(self, *, tenant_id: str, connection_id: str) -> None:
+        for key in tuple(self._records):
+            if key[0] == tenant_id and key[1] == connection_id:
+                del self._records[key]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": "fyers-pkce-verifier-cache/v1",
+            "backend": "memory",
+            "record_count": len(self._records),
+        }
+
+
+class RedisFyersPkceVerifierCache:
+    def __init__(
+        self,
+        *,
+        redis_client: Any,
+        namespace: str = "portfolio:fyers:pkce",
+    ) -> None:
+        self._redis_client = redis_client
+        self._namespace = namespace.strip(":") or "portfolio:fyers:pkce"
+
+    def store(
+        self,
+        *,
+        session: FyersOAuthSession,
+        code_verifier: str,
+    ) -> FyersPkceVerifierRecord:
+        record = FyersPkceVerifierRecord.create(
+            session=session,
+            code_verifier=code_verifier,
+        )
+        ttl_seconds = max(
+            int((record.expires_at - record.created_at).total_seconds()),
+            1,
+        )
+        key = self._redis_key(
+            tenant_id=record.tenant_id,
+            connection_id=record.connection_id,
+            state_hash=record.state_hash,
+        )
+        index_key = self._index_key(
+            tenant_id=record.tenant_id,
+            connection_id=record.connection_id,
+        )
+        self._redis_client.setex(key, ttl_seconds, record.code_verifier)
+        if hasattr(self._redis_client, "sadd"):
+            self._redis_client.sadd(index_key, key)
+        if hasattr(self._redis_client, "expire"):
+            self._redis_client.expire(index_key, ttl_seconds)
+        return record
+
+    def pop(
+        self,
+        *,
+        tenant_id: str,
+        connection_id: str,
+        state_hash: str,
+    ) -> str | None:
+        key = self._redis_key(
+            tenant_id=tenant_id,
+            connection_id=connection_id,
+            state_hash=state_hash,
+        )
+        if hasattr(self._redis_client, "getdel"):
+            raw_value = self._redis_client.getdel(key)
+        else:
+            raw_value = self._redis_client.get(key)
+            self._redis_client.delete(key)
+        return _decode_redis_value(raw_value)
+
+    def clear_connection(self, *, tenant_id: str, connection_id: str) -> None:
+        index_key = self._index_key(tenant_id=tenant_id, connection_id=connection_id)
+        keys = set()
+        if hasattr(self._redis_client, "smembers"):
+            keys = {
+                decoded
+                for value in self._redis_client.smembers(index_key)
+                if (decoded := _decode_redis_value(value))
+            }
+        if keys:
+            self._redis_client.delete(*sorted(keys), index_key)
+        else:
+            self._redis_client.delete(index_key)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": "fyers-pkce-verifier-cache/v1",
+            "backend": "redis",
+            "redis_url": "[REDACTED]",
+        }
+
+    def _redis_key(
+        self,
+        *,
+        tenant_id: str,
+        connection_id: str,
+        state_hash: str,
+    ) -> str:
+        return f"{self._namespace}:verifier:{tenant_id}:{connection_id}:{state_hash}"
+
+    def _index_key(self, *, tenant_id: str, connection_id: str) -> str:
+        return f"{self._namespace}:index:{tenant_id}:{connection_id}"
+
+
 @dataclass(frozen=True)
 class ProviderRefreshJob:
     tenant_id: str
@@ -263,3 +480,19 @@ class ProviderRefreshJob:
 
 def hash_oauth_state(state: str) -> str:
     return f"sha256:{sha256(state.encode('utf-8')).hexdigest()}"
+
+
+def _verifier_key(
+    tenant_id: str,
+    connection_id: str,
+    state_hash: str,
+) -> tuple[str, str, str]:
+    return (tenant_id, connection_id, state_hash)
+
+
+def _decode_redis_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return str(value)

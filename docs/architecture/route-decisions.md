@@ -27,9 +27,10 @@ The router currently returns a `RouteDecision` for:
   `token_exchange_not_configured` until a token-exchange worker is enabled.
   In Postgres mode, the protected API persists only sanitized connection
   metadata, optional opaque credential-vault refs, and hashed single-use OAuth
-  state through the tenant-scoped FYERS integration store; HTTP payloads expose
-  only whether a credential ref is configured. Local/offline mode keeps an
-  in-memory fallback.
+  state through the tenant-scoped FYERS integration store. The PKCE verifier is
+  retained in a one-time in-memory/Redis cache outside durable storage; HTTP
+  payloads expose only whether a credential ref is configured. Local/offline
+  mode keeps an in-memory fallback.
 - Paper approval routes to `/v1/paper/batches/{id}/approve`; approval identity
   must come from server-created `ActorContext` derived from the authenticated
   human API with an explicit tenant id, never from `approved_by` in model

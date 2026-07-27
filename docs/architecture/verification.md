@@ -26,10 +26,11 @@ Current coverage:
 - Protected FYERS integration API contracts verify typed `FyersConnection` and
   `ProviderRefreshJob` public contracts, `ActorContext`-required OAuth
   start/status/callback/disconnect and refresh routes, OAuth state plus PKCE
-  challenge generation without returning a verifier, callback fail-closed on
-  unknown state, explicit token-exchange-disabled status until the credential
-  vault is wired, read-only normalized fixture refreshes with signed positions,
-  and absence of provider tokens, credential material, broker mutation methods,
+  challenge generation without returning a verifier, short-lived one-time
+  verifier cache behavior, callback fail-closed on unknown state or missing
+  verifier, explicit token-exchange-disabled status until the credential vault
+  is wired, read-only normalized fixture refreshes with signed positions, and
+  absence of provider tokens, credential material, broker mutation methods,
   model-visible OAuth tools, or paper-ledger payload mixing.
 - FYERS Postgres storage contracts verify the Alembic-managed
   `fyers_oauth_sessions` table, tenant row-level security, sanitized

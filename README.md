@@ -34,8 +34,9 @@ explicit safety policy.
   `/disconnect`, and `/v1/integrations/fyers/refresh` (plus the
   `/oauth/refresh` compatibility alias). They require server-created
   `ActorContext`, generate OAuth state and PKCE challenge without returning a
-  verifier, keep callback token exchange disabled until a credential vault is
-  wired, and refresh only through the read-only normalized FYERS connector
+  verifier, store the verifier in a short-lived in-memory/Redis cache only,
+  keep callback token exchange disabled until a credential vault is wired, and
+  refresh only through the read-only normalized FYERS connector
   surface with no Yahoo fallback, broker mutation, provider token, or
   paper-ledger mixing.
   In production-like Postgres mode, sanitized connection metadata and hashed
@@ -355,6 +356,9 @@ Protected FYERS connection state is Postgres-backed when
 The persisted records include provider, user hash, read-only scopes, status,
 daily auth expiry, PKCE challenge, timestamps, and an optional opaque
 `credential_ref` only; tokens/verifiers are rejected from the storage contract.
+The matching PKCE verifier is retained outside Postgres in a one-time,
+TTL-bound cache; set `REDIS_URL` for multi-process production-like testing or
+use the in-memory fallback for local fixture runs.
 API responses expose only `credential_ref_configured`, never the reference value
 or vault payload. Local/offline mode keeps the process-local fallback so
 fixture-only API tests remain credential-free.
