@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .database_runtime import DatabaseBackend, load_database_runtime_profile
 from .market_data_store import MARKET_DATA_DB_ENV
 from .models import (
     FundamentalsSnapshot,
@@ -420,6 +422,234 @@ class SQLiteProviderDataStore(ProviderDataStore):
             connection.commit()
 
 
+class PostgresProviderDataStore(ProviderDataStore):
+    """Tenant-scoped Postgres provider context store using JSONB payload columns."""
+
+    def __init__(
+        self,
+        *,
+        tenant_id: str,
+        connection_factory: Callable[[], Any],
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        if not tenant_id.strip():
+            raise ValueError("tenant_id is required for Postgres provider context storage")
+        self._tenant_id = tenant_id.strip()
+        self._connection_factory = connection_factory
+        self._now = now or (lambda: datetime.now(UTC))
+
+    def storage_status(self) -> dict[str, Any]:
+        return {
+            "status": "persisted",
+            "backend": "postgres",
+            "configured": True,
+            "tenant_scoped": True,
+        }
+
+    def record_universe_members(self, members: UniverseMembers) -> UniverseMembers:
+        params = {
+            "tenant_id": self._tenant_id,
+            "provider_id": members.provider_id,
+            "universe_id": members.universe_id.strip(),
+            "as_of": members.as_of,
+            "source": members.source,
+            "payload": members.to_dict(),
+            "recorded_at": _aware_utc(self._now()),
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    INSERT INTO provider_universe_members (
+                        tenant_id,
+                        provider_id,
+                        universe_id,
+                        as_of,
+                        source,
+                        payload,
+                        recorded_at
+                    ) VALUES (
+                        %(tenant_id)s,
+                        %(provider_id)s,
+                        %(universe_id)s,
+                        %(as_of)s,
+                        %(source)s,
+                        %(payload)s,
+                        %(recorded_at)s
+                    )
+                    ON CONFLICT (tenant_id, provider_id, universe_id, as_of)
+                    DO UPDATE SET
+                        source = EXCLUDED.source,
+                        payload = EXCLUDED.payload,
+                        recorded_at = EXCLUDED.recorded_at
+                    """.strip(),
+                    params,
+                )
+            connection.commit()
+        return members
+
+    def get_universe_members(
+        self,
+        universe_id: str,
+        provider_id: str | None = None,
+    ) -> UniverseMembers:
+        query = """
+            SELECT payload
+            FROM provider_universe_members
+            WHERE tenant_id = %(tenant_id)s
+              AND universe_id = %(universe_id)s
+        """
+        params: dict[str, Any] = {
+            "tenant_id": self._tenant_id,
+            "universe_id": universe_id.strip(),
+        }
+        if provider_id is not None:
+            query += " AND provider_id = %(provider_id)s"
+            params["provider_id"] = provider_id
+        query += " ORDER BY as_of DESC, provider_id LIMIT 1"
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(query.strip(), params)
+                row = _cursor_one(cursor)
+        if row is None:
+            raise ValueError(f"Unknown stored universe members: {universe_id}")
+        return _universe_members_from_dict(_payload_from_row(row))
+
+    def count_universe_members(self, provider_id: str | None = None) -> int:
+        query = """
+            SELECT count(*) AS row_count
+            FROM provider_universe_members
+            WHERE tenant_id = %(tenant_id)s
+        """
+        params: dict[str, Any] = {"tenant_id": self._tenant_id}
+        if provider_id:
+            query += " AND provider_id = %(provider_id)s"
+            params["provider_id"] = provider_id.strip()
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(query.strip(), params)
+                row = _cursor_one(cursor)
+        return int(row["row_count"] if row is not None else 0)
+
+    def _record_factor_snapshot(
+        self,
+        kind: str,
+        snapshot: FactorSnapshot,
+    ) -> FactorSnapshot:
+        _validate_factor_kind(kind)
+        params = {
+            "tenant_id": self._tenant_id,
+            "kind": kind,
+            "provider_id": snapshot.provider_id,
+            "symbol": snapshot.symbol.upper().strip(),
+            "as_of": snapshot.as_of,
+            "source": snapshot.source,
+            "payload": snapshot.to_dict(),
+            "recorded_at": _aware_utc(self._now()),
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    INSERT INTO provider_factor_snapshots (
+                        tenant_id,
+                        kind,
+                        provider_id,
+                        symbol,
+                        as_of,
+                        source,
+                        payload,
+                        recorded_at
+                    ) VALUES (
+                        %(tenant_id)s,
+                        %(kind)s,
+                        %(provider_id)s,
+                        %(symbol)s,
+                        %(as_of)s,
+                        %(source)s,
+                        %(payload)s,
+                        %(recorded_at)s
+                    )
+                    ON CONFLICT (tenant_id, kind, provider_id, symbol, as_of)
+                    DO UPDATE SET
+                        source = EXCLUDED.source,
+                        payload = EXCLUDED.payload,
+                        recorded_at = EXCLUDED.recorded_at
+                    """.strip(),
+                    params,
+                )
+            connection.commit()
+        return snapshot
+
+    def _get_factor_snapshot(
+        self,
+        kind: str,
+        symbol: str,
+        provider_id: str | None = None,
+    ) -> FactorSnapshot:
+        _validate_factor_kind(kind)
+        query = """
+            SELECT payload
+            FROM provider_factor_snapshots
+            WHERE tenant_id = %(tenant_id)s
+              AND kind = %(kind)s
+              AND symbol = %(symbol)s
+        """
+        params: dict[str, Any] = {
+            "tenant_id": self._tenant_id,
+            "kind": kind,
+            "symbol": symbol.upper().strip(),
+        }
+        if provider_id is not None:
+            query += " AND provider_id = %(provider_id)s"
+            params["provider_id"] = provider_id
+        query += " ORDER BY as_of DESC, provider_id LIMIT 1"
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(query.strip(), params)
+                row = _cursor_one(cursor)
+        if row is None:
+            raise ValueError(f"Unknown stored {kind} snapshot: {symbol}")
+        return _factor_snapshot_from_dict(kind, _payload_from_row(row))
+
+    def count_factor_snapshots(
+        self,
+        kind: str,
+        provider_id: str | None = None,
+    ) -> int:
+        _validate_factor_kind(kind)
+        query = """
+            SELECT count(*) AS row_count
+            FROM provider_factor_snapshots
+            WHERE tenant_id = %(tenant_id)s
+              AND kind = %(kind)s
+        """
+        params: dict[str, Any] = {
+            "tenant_id": self._tenant_id,
+            "kind": kind,
+        }
+        if provider_id:
+            query += " AND provider_id = %(provider_id)s"
+            params["provider_id"] = provider_id.strip()
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(query.strip(), params)
+                row = _cursor_one(cursor)
+        return int(row["row_count"] if row is not None else 0)
+
+    def _set_tenant_context(self, cursor: Any) -> None:
+        cursor.execute(
+            "SELECT set_config('app.tenant_id', %(tenant_id)s, true)",
+            {"tenant_id": self._tenant_id},
+        )
+
+
 def _validate_factor_kind(kind: str) -> None:
     if kind not in FACTOR_KINDS:
         raise ValueError(f"Unknown provider factor kind: {kind}")
@@ -427,8 +657,20 @@ def _validate_factor_kind(kind: str) -> None:
 
 def build_provider_data_store(
     env: Mapping[str, str] | None = None,
-) -> ProviderDataStore | SQLiteProviderDataStore:
+) -> ProviderDataStore | SQLiteProviderDataStore | PostgresProviderDataStore:
     config = env if env is not None else os.environ
+    profile = load_database_runtime_profile(config)
+    if profile.backend == DatabaseBackend.POSTGRES:
+        database_url = profile.database_url
+        tenant_id = config.get("PORTFOLIO_TENANT_ID", "").strip()
+        if not database_url:
+            raise ValueError("PORTFOLIO_DATABASE_URL is required for Postgres provider context storage")
+        if not tenant_id:
+            raise ValueError("PORTFOLIO_TENANT_ID is required for Postgres provider context storage")
+        return PostgresProviderDataStore(
+            tenant_id=tenant_id,
+            connection_factory=_postgres_connection_factory(database_url),
+        )
     db_path = config.get(MARKET_DATA_DB_ENV, "").strip()
     if db_path:
         return SQLiteProviderDataStore(db_path)
@@ -441,6 +683,18 @@ def _read_only_count(
     filters: Mapping[str, str],
 ) -> int:
     config = env if env is not None else os.environ
+    profile = load_database_runtime_profile(config)
+    if profile.backend == DatabaseBackend.POSTGRES:
+        store = build_provider_data_store(config)
+        if table == "provider_universe_members":
+            return store.count_universe_members(filters.get("provider_id"))
+        if table == "provider_factor_snapshots":
+            return store.count_factor_snapshots(
+                filters["kind"],
+                filters.get("provider_id"),
+            )
+        return 0
+
     db_path = config.get(MARKET_DATA_DB_ENV, "").strip()
     if not db_path:
         return 0
@@ -482,3 +736,55 @@ def count_stored_factor_snapshots(
     if provider_id:
         filters["provider_id"] = provider_id.strip()
     return _read_only_count(env, "provider_factor_snapshots", filters)
+
+
+def _postgres_connection_factory(database_url: str) -> Callable[[], Any]:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+
+        return psycopg.connect(connection_url)
+
+    return connection_factory
+
+
+def _psycopg_database_url(database_url: str) -> str:
+    stripped = database_url.strip()
+    if stripped.startswith("postgresql+psycopg://"):
+        return "postgresql://" + stripped.removeprefix("postgresql+psycopg://")
+    return stripped
+
+
+def _cursor_one(cursor: Any) -> dict[str, Any] | None:
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    return _row_mapping(cursor, row)
+
+
+def _row_mapping(cursor: Any, row: Any) -> dict[str, Any]:
+    if isinstance(row, Mapping):
+        return dict(row)
+    if not isinstance(row, Sequence):
+        raise TypeError("Postgres provider context cursor rows must be mappings or sequences")
+    description = getattr(cursor, "description", None)
+    if not description:
+        raise TypeError("Postgres provider context sequence rows require description")
+    keys = [str(column[0]) for column in description]
+    return dict(zip(keys, row, strict=False))
+
+
+def _payload_from_row(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    payload = row["payload"]
+    if isinstance(payload, str):
+        return _from_json(payload)
+    if isinstance(payload, Mapping):
+        return payload
+    raise TypeError("Postgres provider context payload must be a mapping or JSON string")
+
+
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from datetime import UTC, datetime, timedelta
 
@@ -201,8 +202,22 @@ def test_oidc_id_token_decode_verifies_signature_and_standard_claims() -> None:
 
     assert claims["sub"] == "immutable-subject-123"
 
+    header, payload, signature = token.decode("utf-8").split(".")
+    decoded_payload = json.loads(_base64url_decode(payload))
+    decoded_payload["sub"] = "attacker-subject"
+    tampered_payload = _base64url_encode(json.dumps(decoded_payload).encode("utf-8"))
+
     with pytest.raises(HTTPException) as exc:
-        decode_oidc_id_token(token.decode("utf-8")[:-1] + "x", config=config)
+        decode_oidc_id_token(f"{header}.{tampered_payload}.{signature}", config=config)
 
     assert exc.value.status_code == 401
     assert exc.value.detail == "oidc_token_invalid"
+
+
+def _base64url_decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(f"{value}{padding}")
+
+
+def _base64url_encode(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode("utf-8").rstrip("=")

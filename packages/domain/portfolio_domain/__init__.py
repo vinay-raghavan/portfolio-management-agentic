@@ -115,6 +115,7 @@ from .market_data_store import (
     record_screener_run,
 )
 from .provider_data_store import (
+    PostgresProviderDataStore,
     ProviderDataStore,
     SQLiteProviderDataStore,
     build_provider_data_store,
@@ -327,6 +328,7 @@ __all__ = [
     "PostgresFyersIntegrationStore",
     "PostgresMarketDataStore",
     "PostgresPaperExecutionStore",
+    "PostgresProviderDataStore",
     "PostgresSessionMemoryStore",
     "PortfolioSummary",
     "PreMarketBriefing",
