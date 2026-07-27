@@ -91,6 +91,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
         help="Short Redis backoff duration after a tenant-scoped worker failure.",
     )
+    parser.add_argument(
+        "--kill-switch-active",
+        action="store_true",
+        default=env_flag_enabled(
+            "PAPER_EXECUTION_KILL_SWITCH",
+            "PORTFOLIO_PAPER_EXECUTION_KILL_SWITCH",
+        ),
+        help=(
+            "Reject all claimed paper execution work items without mutation. "
+            "Defaults to PAPER_EXECUTION_KILL_SWITCH or "
+            "PORTFOLIO_PAPER_EXECUTION_KILL_SWITCH."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -140,6 +153,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         backend=profile.backend,
         worker_id=args.worker_id,
         schedule_state=schedule_state,
+        kill_switch_active=args.kill_switch_active,
     )
 
     while True:
@@ -205,6 +219,11 @@ def build_schedule_state(
 
 def _safe_key_part(value: str) -> str:
     return value.strip().replace(":", "_") or "worker"
+
+
+def env_flag_enabled(*names: str) -> bool:
+    truthy_values = {"1", "true", "yes", "y", "on"}
+    return any(os.environ.get(name, "").strip().lower() in truthy_values for name in names)
 
 
 if __name__ == "__main__":

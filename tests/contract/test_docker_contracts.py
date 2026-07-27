@@ -24,6 +24,7 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "AGENT_TOOL_TRANSPORT=mcp" in env_example
     assert "AGENT_MCP_URL=http://mcp-server:8081/mcp" in env_example
     assert "PAPER_LEDGER_DB_PATH=data/paper-ledger.db" in env_example
+    assert "PAPER_EXECUTION_KILL_SWITCH=false" in env_example
     assert "MARKET_DATA_DB_PATH=data/market-data.db" in env_example
     assert "PROVIDER_CONFIG_DB_PATH=data/provider-config.db" in env_example
     assert "PORTFOLIO_MARKET_DATA_PROVIDER=fixture" in env_example
@@ -75,6 +76,7 @@ def test_compose_mounts_paper_ledger_volume() -> None:
     compose = Path("docker-compose.yml").read_text()
 
     assert "PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}" in compose
+    assert "PAPER_EXECUTION_KILL_SWITCH: ${PAPER_EXECUTION_KILL_SWITCH:-false}" in compose
     assert "ENABLE_CLOUD_TELEMETRY: ${ENABLE_CLOUD_TELEMETRY:-false}" in compose
     assert "MARKET_DATA_DB_PATH: ${MARKET_DATA_DB_PATH:-/data/market-data.db}" in compose
     assert "PROVIDER_CONFIG_DB_PATH: ${PROVIDER_CONFIG_DB_PATH:-/data/provider-config.db}" in compose

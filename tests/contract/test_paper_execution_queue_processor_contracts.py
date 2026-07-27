@@ -243,6 +243,25 @@ def test_queue_processor_executes_records_and_completes_accepted_work_item() -> 
     assert "fyers" not in str(result.decision.to_dict()).lower()
 
 
+def test_queue_processor_operator_kill_switch_overrides_work_item_payload() -> None:
+    store = _FakeQueueStore(work_item=_work_item())
+    processor = PaperExecutionQueueProcessor(
+        store=store,
+        worker_id="paper-worker-1",
+        now=lambda: NOW,
+        kill_switch_active=True,
+    )
+
+    result = processor.process_once()
+
+    assert result.status == "failed"
+    assert result.decision is not None
+    assert result.decision.status == "rejected"
+    assert "execution_kill_switch_active" in result.decision.reasons
+    assert store.recorded_decisions == []
+    assert store.completed[0]["status"] == "failed"
+
+
 def test_queue_processor_fails_closed_when_policy_is_missing() -> None:
     store = _FakeQueueStore(work_item=_work_item())
     store.policy = None

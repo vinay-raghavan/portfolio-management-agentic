@@ -437,6 +437,7 @@ def build_postgres_paper_execution_worker(
     backend: DatabaseBackend,
     worker_id: str = "paper-execution-worker",
     now: Callable[[], datetime] | None = None,
+    kill_switch_active: bool = False,
 ) -> PaperExecutionQueueRunner:
     """Build the production-like queued paper execution worker.
 
@@ -467,6 +468,7 @@ def build_postgres_paper_execution_worker(
             store=store,
             worker_id=worker_id,
             now=now,
+            kill_switch_active=kill_switch_active,
         )
     )
 
@@ -479,6 +481,7 @@ def build_postgres_paper_execution_fair_worker(
     worker_id: str = "paper-execution-worker",
     now: Callable[[], datetime] | None = None,
     schedule_state: PaperExecutionWorkerScheduleState | None = None,
+    kill_switch_active: bool = False,
 ) -> PaperExecutionFairQueueRunner:
     clean_tenant_ids = _clean_tenant_ids(tenant_ids)
     if not clean_tenant_ids:
@@ -493,6 +496,7 @@ def build_postgres_paper_execution_fair_worker(
                 backend=backend,
                 worker_id=f"{worker_id}:{tenant_id}",
                 now=now,
+                kill_switch_active=kill_switch_active,
             ).processor
             for tenant_id in clean_tenant_ids
         )

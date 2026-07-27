@@ -340,6 +340,11 @@ def cloud_telemetry_enabled() -> bool:
     )
 
 
+def env_flag_enabled(*names: str) -> bool:
+    truthy_values = {"1", "true", "yes", "y", "on"}
+    return any(os.getenv(name, "").strip().lower() in truthy_values for name in names)
+
+
 def build_logger():
     if not cloud_telemetry_enabled():
         return LocalLogger()
@@ -1911,7 +1916,7 @@ def _execute_queued_postgres_paper_order(
             "available_cash": request.available_cash,
             "current_gross_notional": current_exposure["gross_notional"],
             "current_net_notional": current_exposure["net_notional"],
-            "kill_switch_active": request.kill_switch_active,
+            "kill_switch_active": _paper_execution_kill_switch_active(request),
             "exposure_after": exposure_after,
         },
         decision=None,
@@ -1929,6 +1934,7 @@ def _execute_queued_postgres_paper_order(
         store=store,
         worker_id="paper-execution-api",
         now=lambda: execution_now,
+        kill_switch_active=_paper_execution_operator_kill_switch_active(),
     ).process_once(work_item_id=work_item.work_item_id)
     if result.decision is None:
         raise HTTPException(
@@ -1961,6 +1967,17 @@ def _paper_execution_response(
         "decision": decision.to_dict(),
         "mode": "paper_only",
     }
+
+
+def _paper_execution_operator_kill_switch_active() -> bool:
+    return env_flag_enabled(
+        "PAPER_EXECUTION_KILL_SWITCH",
+        "PORTFOLIO_PAPER_EXECUTION_KILL_SWITCH",
+    )
+
+
+def _paper_execution_kill_switch_active(request: PaperExecuteApiRequest) -> bool:
+    return request.kill_switch_active or _paper_execution_operator_kill_switch_active()
 
 
 def _float_mapping_value(payload: Mapping[str, object], key: str) -> float:
@@ -2173,7 +2190,7 @@ def post_paper_order_execute(
             available_cash=request.available_cash,
             current_gross_notional=current_exposure["gross_notional"],
             current_net_notional=current_exposure["net_notional"],
-            kill_switch_active=request.kill_switch_active,
+            kill_switch_active=_paper_execution_kill_switch_active(request),
             exposure_after=_paper_execution_exposure_after(
                 current_exposure=current_exposure,
                 order=order,

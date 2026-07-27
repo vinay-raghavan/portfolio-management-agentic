@@ -255,6 +255,59 @@ def test_paper_execution_api_revokes_grant_and_rejects_later_execution() -> None
     assert "grant_revoked" in execute_response.json()["decision"]["reasons"]
 
 
+def test_paper_execution_api_server_kill_switch_overrides_request_body(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("PAPER_EXECUTION_KILL_SWITCH", "true")
+    client = TestClient(app)
+    policy_id = "policy-api-server-kill"
+    batch_id = "batch-api-server-kill"
+
+    client.post(
+        "/v1/paper/policies",
+        headers=_headers("admin-1", "admin"),
+        json=_policy_payload(policy_id),
+    )
+    client.post(
+        "/v1/paper/batches",
+        headers=_headers("analyst-1", "analyst"),
+        json=_batch_payload(batch_id),
+    )
+    approval_response = client.post(
+        f"/v1/paper/batches/{batch_id}/approve",
+        headers=_headers("approver-1", "approver"),
+        json={
+            "policy_id": policy_id,
+            "expires_at": _grant_expiry(),
+        },
+    )
+    grant_id = approval_response.json()["grant"]["grant_id"]
+    order_id = quote(f"{batch_id}:0", safe="")
+
+    execute_response = client.post(
+        f"/v1/paper/orders/{order_id}/execute",
+        headers=_headers("analyst-1", "analyst"),
+        json={
+            "grant_id": grant_id,
+            "idempotency_key": "idem-api-server-kill",
+            "quote_price": 980,
+            "quote_as_of": (NOW - timedelta(seconds=10)).isoformat(),
+            "now": NOW.isoformat(),
+            "available_cash": 100_000,
+            "kill_switch_active": False,
+        },
+    )
+
+    assert execute_response.status_code == 409
+    payload = execute_response.json()
+    assert payload["status"] == "rejected"
+    assert payload["decision"]["status"] == "rejected"
+    assert "execution_kill_switch_active" in payload["decision"]["reasons"]
+    assert payload["mode"] == "paper_only"
+    assert "fyers" not in str(payload).lower()
+    assert "token" not in str(payload).lower()
+
+
 class _FakePostgresPaperStore:
     def __init__(self) -> None:
         self.policies = {}
@@ -570,6 +623,71 @@ def test_paper_api_uses_postgres_ledger_for_duplicate_idempotency_keys(
         set(),
     )
     assert "db-secret" not in str(second_response.json()).lower()
+
+
+def test_paper_api_postgres_queue_uses_server_kill_switch_over_request_body(
+    monkeypatch,
+) -> None:
+    fake_store = _FakePostgresPaperStore()
+    _patch_postgres_actor_identity_ids(monkeypatch)
+    monkeypatch.setenv("PORTFOLIO_STORAGE_BACKEND", "postgres")
+    monkeypatch.setenv("PAPER_EXECUTION_KILL_SWITCH", "true")
+    monkeypatch.setenv(
+        "PORTFOLIO_DATABASE_URL",
+        "postgresql+psycopg://portfolio:db-secret@postgres:5432/portfolio_agentic",
+    )
+    monkeypatch.setattr(
+        fast_api_app,
+        "_build_postgres_paper_execution_store",
+        lambda *, tenant_id, database_url: fake_store,
+    )
+    client = TestClient(app)
+    policy_id = "abababab-abab-abab-abab-abababababab"
+    batch_id = "bcbcbcbc-bcbc-bcbc-bcbc-bcbcbcbcbcbc"
+
+    client.post(
+        "/v1/paper/policies",
+        headers=_headers("admin-1", "admin"),
+        json=_policy_payload(policy_id),
+    )
+    client.post(
+        "/v1/paper/batches",
+        headers=_headers("analyst-1", "analyst"),
+        json=_batch_payload(batch_id),
+    )
+    approval_response = client.post(
+        f"/v1/paper/batches/{batch_id}/approve",
+        headers=_headers("approver-1", "approver"),
+        json={
+            "policy_id": policy_id,
+            "expires_at": _grant_expiry(),
+        },
+    )
+    grant_id = approval_response.json()["grant"]["grant_id"]
+
+    execute_response = client.post(
+        f"/v1/paper/orders/{quote(f'{batch_id}:0', safe='')}/execute",
+        headers=_headers("analyst-1", "analyst"),
+        json={
+            "grant_id": grant_id,
+            "idempotency_key": "idem-api-postgres-server-kill",
+            "quote_price": 980,
+            "quote_as_of": (NOW - timedelta(seconds=10)).isoformat(),
+            "now": NOW.isoformat(),
+            "available_cash": 100_000,
+            "kill_switch_active": False,
+        },
+    )
+
+    assert execute_response.status_code == 409
+    assert execute_response.json()["decision"]["status"] == "rejected"
+    assert "execution_kill_switch_active" in execute_response.json()["decision"][
+        "reasons"
+    ]
+    assert fake_store.enqueued_work_items[0].payload["kill_switch_active"] is True
+    assert fake_store.completed_work_items[0].status == "failed"
+    assert fake_store.recorded_decisions == []
+    assert "db-secret" not in str(execute_response.json()).lower()
 
 
 def test_paper_api_returns_rejection_when_postgres_ledger_insert_conflicts(
