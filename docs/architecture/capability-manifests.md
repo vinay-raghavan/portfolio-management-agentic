@@ -20,6 +20,7 @@ the current `RouteToolBundle` contract used by route-scoped model calls.
 | `research` | read-only | Curated research and pattern-card synthesis with citations. |
 | `technical_analysis` | read-only | Deterministic screener, market snapshot, and factor-stack explanations. |
 | `fyers_data` | read-only | FYERS-style normalized provider/account snapshot context without credentials or mutations. |
+| `pre_market_briefing` | read-only | Portfolio, watchlist, signals, research digest, and risk-state pre-market review. |
 | `provider_readiness` | read-only | Configured data-provider health, validation, previews, reconciliation, and refresh readiness. |
 | `risk_review` | read-only | Portfolio, paper-ledger, watchlist, and safety-switch review. |
 | `paper_proposal_execution` | draft-only | Paper-only strategy/backtest/order proposal drafting; no approval or fill authority. |

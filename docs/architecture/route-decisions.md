@@ -11,8 +11,9 @@ The router currently returns a `RouteDecision` for:
 1. Forbidden live-trading, live-strategy, credential, or approval-bypass intent.
 2. FYERS refresh/OAuth/account-refresh intent.
 3. Human paper-approval intent.
-4. Draft-only paper proposal intent.
-5. Ambiguous read-only intent that may proceed to schema-constrained
+4. Read-only pre-market briefing intent.
+5. Draft-only paper proposal intent.
+6. Ambiguous read-only intent that may proceed to schema-constrained
    classification.
 
 ## Safety boundaries
@@ -25,6 +26,8 @@ The router currently returns a `RouteDecision` for:
   human API with an explicit tenant id, never from `approved_by` in model
   output or request JSON. Missing actor subject or tenant metadata fails before
   protected paper state is read or written.
+- Pre-market briefing routes may expose only the read-only
+  `pre_market_briefing` capability tools.
 - Paper proposal routes may expose only the draft-only
   `paper_proposal_execution` capability tools.
 - `approve_paper_order_simulation` and `simulate_approved_paper_fill` remain
@@ -55,6 +58,4 @@ calls as a second guard.
 
 If the decision is `needs_classification`, a schema-constrained classifier may
 choose among read-only capabilities and must fall back to clarification for
-invalid or low-confidence output. Legacy pre-market briefing remains on the
-static ADK workflow path until it is promoted into a capability manifest; this is
-the remaining blocker before ambiguous prompts can fail closed by default.
+invalid or low-confidence output.

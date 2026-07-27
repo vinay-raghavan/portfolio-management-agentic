@@ -1,0 +1,33 @@
+{
+  "name": "pre_market_briefing",
+  "version": "0.1.0",
+  "description": "Read-only pre-market briefing over portfolio, watchlist, signals, research digest, and risk state.",
+  "max_action_tier": "read_only",
+  "allowed_tools": [
+    "create_pre_market_briefing",
+    "get_portfolio_summary",
+    "get_research_digest",
+    "get_risk_review",
+    "get_signal_summary",
+    "get_watchlist_snapshot"
+  ],
+  "context_sources": [
+    "portfolio summary",
+    "watchlist snapshot",
+    "signal summary",
+    "research digest",
+    "risk review"
+  ],
+  "response_schema": "PreMarketBriefingResponse",
+  "token_budget": {
+    "input_tokens": 12000,
+    "output_tokens": 1500,
+    "tool_calls": 5
+  },
+  "eval_cases": [
+    "pre_market_briefing_uses_briefing_tool",
+    "pre_market_briefing_returns_review_actions_only",
+    "pre_market_briefing_states_paper_only_boundary"
+  ],
+  "forbidden_tools": []
+}
