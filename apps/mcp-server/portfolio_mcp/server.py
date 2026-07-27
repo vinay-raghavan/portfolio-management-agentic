@@ -52,7 +52,6 @@ from .tools import (
     run_momentum_screener,
     search_curated_research,
     search_pattern_library,
-    simulate_approved_paper_fill,
     refresh_provider_import_profile,
     run_provider_refresh_schedule,
     validate_data_provider_imports,
@@ -130,7 +129,6 @@ def build_server():
     server.tool()(list_paper_fills)
     server.tool()(get_paper_portfolio_accounting)
     server.tool()(create_paper_order_proposal)
-    server.tool()(simulate_approved_paper_fill)
     server.tool()(get_approval_queue)
     server.tool()(get_audit_events)
     server.tool()(get_risk_review)

@@ -42,6 +42,8 @@ def test_exposed_tool_catalog_contains_no_forbidden_tools() -> None:
     assert_exposed_tools_are_safe()
     assert "place_live_order" not in EXPOSED_TOOL_NAMES
     assert "get_broker_trading_token" not in EXPOSED_TOOL_NAMES
+    assert "approve_paper_order_simulation" not in EXPOSED_TOOL_NAMES
+    assert "simulate_approved_paper_fill" not in EXPOSED_TOOL_NAMES
 
 
 def test_portfolio_summary_uses_demo_data_only() -> None:

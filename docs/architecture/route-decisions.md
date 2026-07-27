@@ -26,7 +26,8 @@ The router currently returns a `RouteDecision` for:
 - Paper proposal routes may expose only the draft-only
   `paper_proposal_execution` capability tools.
 - `approve_paper_order_simulation` and `simulate_approved_paper_fill` remain
-  outside model-selected approval routes.
+  outside model-selected approval routes and are not registered in the
+  model-visible MCP transport catalog.
 
 ## Route tool bundles
 

@@ -81,3 +81,4 @@ def test_mcp_streamable_http_exposes_only_safe_tools(
     assert "place_live_order" not in tool_names
     assert "get_broker_trading_token" not in tool_names
     assert "approve_paper_order_simulation" not in tool_names
+    assert "simulate_approved_paper_fill" not in tool_names

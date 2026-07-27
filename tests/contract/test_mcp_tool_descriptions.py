@@ -56,11 +56,6 @@ WORKFLOW_DESCRIPTION_REQUIREMENTS = {
         "requires a ready recommendation preflight",
         "does not fill",
     ),
-    "simulate_approved_paper_fill": (
-        "approval-gated simulated fill",
-        "only after verified human approval",
-        "never live",
-    ),
     "generate_paper_trading_report": (
         "paper-trading-report",
         "read-only review",
