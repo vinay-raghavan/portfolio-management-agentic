@@ -21,7 +21,9 @@ WORKDIR /workspace
 COPY ./apps/agent-service/pyproject.toml ./apps/agent-service/README.md ./apps/agent-service/uv.lock* ./apps/agent-service/
 COPY ./apps/agent-service/app ./apps/agent-service/app
 COPY ./apps/mcp-server/portfolio_mcp ./apps/mcp-server/portfolio_mcp
+COPY ./packages/capabilities ./packages/capabilities
 COPY ./packages/domain ./packages/domain
+COPY ./packages/harness ./packages/harness
 COPY ./packages/model-provider ./packages/model-provider
 COPY ./packages/policy ./packages/policy
 COPY ./scripts/process_paper_execution_queue.py ./scripts/process_paper_execution_queue.py
