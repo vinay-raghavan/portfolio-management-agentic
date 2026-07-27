@@ -19,14 +19,14 @@
   --signal: #0891b2;
   --signal-soft: #cffafe;
   --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-  --radius: 34px;
-  --radius-xs: 22px;
-  --radius-sm: 28px;
-  --radius-md: 34px;
-  --radius-lg: 44px;
-  --radius-xl: 60px;
+  --radius: 38px;
+  --radius-xs: 26px;
+  --radius-sm: 32px;
+  --radius-md: 40px;
+  --radius-lg: 52px;
+  --radius-xl: 72px;
   --widget-radius: var(--radius-lg);
-  --control-radius: 30px;
+  --control-radius: 34px;
   --pill-radius: 999px;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -1661,14 +1661,14 @@ p {
   --signal: var(--accent-secondary);
   --signal-soft: color-mix(in srgb, var(--accent-secondary) 16%, transparent);
   --shadow: 0 24px 54px -36px rgba(236, 240, 245, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --radius: 34px;
-  --radius-xs: 22px;
-  --radius-sm: 28px;
-  --radius-md: 34px;
-  --radius-lg: 44px;
-  --radius-xl: 60px;
+  --radius: 38px;
+  --radius-xs: 26px;
+  --radius-sm: 32px;
+  --radius-md: 40px;
+  --radius-lg: 52px;
+  --radius-xl: 72px;
   --widget-radius: var(--radius-lg);
-  --control-radius: 30px;
+  --control-radius: 34px;
   --pill-radius: 999px;
   --focus-ring: 0 0 0 2px rgba(124, 173, 247, 0.34), 0 0 0 6px rgba(124, 173, 247, 0.16);
 
@@ -2006,22 +2006,25 @@ input:focus-visible {
   position: relative;
   display: grid;
   min-height: 74px;
-  padding: 16px 20px;
+  padding: 18px 22px;
   border: 1px solid var(--step-color, var(--accent-primary));
-  border-radius: var(--radius-md);
+  border-radius: var(--widget-radius);
   background: color-mix(in srgb, var(--base-bg-medium-default) 48%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 18px 42px -34px color-mix(in srgb, var(--step-color, var(--accent-primary)) 46%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .flow-step::before {
   content: "";
   position: absolute;
-  inset: -1px auto auto 16px;
-  width: 40%;
-  height: 3px;
+  inset: 11px auto auto 20px;
+  width: 44%;
+  height: 6px;
   border-radius: 999px;
   background: var(--step-color, var(--accent-primary));
   box-shadow: 0 0 16px color-mix(in srgb, var(--step-color, var(--accent-primary)) 40%, transparent);
+  opacity: 0.9;
 }
 
 .flow-step--blue {
@@ -2057,8 +2060,9 @@ input:focus-visible {
   top: 50%;
   right: -34px;
   width: 28px;
-  height: 2px;
-  background: var(--base-text-weak-default);
+  height: 6px;
+  border-radius: var(--pill-radius);
+  background: color-mix(in srgb, var(--base-text-weak-default) 70%, transparent);
   transform: translateY(-50%);
 }
 
@@ -2066,12 +2070,12 @@ input:focus-visible {
   content: "";
   position: absolute;
   top: 50%;
-  right: -1px;
-  width: 0;
-  height: 0;
-  border-top: 6px solid transparent;
-  border-bottom: 6px solid transparent;
-  border-left: 9px solid var(--base-text-weak-default);
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--base-text-weak-default);
+  border-radius: var(--pill-radius);
+  background: var(--base-bg-default);
   transform: translateY(-50%);
 }
 
@@ -2083,17 +2087,19 @@ input:focus-visible {
 .metric-tile {
   min-height: 136px;
   padding: 24px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--widget-radius);
 }
 
 .metric-tile::before,
 .panel::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
+  top: 14px;
+  left: 22px;
+  right: auto;
+  width: 68px;
+  height: 7px;
+  border-radius: var(--pill-radius);
   background: var(--tile-color, var(--accent-primary));
   opacity: 0.98;
   box-shadow: 0 0 18px color-mix(in srgb, var(--tile-color, var(--accent-primary)) 45%, transparent);
@@ -2162,7 +2168,7 @@ input:focus-visible {
 
 .panel {
   padding: 20px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--widget-radius);
 }
 
 .workflow-panel {
