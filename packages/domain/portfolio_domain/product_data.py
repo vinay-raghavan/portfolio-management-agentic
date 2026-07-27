@@ -21,6 +21,7 @@ from .models import (
 from .provider_profiles import list_provider_import_reconciliation
 from .provider_profiles import list_provider_refresh_readiness
 from .providers import DataProviderRegistry, get_data_provider_registry
+from .research_store import FileBackedPatternStore
 
 OFFLINE_SOURCE = "offline_fixture"
 
@@ -213,6 +214,8 @@ PATTERN_CARDS = [
         source_type="public_reference",
     ),
 ]
+
+PATTERN_STORE = FileBackedPatternStore(PATTERN_CARDS)
 
 _COMPONENTS: dict[str, list[ScoreComponent]] = {
     "TATAMOTORS": [
@@ -1308,40 +1311,11 @@ def search_pattern_cards(
     tags: list[str] | None = None,
     limit: int = 5,
 ) -> list[PatternCard]:
-    terms = [term for term in query.lower().split() if term]
-    tag_filter = {tag.strip().lower() for tag in tags or [] if tag.strip()}
-
-    def score(card: PatternCard) -> int:
-        haystack = " ".join(
-            [
-                card.pattern_id,
-                card.title,
-                card.setup_type,
-                card.summary,
-                " ".join(card.tags),
-                " ".join(card.evidence),
-            ]
-        ).lower()
-        term_score = sum(1 for term in terms if term in haystack)
-        tag_score = 2 if tag_filter and tag_filter.intersection(card.tags) else 0
-        return term_score + tag_score
-
-    cards = [
-        card
-        for card in PATTERN_CARDS
-        if not tag_filter or tag_filter.intersection(set(card.tags))
-    ]
-    cards.sort(key=lambda card: (score(card), card.pattern_id), reverse=True)
-    if terms or tag_filter:
-        cards = [card for card in cards if score(card) > 0]
-    return cards[: max(0, limit)]
+    return PATTERN_STORE.search(query, tags=tags, limit=limit)
 
 
 def get_pattern_card(pattern_id: str) -> PatternCard:
-    for card in PATTERN_CARDS:
-        if card.pattern_id == pattern_id:
-            return card
-    raise ValueError(f"Unknown pattern_id: {pattern_id}")
+    return PATTERN_STORE.get(pattern_id)
 
 
 def _patterns_for_setup(setup: str) -> list[PatternCard]:

@@ -146,6 +146,8 @@ from .providers import (
     validate_configured_provider_imports,
 )
 from .product_data import (
+    PATTERN_CARDS,
+    PATTERN_STORE,
     build_factor_stack_explanation,
     build_strategy_evidence_pack,
     get_pattern_card,
@@ -158,6 +160,16 @@ from .recommendations import (
     build_recommendation_explanation,
 )
 from .reports import build_paper_trading_report
+from .research_store import (
+    FileBackedPatternStore,
+    FileBackedResearchStore,
+    PatternStore,
+    ResearchDocument,
+    ResearchSource,
+    ResearchStore,
+    RetrievalHit,
+    pattern_card_to_research_document,
+)
 
 __all__ = [
     "ApprovalRequest",
@@ -167,6 +179,8 @@ __all__ = [
     "BacktestTrade",
     "BrokerAccountSnapshot",
     "FactorStackExplanation",
+    "FileBackedPatternStore",
+    "FileBackedResearchStore",
     "FundamentalsSnapshot",
     "FyersConnectionHealth",
     "FyersFunds",
@@ -189,6 +203,9 @@ __all__ = [
     "PaperTradingReport",
     "PatternCard",
     "PatternCitation",
+    "PATTERN_CARDS",
+    "PATTERN_STORE",
+    "PatternStore",
     "PortfolioSummary",
     "PreMarketBriefing",
     "ProviderDescriptor",
@@ -200,6 +217,10 @@ __all__ = [
     "RankedScreenerCandidate",
     "RecommendationExplanation",
     "ResearchDigest",
+    "ResearchDocument",
+    "ResearchSource",
+    "ResearchStore",
+    "RetrievalHit",
     "RiskReview",
     "ScreenerCandidate",
     "ScreenerRunResult",
@@ -289,6 +310,7 @@ __all__ = [
     "list_stored_screener_runs",
     "normalize_fyers_symbol",
     "parse_fyers_symbol",
+    "pattern_card_to_research_document",
     "record_market_data_snapshot",
     "record_screener_run",
     "run_fixture_screener",

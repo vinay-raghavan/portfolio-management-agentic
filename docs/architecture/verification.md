@@ -18,7 +18,7 @@ Current coverage:
 - Docker or Podman Compose config validates when either runtime is available.
 - Demo portfolio, screener, strategy draft, and paper proposal contracts work.
 - Pre-market briefing contracts compose portfolio, watchlist, signal, research, and risk sections from synthetic data.
-- Product data and pattern contracts list fixture/configured universes, run hard-gated deterministic screeners, retrieve pattern cards, cite strategy evidence, and explain factor stacks.
+- Product data and pattern contracts list fixture/configured universes, run hard-gated deterministic screeners, seed file-backed PatternStore/ResearchStore contracts from versioned pattern cards, retrieve pattern cards, cite strategy evidence, and explain factor stacks without vector retrieval.
 - Provider readiness evidence contracts disclose stale, backoff, pending, or retry-due provider state in configured screener and recommendation explanations without creating paper orders or leaking local provider paths.
 - Provider import-reconciliation gate contracts disclose source-changed, store-mismatch, pending-refresh, and needs-attention states in configured screeners and recommendations, downgrade confidence, and remove paper-order next actions without leaking local provider paths.
 - Market-data persistence contracts store and reload fixture/configured-provider market snapshots, provider context records, and screener runs in their tool payload shape without exposing database paths or credentials.
