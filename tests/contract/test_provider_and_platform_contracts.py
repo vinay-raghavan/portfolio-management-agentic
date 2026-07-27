@@ -1,11 +1,14 @@
 from portfolio_agent_platform import AgentPlatform, get_platform_profile
 from portfolio_model_provider import (
     DEFAULT_ROUTE_BUDGETS,
+    ModelCandidateEvaluation,
+    ModelCandidateTuningDecision,
     ModelUsageBudgetDecision,
     ModelProvider,
     ModelUsageEvent,
     ModelUsageSummary,
     build_model_capability_report,
+    evaluate_model_candidate_for_tuning,
     build_model_tuning_plan,
     evaluate_model_usage_event,
     load_model_provider_config,
@@ -208,6 +211,114 @@ def test_model_tuning_plan_prefers_prompt_and_routing_before_fine_tuning() -> No
         "technical_analysis",
         "paper_proposal_execution",
     }
+
+
+def test_model_candidate_tuning_gate_promotes_provider_neutral_candidate() -> None:
+    baseline = ModelCandidateEvaluation(
+        model="incumbent",
+        provider=ModelProvider.GEMINI,
+        safety_pass_rate=1.0,
+        core_task_success_rate=0.96,
+        mean_response_score=4.5,
+        applicable_trajectory_score=1.0,
+        p50_total_tokens=10_000,
+        p95_latency_ms=4_000,
+        judge_error_count=0,
+    )
+    candidate = ModelCandidateEvaluation(
+        model="llama3.1:8b",
+        provider=ModelProvider.OLLAMA,
+        safety_pass_rate=1.0,
+        core_task_success_rate=0.97,
+        mean_response_score=4.6,
+        applicable_trajectory_score=1.0,
+        p50_total_tokens=10_900,
+        p95_latency_ms=4_700,
+        judge_error_count=0,
+    )
+
+    decision = evaluate_model_candidate_for_tuning(candidate, baseline=baseline)
+
+    assert isinstance(decision, ModelCandidateTuningDecision)
+    assert decision.model == "llama3.1:8b"
+    assert decision.provider == ModelProvider.OLLAMA
+    assert decision.promotable is True
+    assert decision.blocking_reasons == ()
+    assert decision.metrics["token_ratio_to_baseline"] == 1.09
+    assert decision.metrics["latency_ratio_to_baseline"] == 1.175
+    assert "prompt" not in decision.to_dict()
+    assert "response" not in decision.to_dict()
+
+
+def test_model_candidate_tuning_gate_fails_closed_on_safety_quality_and_efficiency() -> None:
+    baseline = ModelCandidateEvaluation(
+        model="incumbent",
+        provider=ModelProvider.GEMINI,
+        safety_pass_rate=1.0,
+        core_task_success_rate=0.96,
+        mean_response_score=4.5,
+        applicable_trajectory_score=1.0,
+        p50_total_tokens=10_000,
+        p95_latency_ms=4_000,
+        judge_error_count=0,
+    )
+    candidate = ModelCandidateEvaluation(
+        model="gemma:7b",
+        provider=ModelProvider.OLLAMA,
+        safety_pass_rate=0.99,
+        core_task_success_rate=0.94,
+        mean_response_score=3.9,
+        applicable_trajectory_score=0.98,
+        p50_total_tokens=11_500,
+        p95_latency_ms=4_900,
+        judge_error_count=1,
+    )
+
+    decision = evaluate_model_candidate_for_tuning(candidate, baseline=baseline)
+
+    assert decision.promotable is False
+    assert decision.blocking_reasons == (
+        "safety_pass_rate_below_100_percent",
+        "core_task_success_below_95_percent",
+        "mean_response_score_below_4",
+        "applicable_trajectory_below_1",
+        "judge_errors_present",
+        "p50_tokens_exceed_110_percent_baseline",
+        "p95_latency_exceed_120_percent_baseline",
+    )
+    assert decision.metrics["token_ratio_to_baseline"] == 1.15
+    assert decision.metrics["latency_ratio_to_baseline"] == 1.225
+
+
+def test_model_candidate_tuning_gate_requires_baseline_without_judge_errors() -> None:
+    baseline = ModelCandidateEvaluation(
+        model="incumbent",
+        provider=ModelProvider.GEMINI,
+        safety_pass_rate=1.0,
+        core_task_success_rate=0.96,
+        mean_response_score=4.5,
+        applicable_trajectory_score=1.0,
+        p50_total_tokens=0,
+        p95_latency_ms=0,
+        judge_error_count=1,
+    )
+    candidate = ModelCandidateEvaluation(
+        model="llama3.1:8b",
+        provider=ModelProvider.OLLAMA,
+        safety_pass_rate=1.0,
+        core_task_success_rate=0.97,
+        mean_response_score=4.6,
+        applicable_trajectory_score=1.0,
+        p50_total_tokens=10_000,
+        p95_latency_ms=4_000,
+        judge_error_count=0,
+    )
+
+    decision = evaluate_model_candidate_for_tuning(candidate, baseline=baseline)
+
+    assert decision.promotable is False
+    assert "baseline_judge_errors_present" in decision.blocking_reasons
+    assert "baseline_efficiency_missing" in decision.blocking_reasons
 
 
 def test_model_usage_event_records_token_latency_and_tool_counts_only() -> None:

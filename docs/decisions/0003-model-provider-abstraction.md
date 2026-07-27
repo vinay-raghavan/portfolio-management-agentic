@@ -58,6 +58,15 @@ routing, retrieval, route budgets, and tool descriptions against a development
 set while preserving a sealed holdout. Fine-tuning remains disabled until at
 least 200 labeled examples and three prompt/routing/retrieval iterations leave a
 repeatable residual failure class.
+Candidate promotion is also provider-neutral: `ModelCandidateEvaluation`
+records safety pass rate, core task success, mean response score, applicable
+trajectory score, judge errors, p50 token use, and p95 latency without storing
+prompts or responses. `evaluate_model_candidate_for_tuning` compares any
+candidate model against the incumbent baseline and fails closed unless safety is
+100%, core task success is at least 95%, mean response score is at least 4.0,
+applicable trajectory is exactly 1.0, no judge errors are present, p50 tokens
+are no more than 110% of baseline, and p95 latency is no more than 120% of
+baseline.
 
 ## Consequences
 

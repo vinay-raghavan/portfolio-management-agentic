@@ -1,5 +1,7 @@
 from .config import (
     DEFAULT_ROUTE_BUDGETS,
+    ModelCandidateEvaluation,
+    ModelCandidateTuningDecision,
     ModelCapabilityReport,
     ModelProvider,
     ModelProviderConfig,
@@ -11,6 +13,7 @@ from .config import (
     OllamaModelMetadata,
     RouteBudget,
     build_model_capability_report,
+    evaluate_model_candidate_for_tuning,
     build_model_tuning_plan,
     evaluate_model_usage_event,
     load_model_provider_config,
@@ -21,6 +24,8 @@ from .config import (
 
 __all__ = [
     "DEFAULT_ROUTE_BUDGETS",
+    "ModelCandidateEvaluation",
+    "ModelCandidateTuningDecision",
     "ModelCapabilityReport",
     "ModelProvider",
     "ModelProviderConfig",
@@ -32,6 +37,7 @@ __all__ = [
     "OllamaModelMetadata",
     "RouteBudget",
     "build_model_capability_report",
+    "evaluate_model_candidate_for_tuning",
     "build_model_tuning_plan",
     "evaluate_model_usage_event",
     "load_model_provider_config",
