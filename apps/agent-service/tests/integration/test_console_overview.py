@@ -268,6 +268,157 @@ def test_model_tuning_evaluation_rejects_raw_prompt_or_secret_payload(monkeypatc
     assert response.json()["detail"] == "model_tuning_contains_sensitive_data"
 
 
+def test_model_tuning_evaluates_provider_neutral_candidate_suite(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "MODEL_TUNING_CANDIDATES",
+        "llama3.1:8b,gemma4:12b,hosted-mini",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/models/tuning/evaluate-suite",
+        json={
+            "baseline": {
+                "provider": "gemini",
+                "model": "incumbent",
+                "safety_pass_rate": 1.0,
+                "core_task_success_rate": 0.96,
+                "mean_response_score": 4.6,
+                "applicable_trajectory_score": 1.0,
+                "p50_total_tokens": 4_000,
+                "p95_latency_ms": 5_000,
+                "judge_error_count": 0,
+            },
+            "candidates": [
+                {
+                    "provider": "ollama",
+                    "model": "gemma4:12b",
+                    "safety_pass_rate": 1.0,
+                    "core_task_success_rate": 0.96,
+                    "mean_response_score": 4.2,
+                    "applicable_trajectory_score": 1.0,
+                    "p50_total_tokens": 4_250,
+                    "p95_latency_ms": 5_200,
+                    "judge_error_count": 0,
+                },
+                {
+                    "provider": "ollama",
+                    "model": "llama3.1:8b",
+                    "safety_pass_rate": 1.0,
+                    "core_task_success_rate": 0.96,
+                    "mean_response_score": 4.5,
+                    "applicable_trajectory_score": 1.0,
+                    "p50_total_tokens": 4_100,
+                    "p95_latency_ms": 5_200,
+                    "judge_error_count": 0,
+                },
+                {
+                    "provider": "openai_compatible",
+                    "model": "hosted-mini",
+                    "safety_pass_rate": 1.0,
+                    "core_task_success_rate": 0.97,
+                    "mean_response_score": 4.9,
+                    "applicable_trajectory_score": 1.0,
+                    "p50_total_tokens": 4_600,
+                    "p95_latency_ms": 5_300,
+                    "judge_error_count": 0,
+                },
+            ],
+            "sealed_holdout_passed": True,
+            "min_candidate_count": 3,
+            "required_candidate_models": ["llama3.1:8b", "gemma4:12b"],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    serialized = str(payload).lower()
+    assert payload["status"] == "evaluated"
+    assert payload["provider_neutral"] is True
+    assert payload["decision"]["promotable"] is True
+    assert payload["decision"]["selected"] == {
+        "model": "llama3.1:8b",
+        "provider": "ollama",
+    }
+    assert payload["decision"]["candidate_count"] == 3
+    assert payload["decision"]["promotable_candidate_count"] == 2
+    assert "raw_prompt" not in serialized
+    assert "raw_response" not in serialized
+    assert "secret" not in serialized
+
+
+def test_model_tuning_suite_rejects_unlisted_or_sensitive_candidate(monkeypatch) -> None:
+    monkeypatch.setenv("MODEL_TUNING_CANDIDATES", "llama3.1:8b")
+    client = TestClient(app)
+
+    unlisted = client.post(
+        "/v1/models/tuning/evaluate-suite",
+        json={
+            "baseline": {
+                "provider": "gemini",
+                "model": "incumbent",
+                "safety_pass_rate": 1.0,
+                "core_task_success_rate": 0.96,
+                "mean_response_score": 4.6,
+                "applicable_trajectory_score": 1.0,
+                "p50_total_tokens": 4_000,
+                "p95_latency_ms": 5_000,
+                "judge_error_count": 0,
+            },
+            "candidates": [
+                {
+                    "provider": "ollama",
+                    "model": "not-allowlisted:8b",
+                    "safety_pass_rate": 1.0,
+                    "core_task_success_rate": 0.96,
+                    "mean_response_score": 4.5,
+                    "applicable_trajectory_score": 1.0,
+                    "p50_total_tokens": 4_100,
+                    "p95_latency_ms": 5_200,
+                    "judge_error_count": 0,
+                },
+            ],
+            "sealed_holdout_passed": True,
+        },
+    )
+    sensitive = client.post(
+        "/v1/models/tuning/evaluate-suite",
+        json={
+            "baseline": {
+                "provider": "gemini",
+                "model": "incumbent",
+                "safety_pass_rate": 1.0,
+                "core_task_success_rate": 0.96,
+                "mean_response_score": 4.6,
+                "applicable_trajectory_score": 1.0,
+                "p50_total_tokens": 4_000,
+                "p95_latency_ms": 5_000,
+                "judge_error_count": 0,
+            },
+            "candidates": [
+                {
+                    "provider": "ollama",
+                    "model": "llama3.1:8b",
+                    "safety_pass_rate": 1.0,
+                    "core_task_success_rate": 0.96,
+                    "mean_response_score": 4.5,
+                    "applicable_trajectory_score": 1.0,
+                    "p50_total_tokens": 4_100,
+                    "p95_latency_ms": 5_200,
+                    "judge_error_count": 0,
+                    "raw_response": "secret transcript",
+                },
+            ],
+            "sealed_holdout_passed": True,
+        },
+    )
+
+    assert unlisted.status_code == 400
+    assert unlisted.json()["detail"] == "model_candidate_not_allowed"
+    assert sensitive.status_code == 400
+    assert sensitive.json()["detail"] == "model_tuning_contains_sensitive_data"
+
+
 def test_model_usage_telemetry_records_budgeted_metrics_without_payloads(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")

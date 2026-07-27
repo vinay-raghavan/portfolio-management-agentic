@@ -602,6 +602,12 @@ baseline/candidate metrics. The candidate model must be allowlisted by
 `model_candidate_not_allowed`, weak metrics return a non-promotable decision
 with deterministic blocking reasons, and raw prompt/response/secret-shaped
 payloads fail before schema parsing.
+`/v1/models/tuning/evaluate-suite` evaluates a metric-only candidate set across
+local or hosted providers, requires explicit sealed-holdout success, verifies
+minimum/required candidate coverage, ranks only promotable candidates, and
+returns a deterministic selected model without storing prompts, responses, or
+eval examples. This is the preferred gate when comparing `llama3.1:8b`,
+`gemma4:12b`, or any other 7B/8B-compatible model against the incumbent.
 `/v1/models/usage/events` records provider-neutral model usage metrics only:
 prompt-token count, output-token count, route, tool calls, queue wait, latency,
 retry count, and request id. In offline/SQLite mode the API uses an in-process

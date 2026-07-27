@@ -263,6 +263,42 @@ class ModelCandidateTuningDecision:
         }
 
 
+@dataclass(frozen=True)
+class ModelCandidateSuiteDecision:
+    selected_model: str | None
+    selected_provider: ModelProvider | None
+    promotable: bool
+    blocking_reasons: tuple[str, ...]
+    candidate_decisions: tuple[ModelCandidateTuningDecision, ...]
+    min_candidate_count: int
+    sealed_holdout_passed: bool
+
+    def to_dict(self) -> dict[str, object]:
+        promotable_candidates = [
+            decision for decision in self.candidate_decisions if decision.promotable
+        ]
+        return {
+            "schema_version": "portfolio-model-candidate-suite/v1",
+            "promotable": self.promotable,
+            "selected": (
+                None
+                if self.selected_model is None or self.selected_provider is None
+                else {
+                    "model": self.selected_model,
+                    "provider": self.selected_provider.value,
+                }
+            ),
+            "blocking_reasons": list(self.blocking_reasons),
+            "candidate_count": len(self.candidate_decisions),
+            "promotable_candidate_count": len(promotable_candidates),
+            "min_candidate_count": self.min_candidate_count,
+            "sealed_holdout_passed": self.sealed_holdout_passed,
+            "candidate_decisions": [
+                decision.to_dict() for decision in self.candidate_decisions
+            ],
+        }
+
+
 DEFAULT_ROUTE_BUDGETS: dict[str, tuple[int, int, int]] = {
     "fyers_data": (12_000, 1_500, 5),
     "router_refusal": (2_000, 512, 0),
@@ -619,6 +655,56 @@ def evaluate_model_candidate_for_tuning(
     )
 
 
+def evaluate_model_candidate_suite_for_tuning(
+    candidates: Sequence[ModelCandidateEvaluation],
+    *,
+    baseline: ModelCandidateEvaluation,
+    sealed_holdout_passed: bool,
+    min_candidate_count: int = 1,
+    required_candidate_models: Sequence[str] = (),
+) -> ModelCandidateSuiteDecision:
+    candidate_decisions = tuple(
+        sorted(
+            (
+                evaluate_model_candidate_for_tuning(candidate, baseline=baseline)
+                for candidate in candidates
+            ),
+            key=_candidate_decision_sort_key,
+        )
+    )
+    candidate_models = {decision.model for decision in candidate_decisions}
+    blocking_reasons: list[str] = []
+
+    if not sealed_holdout_passed:
+        blocking_reasons.append("sealed_holdout_not_passed")
+    if len(candidate_decisions) < min_candidate_count:
+        blocking_reasons.append("candidate_count_below_minimum")
+    for required_model in required_candidate_models:
+        if required_model not in candidate_models:
+            blocking_reasons.append(f"required_candidate_model_missing:{required_model}")
+
+    promotable_candidates = [
+        decision for decision in candidate_decisions if decision.promotable
+    ]
+    if not promotable_candidates:
+        blocking_reasons.append("no_promotable_candidate")
+
+    selected = (
+        None
+        if blocking_reasons
+        else promotable_candidates[0]
+    )
+    return ModelCandidateSuiteDecision(
+        selected_model=selected.model if selected is not None else None,
+        selected_provider=selected.provider if selected is not None else None,
+        promotable=selected is not None and not blocking_reasons,
+        blocking_reasons=tuple(blocking_reasons),
+        candidate_decisions=candidate_decisions,
+        min_candidate_count=min_candidate_count,
+        sealed_holdout_passed=sealed_holdout_passed,
+    )
+
+
 def _known_context_window(provider: ModelProvider, model: str) -> int:
     if provider == ModelProvider.OLLAMA:
         known = KNOWN_LOCAL_MODEL_CAPABILITIES.get(model, {})
@@ -703,6 +789,23 @@ def _rounded_ratio(value: float | None) -> float:
     if value is None:
         return 0.0
     return round(value, 4)
+
+
+def _candidate_decision_sort_key(
+    decision: ModelCandidateTuningDecision,
+) -> tuple[object, ...]:
+    metrics = decision.metrics
+    return (
+        not decision.promotable,
+        -float(metrics["safety_pass_rate"]),
+        -float(metrics["core_task_success_rate"]),
+        -float(metrics["mean_response_score"]),
+        -float(metrics["applicable_trajectory_score"]),
+        float(metrics["token_ratio_to_baseline"]),
+        float(metrics["latency_ratio_to_baseline"]),
+        decision.provider.value,
+        decision.model,
+    )
 
 
 def _nearest_rank_percentile(values: Sequence[int], percentile: float) -> int:

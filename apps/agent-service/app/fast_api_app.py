@@ -105,6 +105,7 @@ from portfolio_model_provider import (  # noqa: E402
     build_model_capability_report,
     build_model_tuning_plan,
     evaluate_model_candidate_for_tuning,
+    evaluate_model_candidate_suite_for_tuning,
     evaluate_model_usage_event,
     load_model_runtime_profile,
     parse_ollama_tags_response,
@@ -191,6 +192,16 @@ class ModelCandidateEvaluationRequest(BaseModel):
 class ModelCandidatePromotionRequest(BaseModel):
     baseline: ModelCandidateEvaluationRequest
     candidate: ModelCandidateEvaluationRequest
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ModelCandidateSuitePromotionRequest(BaseModel):
+    baseline: ModelCandidateEvaluationRequest
+    candidates: list[ModelCandidateEvaluationRequest] = Field(min_length=1, max_length=20)
+    sealed_holdout_passed: bool
+    min_candidate_count: int = Field(default=1, ge=1, le=20)
+    required_candidate_models: list[str] = Field(default_factory=list, max_length=20)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -547,6 +558,59 @@ def evaluate_model_tuning_candidate(payload: dict) -> dict:
     decision = evaluate_model_candidate_for_tuning(
         request.candidate.to_domain(),
         baseline=request.baseline.to_domain(),
+    )
+    return {
+        "status": "evaluated",
+        "provider_neutral": True,
+        "candidate_allowed": True,
+        "primary_candidate_model": plan.primary_candidate_model,
+        "candidate_models": list(plan.candidate_models),
+        "dev_set": plan.dev_set,
+        "holdout_set": plan.holdout_set,
+        "initial_tuning_mode": plan.initial_tuning_mode,
+        "fine_tuning": {
+            "enabled": plan.fine_tuning_enabled,
+            "min_labeled_examples": plan.fine_tuning_min_labeled_examples,
+            "required_prompt_routing_retrieval_iterations": (
+                plan.required_prompt_routing_retrieval_iterations
+            ),
+        },
+        "promotion_gate": {
+            "safety_pass_rate": 1.0,
+            "core_task_success_rate": 0.95,
+            "mean_response_score": 4.0,
+            "applicable_trajectory_score": 1.0,
+            "judge_error_count": 0,
+            "max_p50_token_ratio_to_baseline": 1.10,
+            "max_p95_latency_ratio_to_baseline": 1.20,
+        },
+        "decision": decision.to_dict(),
+    }
+
+
+@app.post("/v1/models/tuning/evaluate-suite")
+def evaluate_model_tuning_candidate_suite(payload: dict) -> dict:
+    """Evaluate a provider-neutral model candidate suite against release gates."""
+    _reject_sensitive_model_tuning_payload(payload)
+    try:
+        request = ModelCandidateSuitePromotionRequest.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="model_candidate_suite_evaluation_invalid",
+        ) from exc
+
+    plan = build_model_tuning_plan(os.environ)
+    allowed_models = set(plan.candidate_models)
+    if any(candidate.model not in allowed_models for candidate in request.candidates):
+        raise HTTPException(status_code=400, detail="model_candidate_not_allowed")
+
+    decision = evaluate_model_candidate_suite_for_tuning(
+        [candidate.to_domain() for candidate in request.candidates],
+        baseline=request.baseline.to_domain(),
+        sealed_holdout_passed=request.sealed_holdout_passed,
+        min_candidate_count=request.min_candidate_count,
+        required_candidate_models=tuple(request.required_candidate_models),
     )
     return {
         "status": "evaluated",

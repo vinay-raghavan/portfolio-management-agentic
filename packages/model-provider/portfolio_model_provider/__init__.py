@@ -1,6 +1,7 @@
 from .config import (
     DEFAULT_ROUTE_BUDGETS,
     ModelCandidateEvaluation,
+    ModelCandidateSuiteDecision,
     ModelCandidateTuningDecision,
     ModelCapabilityReport,
     ModelProvider,
@@ -13,6 +14,7 @@ from .config import (
     OllamaModelMetadata,
     RouteBudget,
     build_model_capability_report,
+    evaluate_model_candidate_suite_for_tuning,
     evaluate_model_candidate_for_tuning,
     build_model_tuning_plan,
     evaluate_model_usage_event,
@@ -26,6 +28,7 @@ from .usage_store import PostgresModelUsageStore
 __all__ = [
     "DEFAULT_ROUTE_BUDGETS",
     "ModelCandidateEvaluation",
+    "ModelCandidateSuiteDecision",
     "ModelCandidateTuningDecision",
     "ModelCapabilityReport",
     "ModelProvider",
@@ -39,6 +42,7 @@ __all__ = [
     "PostgresModelUsageStore",
     "RouteBudget",
     "build_model_capability_report",
+    "evaluate_model_candidate_suite_for_tuning",
     "evaluate_model_candidate_for_tuning",
     "build_model_tuning_plan",
     "evaluate_model_usage_event",

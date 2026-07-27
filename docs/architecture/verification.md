@@ -347,6 +347,13 @@ The candidate-evaluation API applies those thresholds to metric-only baseline
 and candidate evidence. It rejects candidates outside `MODEL_TUNING_CANDIDATES`
 and rejects raw prompt, raw response, transcript, message, token, or secret
 fields before evaluating promotion readiness.
+The candidate-suite API applies the same provider-neutral checks to a bounded
+set of local or hosted candidates, fails closed unless sealed holdout evidence
+is explicitly marked as passed, enforces minimum and required candidate
+coverage, and ranks only promotable models by safety, core success, response
+score, trajectory, token use, and latency. This keeps `llama3.1:8b`,
+`gemma4:12b`, and later 7B/8B pilots interchangeable behind the same metric
+contract.
 Model usage telemetry accepts only metric fields: route, provider/model ids,
 prompt/output token counts, tool-call count, queue wait, latency, retry count,
 and request id. Extra fields are rejected so raw prompts, raw responses, and
