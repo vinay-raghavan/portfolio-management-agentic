@@ -42,8 +42,10 @@ The current runtime contract exposes `search_curated_research` as a read-only
 MCP tool backed by the same fixture document contract as pattern cards. The
 Postgres runtime path is tenant-scoped full-text search over `research_sources`
 and `research_documents`; a migration keeps each document search field current
-on insert or update. Source administration, arbitrary URL ingestion, and
-research-source refresh configuration stay outside MCP/model-visible tools.
+on insert or update, and `PostgresResearchStore` executes the same query through
+an injectable connection factory for runtime wiring and production-like tests.
+Source administration, arbitrary URL ingestion, and research-source refresh
+configuration stay outside MCP/model-visible tools.
 
 ## Consequences
 
@@ -60,7 +62,8 @@ research-source refresh configuration stay outside MCP/model-visible tools.
 - Contract tests assert citation payloads include source identifiers and version metadata.
 - Store contract tests assert pattern cards seed file-backed stores through the
   same document/provenance contract used by future runtime retrieval.
-- Postgres contract tests assert tenant-scoped full-text search, enabled-source
-  filtering, available-document filtering, and no vector retrieval path.
+- Postgres contract tests assert tenant-scoped full-text search planning and
+  execution, enabled-source filtering, available-document filtering, safe
+  provenance mapping, blank/URL query rejection, and no vector retrieval path.
 - Eval cases check that pattern-grounded answers cite retrieved context and still refuse live trading.
 - Security tests prove retrieval tools cannot expose secrets, local-only notes, or broker credentials.

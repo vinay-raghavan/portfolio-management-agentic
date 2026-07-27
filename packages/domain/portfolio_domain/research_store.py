@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from hashlib import sha256
 import re
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Iterable, Protocol
 
 from .models import PatternCard
@@ -259,8 +260,84 @@ class FileBackedPatternStore:
         return FileBackedResearchStore.from_pattern_cards(self._cards.values())
 
 
+class PostgresResearchStore:
+    def __init__(
+        self,
+        *,
+        tenant_id: str,
+        connection_factory: Callable[[], Any],
+    ) -> None:
+        if not tenant_id.strip():
+            raise ValueError("tenant_id is required for Postgres research search")
+        self._tenant_id = tenant_id
+        self._connection_factory = connection_factory
+
+    def search(
+        self,
+        query: str,
+        *,
+        normalized_symbol: str | None = None,
+        limit: int = 5,
+    ) -> list[RetrievalHit]:
+        plan = build_postgres_research_search_query(
+            tenant_id=self._tenant_id,
+            query=query,
+            normalized_symbol=normalized_symbol,
+            limit=limit,
+        )
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(plan.sql, plan.params)
+                rows = _cursor_rows(cursor)
+        terms = _terms(plan.params["query"])
+        return [
+            _row_to_retrieval_hit(row, rank=rank, terms=terms)
+            for rank, row in enumerate(rows, start=1)
+        ]
+
+    def get_document(self, document_id: str) -> ResearchDocument:
+        if not document_id.strip():
+            raise ValueError("document_id is required")
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        d.id,
+                        d.source_id,
+                        d.document_key,
+                        d.title,
+                        d.published_at,
+                        d.fetched_at,
+                        d.checksum,
+                        d.source_status,
+                        d.content,
+                        d.provenance,
+                        d.license_metadata
+                    FROM research_documents d
+                    JOIN research_sources s
+                        ON s.id = d.source_id
+                       AND s.tenant_id = d.tenant_id
+                    WHERE d.tenant_id = %(tenant_id)s
+                      AND d.id = %(document_id)s
+                      AND s.status = 'enabled'
+                      AND d.source_status = 'available'
+                    """.strip(),
+                    {
+                        "tenant_id": self._tenant_id,
+                        "document_id": document_id,
+                    },
+                )
+                row = _cursor_one(cursor)
+        if row is None:
+            raise ValueError(f"Unknown research document: {document_id}")
+        return _row_to_research_document(row)
+
+
 def normalize_research_query(query: str) -> str:
     normalized = " ".join(query.strip().split())
+    if not normalized:
+        raise ValueError("Research query must not be empty")
     lowered = normalized.lower()
     if (
         "://" in lowered
@@ -375,3 +452,114 @@ def _snippet(body: str, terms: list[str]) -> str:
     )
     start = max(0, first_match - 60)
     return body[start : start + 220]
+
+
+def _cursor_rows(cursor: Any) -> list[dict[str, Any]]:
+    rows = cursor.fetchall()
+    return [_row_mapping(cursor, row) for row in rows]
+
+
+def _cursor_one(cursor: Any) -> dict[str, Any] | None:
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    return _row_mapping(cursor, row)
+
+
+def _row_mapping(cursor: Any, row: Any) -> dict[str, Any]:
+    if isinstance(row, Mapping):
+        return dict(row)
+    if not isinstance(row, Sequence):
+        raise TypeError("Postgres research cursor rows must be mappings or sequences")
+    description = getattr(cursor, "description", None)
+    if not description:
+        raise TypeError("Postgres research cursor sequence rows require description")
+    keys = [str(column[0]) for column in description]
+    return dict(zip(keys, row, strict=False))
+
+
+def _row_to_retrieval_hit(
+    row: Mapping[str, Any],
+    *,
+    rank: int,
+    terms: list[str],
+) -> RetrievalHit:
+    provenance = _safe_metadata(_dict_value(row.get("provenance")))
+    return RetrievalHit(
+        document_id=str(row["id"]),
+        source_id=str(row["source_id"]),
+        title=str(row["title"]),
+        rank=rank,
+        score=float(row.get("score") or 0.0),
+        snippet=_snippet(str(row.get("content") or ""), terms),
+        checksum=str(row["checksum"]),
+        published_at=_string_value(row.get("published_at")),
+        fetched_at=_string_value(row.get("fetched_at")),
+        source_status=str(row["source_status"]),
+        citation_url=_citation_url(provenance),
+        metadata={
+            "document_key": row.get("document_key"),
+            "normalized_symbol": row.get("normalized_symbol"),
+            "provenance": provenance,
+            "license_metadata": _safe_metadata(_dict_value(row.get("license_metadata"))),
+        },
+    )
+
+
+def _row_to_research_document(row: Mapping[str, Any]) -> ResearchDocument:
+    provenance = _safe_metadata(_dict_value(row.get("provenance")))
+    return ResearchDocument(
+        document_id=str(row["id"]),
+        source_id=str(row["source_id"]),
+        version=str(row.get("document_key") or ""),
+        title=str(row["title"]),
+        body=str(row.get("content") or ""),
+        checksum=str(row["checksum"]),
+        published_at=_string_value(row.get("published_at")),
+        fetched_at=_string_value(row.get("fetched_at")),
+        source_status=str(row["source_status"]),
+        license=str(
+            _dict_value(row.get("license_metadata")).get("usage", "public_reference")
+        ),
+        citation_url=_citation_url(provenance),
+        metadata={
+            "document_key": row.get("document_key"),
+            "provenance": provenance,
+            "license_metadata": _safe_metadata(_dict_value(row.get("license_metadata"))),
+        },
+    )
+
+
+def _dict_value(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _safe_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    blocked_fragments = (
+        "credential",
+        "password",
+        "secret",
+        "token",
+        "path",
+        "raw_payload",
+        "resolved",
+    )
+    return {
+        str(key): value
+        for key, value in metadata.items()
+        if not any(fragment in str(key).lower() for fragment in blocked_fragments)
+    }
+
+
+def _citation_url(provenance: Mapping[str, Any]) -> str:
+    value = provenance.get("citation_url") or provenance.get("canonical_url") or ""
+    return value if isinstance(value, str) else ""
+
+
+def _string_value(value: Any) -> str:
+    if value is None:
+        return ""
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        return str(isoformat())
+    return str(value)
