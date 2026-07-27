@@ -90,6 +90,13 @@ from .fyers_integration import (
     hash_oauth_state,
 )
 from .actor_identity_store import ActorIdentityRecord, PostgresActorIdentityStore
+from .credential_vault import (
+    CredentialVaultBackend,
+    CredentialVaultProfile,
+    CredentialVaultReadiness,
+    evaluate_credential_vault_readiness,
+    load_credential_vault_profile,
+)
 from .fyers_integration_store import PostgresFyersIntegrationStore
 from .market_data_store import (
     SQLiteMarketDataStore,
@@ -247,6 +254,9 @@ __all__ = [
     "BacktestTrade",
     "BrokerAccountSnapshot",
     "BUILTIN_RESEARCH_SOURCES",
+    "CredentialVaultBackend",
+    "CredentialVaultProfile",
+    "CredentialVaultReadiness",
     "DatabaseBackend",
     "DatabaseRuntimeProfile",
     "DatabaseRuntimeReadiness",
@@ -385,6 +395,7 @@ __all__ = [
     "create_fixture_strategy_draft",
     "draft_strategy",
     "evaluate_database_runtime_readiness",
+    "evaluate_credential_vault_readiness",
     "evaluate_paper_execution_order",
     "get_fixture_backtest_request",
     "get_fixture_backtest_result",
@@ -400,6 +411,7 @@ __all__ = [
     "get_data_provider_registry",
     "issue_paper_execution_grant",
     "load_database_runtime_profile",
+    "load_credential_vault_profile",
     "list_configured_fundamentals_snapshots",
     "list_configured_macro_snapshots",
     "list_configured_market_data_snapshots",

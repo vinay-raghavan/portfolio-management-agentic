@@ -127,6 +127,10 @@ Current coverage:
 - Paper execution API contracts ensure Postgres-backed policy, batch, grant,
   and execution work-item actor FK fields also use resolved `actor_identities`
   UUIDs while local/offline process-memory mode keeps readable subject strings.
+- Credential-vault readiness contracts fail closed by default, require explicit
+  `macos_keychain` local or `kms` hosted configuration before token exchange is
+  allowed, expose only redacted admin status, and keep FYERS OAuth callbacks in
+  `token_exchange_not_configured` state until readiness is true.
 - Provider adapter contracts expose fixture defaults, provider health, import validation, fixture market snapshots, configured read-only JSON market snapshots, configured read-only JSON universes, configured read-only JSON fundamentals, configured read-only JSON sentiment, configured read-only JSON volatility, configured read-only JSON macro context, and universe membership without credentials or network requirements.
 - Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require readiness preflight before paper order proposals, block incomplete proposal evidence before draft creation, require approval before simulated fills, update paper positions/accounting, emit redacted audit events, and persist paper-ledger state when SQLite is configured.
 - Gemini, Claude, OpenAI-compatible, and Ollama provider profiles are declared; Ollama runtime profiles include route budgets for every model-visible capability manifest, 80% context-window caps, model digest pinning and verification, private inventory probing without prompts, capability readiness, redacted usage-event schema, deterministic usage-budget decisions, aggregate token/latency/tool summaries, a prompt/routing/retrieval-first tuning gate, and provider-neutral candidate promotion checks for safety, core success, response quality, trajectory, judge errors, token use, and latency.

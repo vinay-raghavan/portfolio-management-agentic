@@ -87,6 +87,12 @@ hashed OAuth state while leaving credential-vault token exchange disabled.
 Protected FYERS refresh routes use that same store to persist refresh-job rows,
 normalized quote envelopes, and broker account snapshots with signed quantities
 and explicit errors.
+The protected admin-only `/v1/credentials/vault/status` endpoint reports
+redacted credential-vault readiness for `disabled`, `macos_keychain`, and `kms`
+backends. It returns configured booleans and blocking reasons only; provider
+secrets, access tokens, refresh tokens, and client secrets are not accepted or
+returned. FYERS OAuth callbacks include this readiness and keep token exchange
+disabled until a vault backend is ready.
 Protected `/v1/sessions/{session_id}/summary` routes persist only compact
 session summaries and sanitized object references through
 `PostgresSessionMemoryStore` in Postgres mode; local/offline mode keeps the same

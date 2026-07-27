@@ -156,6 +156,10 @@ def test_fyers_oauth_status_disconnect_and_refresh_are_human_api_only_and_redact
     assert callback.status_code == 200
     assert callback.json()["status"] == "reconnect_required"
     assert callback.json()["connection"]["credential_status"] == "token_exchange_not_configured"
+    assert callback.json()["credential_vault"]["ready"] is False
+    assert "credential_vault_disabled" in callback.json()["credential_vault"][
+        "blocking_reasons"
+    ]
     assert status.status_code == 200
     assert status.json()["connection"]["status"] == "reconnect_required"
     assert refresh.status_code == 200
@@ -178,6 +182,32 @@ def test_fyers_oauth_status_disconnect_and_refresh_are_human_api_only_and_redact
     assert "trading_token" not in serialized
     assert "place_order" not in serialized
     assert "paper_ledger" not in serialized
+
+
+def test_credential_vault_status_reports_readiness_without_secret_material(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("CREDENTIAL_VAULT_BACKEND", "macos_keychain")
+    monkeypatch.setenv("CREDENTIAL_VAULT_SERVICE", "portfolio-agentic-fyers")
+    monkeypatch.setenv("CREDENTIAL_VAULT_LOCAL_RUNTIME", "true")
+    monkeypatch.setenv("FYERS_CLIENT_SECRET", "must-not-return")
+    client = TestClient(app)
+
+    response = client.get(
+        "/v1/credentials/vault/status",
+        headers=_headers("admin-1", "admin"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    serialized = str(payload).lower()
+    assert payload["status"] == "ready"
+    assert payload["profile"]["backend"] == "macos_keychain"
+    assert payload["profile"]["service_configured"] is True
+    assert payload["readiness"]["ready"] is True
+    assert "must-not-return" not in serialized
+    assert "client_secret" not in serialized
+    assert "access_token" not in serialized
 
 
 def test_fyers_api_uses_postgres_store_when_configured(monkeypatch) -> None:
