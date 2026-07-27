@@ -61,10 +61,12 @@ This slice establishes the safe contract between research, simulation, and the f
   paper execution work items with `FOR UPDATE SKIP LOCKED`, checks the durable
   ledger for duplicate idempotency keys before API execution, treats the unique
   ledger insert result as authoritative if a concurrent request races the
-  pre-check, updates grant consumed capacity only after a successful accepted
-  ledger insert, stores JSON-safe summaries only, and rejects FYERS, broker
-  trading-token, and credential-looking payload contamination before writes or
-  reads return domain contracts.
+  pre-check, locks the active grant row before accepted ledger insertion,
+  admits the insert only while reserved order/gross/net capacity remains, updates
+  consumed capacity only after the ledger row is inserted, stores JSON-safe
+  summaries only, and rejects FYERS, broker trading-token, and
+  credential-looking payload contamination before writes or reads return domain
+  contracts.
 - The agent service exposes protected `/v1/paper/policies`,
   `/v1/paper/batches`, `/v1/paper/batches/{id}/approve|revoke`, and
   `/v1/paper/orders/{id}/execute` contracts. These endpoints derive requester
@@ -100,15 +102,17 @@ process memory, and a skipped `ON CONFLICT DO NOTHING ... RETURNING id` insert
 is returned to the API as a duplicate rejection rather than an accepted fill.
 Postgres execution limit checks derive current exposure from the persisted
 grant `consumed_capacity`, not request-body `current_gross_notional` or
-`current_net_notional` fields. Successful accepted inserts update
-`paper_execution_grants.consumed_capacity`; conflict rejections do not consume
-capacity. In Postgres mode, `/v1/paper/orders/{id}/execute` now creates a
-`PaperExecutionWorkItem` and processes it through
-`PaperExecutionQueueProcessor` as `paper-execution-api`, completing the item as
-`completed` or `failed`. Compose also deploys `paper-execution-worker`, a
-bounded Postgres-only queue loop around the same processor for background
-processing. The next production hardening step is serializing grant-capacity
-reservation inside the worker path and adding fair scheduling across tenants.
+`current_net_notional` fields. Accepted ledger inserts and grant-capacity
+updates happen through one Postgres statement that locks the active grant row,
+checks remaining reserved capacity, inserts the idempotent ledger row, and then
+updates `paper_execution_grants.consumed_capacity`; duplicate conflicts or
+capacity races return rejected decisions without consuming capacity. In
+Postgres mode, `/v1/paper/orders/{id}/execute` now creates a
+`PaperExecutionWorkItem` and processes it through `PaperExecutionQueueProcessor`
+as `paper-execution-api`, completing the item as `completed` or `failed`.
+Compose also deploys `paper-execution-worker`, a bounded Postgres-only queue
+loop around the same processor for background processing. The next production
+hardening step is fair scheduling across tenants.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.

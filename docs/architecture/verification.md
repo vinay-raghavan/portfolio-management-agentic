@@ -61,8 +61,9 @@ Current coverage:
   redaction from responses, duplicate idempotency rejection from the Postgres
   ledger rather than process-local memory, conflict-race rejection when a unique
   ledger insert is skipped, accepted-insert grant consumed-capacity updates
-  without consuming capacity on duplicate conflicts, and paper-only response
-  payloads without FYERS or credential fields.
+  without consuming capacity on duplicate conflicts, locked-grant capacity
+  guards that reject reserved-capacity races without ledger mutation, and
+  paper-only response payloads without FYERS or credential fields.
 - Paper-execution worker contracts verify `DeterministicPaperExecutionWorker`
   owns the evaluate-and-record boundary, records only accepted decisions, keeps
   rejected decisions mutation-free, and returns the recorder-authoritative

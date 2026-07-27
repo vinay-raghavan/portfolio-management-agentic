@@ -231,7 +231,15 @@ def test_store_issues_human_bound_grant_and_persists_scope_under_ceiling() -> No
 
 
 def test_store_records_execution_decision_as_idempotent_paper_ledger_entry() -> None:
-    cursor = _FakeCursor(columns=["id"], rows=[("ledger-1",)])
+    cursor = _FakeCursor(
+        columns=[
+            "grant_locked",
+            "capacity_available",
+            "ledger_id",
+            "grant_update_id",
+        ],
+        rows=[(True, True, "ledger-1", "grant-1")],
+    )
     connection = _FakeConnection(cursor)
     store = _store(cursor, connection)
     policy = _policy()
@@ -280,21 +288,34 @@ def test_store_records_execution_decision_as_idempotent_paper_ledger_entry() -> 
     assert "live" not in str(params["fill"]).lower()
     assert "fyers" not in str(params).lower()
     assert "token" not in str(params).lower()
-    update_sql, update_params = cursor.executed[1]
-    assert "UPDATE paper_execution_grants" in update_sql
-    assert "consumed_capacity" in update_sql
-    assert "jsonb_build_object" in update_sql
-    assert "status = 'active'" in update_sql
-    assert update_params["tenant_id"] == TENANT_ID
-    assert update_params["grant_id"] == grant.grant_id
-    assert update_params["order_count_delta"] == 1
-    assert update_params["gross_notional_delta"] == 4_900.0
-    assert update_params["net_notional_delta"] == 4_900.0
+    assert "WITH locked_grant AS" in sql
+    assert "FOR UPDATE" in sql
+    assert "capacity_check AS" in sql
+    assert "ledger_insert AS" in sql
+    assert "capacity_update AS" in sql
+    assert "UPDATE paper_execution_grants" in sql
+    assert "consumed_capacity" in sql
+    assert "jsonb_build_object" in sql
+    assert "status = 'active'" in sql
+    assert "max_gross_notional" in sql
+    assert "max_net_notional" in sql
+    assert params["order_count_delta"] == 1
+    assert params["gross_notional_delta"] == 4_900.0
+    assert params["net_notional_delta"] == 4_900.0
+    assert len(cursor.executed) == 1
     assert connection.committed is True
 
 
 def test_store_returns_duplicate_rejection_when_ledger_insert_conflicts() -> None:
-    cursor = _FakeCursor(columns=["id"])
+    cursor = _FakeCursor(
+        columns=[
+            "grant_locked",
+            "capacity_available",
+            "ledger_id",
+            "grant_update_id",
+        ],
+        rows=[(True, True, None, None)],
+    )
     connection = _FakeConnection(cursor)
     store = _store(cursor, connection)
     policy = _policy()
@@ -337,6 +358,64 @@ def test_store_returns_duplicate_rejection_when_ledger_insert_conflicts() -> Non
     assert decision.reasons == ("duplicate_idempotency_key",)
     assert decision.audit_event["event_type"] == "paper_execution_rejected"
     assert decision.audit_event["idempotency_key"] == "idem-race"
+    assert len(cursor.executed) == 1
+    assert connection.committed is True
+
+
+def test_store_rejects_execution_decision_when_grant_capacity_is_exhausted() -> None:
+    cursor = _FakeCursor(
+        columns=[
+            "grant_locked",
+            "capacity_available",
+            "ledger_id",
+            "grant_update_id",
+        ],
+        rows=[(True, False, None, None)],
+    )
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+    policy = _policy()
+    batch = _batch()
+    grant = store.issue_grant(
+        policy=policy,
+        batch_request=batch,
+        approved_by_actor_id=APPROVER_ID,
+        expires_at=NOW + timedelta(minutes=10),
+    )
+    cursor.executed.clear()
+    order = batch.orders[0]
+    accepted = evaluate_paper_execution_order(
+        policy=policy,
+        grant=grant,
+        batch_request=batch,
+        order=order,
+        idempotency_key="idem-capacity-race",
+        quote_price=980.0,
+        quote_as_of=NOW - timedelta(seconds=10),
+        now=NOW,
+        available_cash=100_000,
+    )
+
+    decision = store.record_execution_decision(
+        grant=grant,
+        batch_request=batch,
+        order=order,
+        decision=accepted,
+        fill_price=980.0,
+        exposure_after={"gross_notional": 4_900.0, "net_notional": 4_900.0},
+    )
+
+    sql, params = cursor.executed[0]
+    assert "WITH locked_grant AS" in sql
+    assert "FOR UPDATE" in sql
+    assert "capacity_check AS" in sql
+    assert "WHERE EXISTS (SELECT 1 FROM capacity_check)" in sql
+    assert params["idempotency_key"] == "idem-capacity-race"
+    assert decision.status == "rejected"
+    assert decision.fill is None
+    assert decision.reasons == ("grant_capacity_exceeded",)
+    assert decision.audit_event["event_type"] == "paper_execution_rejected"
+    assert decision.audit_event["idempotency_key"] == "idem-capacity-race"
     assert len(cursor.executed) == 1
     assert connection.committed is True
 

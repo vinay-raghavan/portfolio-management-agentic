@@ -36,7 +36,9 @@ explicit safety policy.
   enqueues durable `PaperExecutionWorkItem` records and processes them through
   the standalone deterministic `PaperExecutionQueueProcessor`, giving the API
   and deployed `paper-execution-worker` the same fail-closed execution
-  boundary.
+  boundary. Accepted Postgres fills lock the active grant row and update
+  consumed capacity only after the idempotent ledger insert succeeds, so
+  duplicate or reserved-capacity races reject without consuming grant capacity.
 - Market-data persistence stores fixture/configured-provider market snapshots, provider context snapshots, and screener runs in the same JSON payload shape returned by the tools when `MARKET_DATA_DB_PATH` is configured.
 - Provider configuration profiles and import-refresh jobs persist sanitized validation and execution summaries when `PROVIDER_CONFIG_DB_PATH` is configured. Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can also import normalized records into the SQLite data store behind `MARKET_DATA_DB_PATH`. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval infrastructure is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade`, writes redacted baseline summaries, and produces deterministic triage reports for grade-result failures without printing secret values. The eval config combines an LLM response-quality rubric with deterministic forbidden-action and workflow-tool-trajectory code metrics. A manual GitHub Actions workflow can run the credentialed baseline and upload ignored eval artifacts.
