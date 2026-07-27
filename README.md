@@ -71,6 +71,11 @@ explicit safety policy.
   boundary. Accepted Postgres fills lock the active grant row and update
   consumed capacity only after the idempotent ledger insert succeeds, so
   duplicate or reserved-capacity races reject without consuming grant capacity.
+  `PAPER_EXECUTION_KILL_SWITCH=true` or
+  `PORTFOLIO_PAPER_EXECUTION_KILL_SWITCH=true` is an operator-controlled global
+  stop: API execution requests and queued worker processors reject every paper
+  order with `execution_kill_switch_active`, even if the request body says the
+  kill switch is false.
   The worker can process `PORTFOLIO_TENANT_IDS` in round-robin order so one
   busy tenant does not monopolize the bounded local worker loop, and Redis can
   persist the distributed scheduling cursor plus short-lived failure backoff.
@@ -273,6 +278,16 @@ uv run python scripts/process_paper_execution_queue.py \
 
 The health output is redacted, model-invisible, and does not claim or process
 paper execution queue items.
+
+Global paper execution stop:
+
+```bash
+PAPER_EXECUTION_KILL_SWITCH=true
+```
+
+Set this on both `agent-service` and `paper-execution-worker` to reject all
+paper-only execution attempts without live-broker side effects or paper-ledger
+fills. Compose wires the flag to both services and defaults it to `false`.
 
 Deployment topology:
 

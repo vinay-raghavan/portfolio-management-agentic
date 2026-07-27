@@ -79,6 +79,7 @@ class PaperExecutionQueueProcessor:
     store: PaperExecutionQueueStore
     worker_id: str
     now: Callable[[], datetime] | None = None
+    kill_switch_active: bool = False
 
     def process_once(
         self,
@@ -197,7 +198,9 @@ class PaperExecutionQueueProcessor:
                         grant.consumed_capacity,
                         "net_notional",
                     ),
-                    kill_switch_active=payload["kill_switch_active"],
+                    kill_switch_active=(
+                        payload["kill_switch_active"] or self.kill_switch_active
+                    ),
                     exposure_after=payload["exposure_after"],
                 )
             )

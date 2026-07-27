@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import scripts.process_paper_execution_queue as worker_cli
 from scripts.process_paper_execution_queue import (
     build_schedule_state,
     build_worker_ids,
+    env_flag_enabled,
     main,
     parse_tenant_ids,
 )
@@ -29,6 +31,20 @@ def test_worker_cli_builds_stable_tenant_worker_ids() -> None:
         ("tenant-a", "tenant-b"),
         worker_id="paper-worker",
     ) == ("paper-worker:tenant-a", "paper-worker:tenant-b")
+
+
+def test_worker_cli_reads_operator_kill_switch_env(monkeypatch) -> None:
+    assert env_flag_enabled(
+        "PAPER_EXECUTION_KILL_SWITCH",
+        "PORTFOLIO_PAPER_EXECUTION_KILL_SWITCH",
+    ) is False
+
+    monkeypatch.setenv("PORTFOLIO_PAPER_EXECUTION_KILL_SWITCH", "true")
+
+    assert env_flag_enabled(
+        "PAPER_EXECUTION_KILL_SWITCH",
+        "PORTFOLIO_PAPER_EXECUTION_KILL_SWITCH",
+    ) is True
 
 
 class _FakeRedisModule:
@@ -119,3 +135,63 @@ def test_worker_cli_health_snapshot_does_not_process_queue_or_expose_redis_url(
     assert payload["model_visible"] is False
     assert "redis-secret" not in str(payload)
     assert "redis://" not in str(payload)
+
+
+def test_worker_cli_passes_operator_kill_switch_to_fair_runner(
+    monkeypatch,
+    capsys,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeSummary:
+        idle = True
+
+        def to_dict(self):
+            return {
+                "schema_version": "paper-execution-worker-runner-summary/v1",
+                "processed": 0,
+                "failed": 1,
+                "idle": True,
+                "total_attempted": 1,
+            }
+
+    class _FakeRunner:
+        def run_until_idle(self, *, max_items: int):
+            captured["max_items"] = max_items
+            return _FakeSummary()
+
+    def fake_build_fair_worker(**kwargs):
+        captured.update(kwargs)
+        return _FakeRunner()
+
+    monkeypatch.setenv("PORTFOLIO_PAPER_EXECUTION_KILL_SWITCH", "true")
+    monkeypatch.setattr(worker_cli, "build_schedule_state", lambda **kwargs: None)
+    monkeypatch.setattr(
+        worker_cli,
+        "load_database_runtime_profile",
+        lambda env: SimpleNamespace(database_url="postgresql://db", backend="postgres"),
+    )
+    monkeypatch.setattr(
+        worker_cli,
+        "build_postgres_paper_execution_fair_worker",
+        fake_build_fair_worker,
+    )
+
+    exit_code = main(
+        [
+            "--tenant-id",
+            "tenant-a",
+            "--worker-id",
+            "paper-worker",
+            "--max-items",
+            "7",
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["failed"] == 1
+    assert captured["tenant_ids"] == ("tenant-a",)
+    assert captured["worker_id"] == "paper-worker"
+    assert captured["kill_switch_active"] is True
+    assert captured["max_items"] == 7
