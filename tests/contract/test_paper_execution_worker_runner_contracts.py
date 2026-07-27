@@ -12,6 +12,7 @@ from portfolio_domain import (
     PaperExecutionOrder,
     PaperExecutionPolicyCeiling,
     PaperExecutionFairQueueRunner,
+    PaperExecutionWorkerHealthSnapshot,
     PaperExecutionQueueProcessor,
     PaperExecutionQueueProcessorResult,
     PaperExecutionQueueRunner,
@@ -197,6 +198,16 @@ class _FakeRedisClient:
         self.values[key] = value.encode()
 
 
+class _LeakyScheduleState(_FakeScheduleState):
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": "paper-execution-leaky-schedule-state/v1",
+            "backend": "redis",
+            "redis_url": "redis://:redis-secret@redis:6379/0",
+            "nested": {"access_token": "should-not-leak"},
+        }
+
+
 def _policy() -> PaperExecutionPolicyCeiling:
     return PaperExecutionPolicyCeiling(
         policy_id=POLICY_ID,
@@ -371,9 +382,15 @@ def test_fair_worker_runner_processes_tenants_round_robin() -> None:
         "idle": False,
         "total_attempted": 3,
         "worker_ids": ["paper-worker:tenant-a", "paper-worker:tenant-b"],
+        "skipped_backoff_worker_ids": [],
+        "schedule_state": {
+            "schema_version": "paper-execution-schedule-state/v1",
+            "backend": "none",
+        },
         "per_worker": [
             {
                 "worker_id": "paper-worker:tenant-a",
+                "backed_off": False,
                 "processed": 2,
                 "failed": 0,
                 "idle": False,
@@ -381,6 +398,7 @@ def test_fair_worker_runner_processes_tenants_round_robin() -> None:
             },
             {
                 "worker_id": "paper-worker:tenant-b",
+                "backed_off": False,
                 "processed": 1,
                 "failed": 0,
                 "idle": False,
@@ -456,6 +474,54 @@ def test_fair_worker_runner_uses_schedule_state_for_order_and_backoff() -> None:
     assert summary.total_attempted == 1
     assert summary.idle is True
     assert schedule_state.marked == [("paper-worker:tenant-b", "processed")]
+    assert summary.to_dict()["skipped_backoff_worker_ids"] == [
+        "paper-worker:tenant-a"
+    ]
+    assert summary.to_dict()["per_worker"][0]["backed_off"] is True
+    assert "approve" not in str(summary.to_dict()).lower()
+    assert "access_token" not in str(summary.to_dict()).lower()
+
+
+def test_fair_worker_runner_exposes_read_only_health_snapshot() -> None:
+    schedule_state = _FakeScheduleState(backed_off={"paper-worker:tenant-b"})
+    runner = PaperExecutionFairQueueRunner(
+        processors=(
+            _ScriptedProcessor(
+                worker_id="paper-worker:tenant-a",
+                statuses=[],
+                call_order=[],
+            ),
+            _ScriptedProcessor(
+                worker_id="paper-worker:tenant-b",
+                statuses=[],
+                call_order=[],
+            ),
+        ),
+        schedule_state=schedule_state,
+        now=lambda: NOW,
+    )
+
+    health = runner.describe_health()
+
+    assert isinstance(health, PaperExecutionWorkerHealthSnapshot)
+    assert health.to_dict() == {
+        "schema_version": "paper-execution-worker-health/v1",
+        "observed_at": NOW.isoformat(),
+        "worker_ids": ["paper-worker:tenant-a", "paper-worker:tenant-b"],
+        "redaction_status": "redacted",
+        "model_visible": False,
+        "schedule_state": {
+            "schema_version": "paper-execution-schedule-state/v1",
+            "backend": "custom",
+        },
+        "per_worker": [
+            {"worker_id": "paper-worker:tenant-a", "backed_off": False},
+            {"worker_id": "paper-worker:tenant-b", "backed_off": True},
+        ],
+    }
+    assert schedule_state.marked == []
+    assert "token" not in str(health.to_dict()).lower()
+    assert "fyers" not in str(health.to_dict()).lower()
 
 
 def test_redis_schedule_state_rotates_workers_and_records_failure_backoff() -> None:
@@ -490,3 +556,52 @@ def test_redis_schedule_state_rotates_workers_and_records_failure_backoff() -> N
     assert state.worker_is_backed_off("paper-worker:tenant-b", now=NOW) is True
     assert "secret" not in str(client.values).lower()
     assert "fyers" not in str(client.values).lower()
+
+
+def test_redis_schedule_state_health_snapshot_redacts_urls_and_reports_backoff() -> None:
+    client = _FakeRedisClient()
+    state = PaperExecutionRedisScheduleState(
+        redis_client=client,
+        key_prefix="paper:worker",
+        backoff_seconds=45,
+        now=lambda: NOW,
+    )
+    state.mark_worker_result(
+        worker_id="paper-worker:tenant-b",
+        status="failed",
+        now=NOW,
+    )
+
+    health = PaperExecutionWorkerHealthSnapshot.from_worker_ids(
+        worker_ids=("paper-worker:tenant-a", "paper-worker:tenant-b"),
+        schedule_state=state,
+        observed_at=NOW,
+    ).to_dict()
+
+    assert health["schedule_state"] == {
+        "schema_version": "paper-execution-redis-schedule-state/v1",
+        "key_prefix": "paper:worker",
+        "backoff_seconds": 45,
+        "backend": "redis",
+    }
+    assert health["per_worker"] == [
+        {"worker_id": "paper-worker:tenant-a", "backed_off": False},
+        {"worker_id": "paper-worker:tenant-b", "backed_off": True},
+    ]
+    assert "redis://" not in str(health)
+    assert "secret" not in str(health).lower()
+    assert "access_token" not in str(health).lower()
+
+
+def test_worker_health_snapshot_redacts_custom_schedule_state_payloads() -> None:
+    health = PaperExecutionWorkerHealthSnapshot.from_worker_ids(
+        worker_ids=("paper-worker:tenant-a",),
+        schedule_state=_LeakyScheduleState(),
+        observed_at=NOW,
+    ).to_dict()
+
+    assert health["schedule_state"]["redis_url"] == "[REDACTED]"
+    assert health["schedule_state"]["nested"]["access_token"] == "[REDACTED]"
+    assert "redis://" not in str(health)
+    assert "redis-secret" not in str(health)
+    assert "should-not-leak" not in str(health)

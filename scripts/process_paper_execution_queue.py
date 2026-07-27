@@ -16,6 +16,7 @@ if str(DOMAIN_PATH) not in sys.path:
 
 from portfolio_domain import (  # noqa: E402
     PaperExecutionRedisScheduleState,
+    PaperExecutionWorkerHealthSnapshot,
     build_postgres_paper_execution_fair_worker,
     load_database_runtime_profile,
 )
@@ -70,6 +71,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Continue polling after idle cycles. Default exits after one idle cycle.",
     )
     parser.add_argument(
+        "--health",
+        action="store_true",
+        help=(
+            "Print a read-only worker health/backoff snapshot and exit without "
+            "claiming or processing queue items."
+        ),
+    )
+    parser.add_argument(
         "--redis-url",
         default=os.environ.get("REDIS_URL", ""),
         help="Redis URL for distributed worker schedule/backoff state.",
@@ -111,12 +120,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    profile = load_database_runtime_profile(os.environ)
     schedule_state = build_schedule_state(
         redis_url=args.redis_url,
         worker_id=args.worker_id,
         backoff_seconds=args.schedule_backoff_seconds,
     )
+    if args.health:
+        health = PaperExecutionWorkerHealthSnapshot.from_worker_ids(
+            worker_ids=build_worker_ids(tenant_ids, worker_id=args.worker_id),
+            schedule_state=schedule_state,
+        )
+        print(json.dumps(health.to_dict(), sort_keys=True))
+        return 0
+
+    profile = load_database_runtime_profile(os.environ)
     runner = build_postgres_paper_execution_fair_worker(
         tenant_ids=tenant_ids,
         database_url=profile.database_url,
@@ -151,6 +168,18 @@ def parse_tenant_ids(
         clean.append(tenant_id)
         seen.add(tenant_id)
     return tuple(clean)
+
+
+def build_worker_ids(
+    tenant_ids: tuple[str, ...],
+    *,
+    worker_id: str,
+) -> tuple[str, ...]:
+    clean_worker_id = worker_id.strip() or "paper-execution-worker"
+    return tuple(
+        f"{clean_worker_id}:{tenant_id}"
+        for tenant_id in parse_tenant_ids(",".join(tenant_ids))
+    )
 
 
 def build_schedule_state(

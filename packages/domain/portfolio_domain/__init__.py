@@ -137,6 +137,7 @@ from .paper_execution_worker_runner import (
     PaperExecutionQueueRunner,
     PaperExecutionQueueRunnerSummary,
     PaperExecutionRedisScheduleState,
+    PaperExecutionWorkerHealthSnapshot as PaperExecutionWorkerHealthSnapshot,
     PaperExecutionWorkerScheduleState,
     build_postgres_paper_execution_fair_worker,
     build_postgres_paper_execution_worker,
