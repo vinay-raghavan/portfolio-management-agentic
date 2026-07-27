@@ -236,6 +236,9 @@ class _FakePostgresPaperStore:
         self.batches = {}
         self.grants = {}
         self.recorded_decisions = []
+        self.enqueued_work_items = []
+        self.claimed_work_items = []
+        self.completed_work_items = []
         self.idempotency_checks = []
         self.conflict_on_record = False
 
@@ -289,6 +292,70 @@ class _FakePostgresPaperStore:
             item["decision"]["audit_event"]["idempotency_key"] == idempotency_key
             for item in self.recorded_decisions
         )
+
+    def enqueue_execution_work_item(self, work_item):
+        self.enqueued_work_items.append(work_item)
+        return work_item
+
+    def claim_next_execution_work_item(self, *, worker_id: str, now=None):
+        queued = [
+            item for item in self.enqueued_work_items if item.status == "queued"
+        ]
+        if not queued:
+            return None
+        item = queued[0]
+        claimed = replace(
+            item,
+            status="claimed",
+            claimed_by=worker_id,
+            claimed_at=now or NOW,
+            attempt_count=item.attempt_count + 1,
+            updated_at=now or NOW,
+        )
+        self.enqueued_work_items[0] = claimed
+        self.claimed_work_items.append(claimed)
+        return claimed
+
+    def claim_execution_work_item(self, *, work_item_id: str, worker_id: str, now=None):
+        queued = [
+            item
+            for item in self.enqueued_work_items
+            if item.status == "queued" and item.work_item_id == work_item_id
+        ]
+        if not queued:
+            return None
+        item = queued[0]
+        claimed = replace(
+            item,
+            status="claimed",
+            claimed_by=worker_id,
+            claimed_at=now or NOW,
+            attempt_count=item.attempt_count + 1,
+            updated_at=now or NOW,
+        )
+        self.enqueued_work_items = [
+            claimed if existing.work_item_id == work_item_id else existing
+            for existing in self.enqueued_work_items
+        ]
+        self.claimed_work_items.append(claimed)
+        return claimed
+
+    def complete_execution_work_item(self, *, work_item_id: str, decision, now=None):
+        claimed = [
+            item for item in self.claimed_work_items if item.work_item_id == work_item_id
+        ]
+        if not claimed:
+            return None
+        item = claimed[-1]
+        completed = replace(
+            item,
+            status="completed" if decision.status == "accepted" else "failed",
+            decision=decision.to_dict(),
+            completed_at=now or NOW,
+            updated_at=now or NOW,
+        )
+        self.completed_work_items.append(completed)
+        return completed
 
     def record_execution_decision(
         self,
@@ -381,6 +448,13 @@ def test_paper_api_uses_postgres_store_when_storage_backend_is_postgres(
     assert fake_store.policies[policy_id].created_by_actor_id == "admin-1"
     assert fake_store.batches[batch_id].requested_by_actor_id == "analyst-1"
     assert fake_store.grants[grant_id].approved_by_actor_id == "approver-1"
+    assert len(fake_store.enqueued_work_items) == 1
+    assert fake_store.enqueued_work_items[0].order_id == f"{batch_id}:0"
+    assert fake_store.enqueued_work_items[0].requested_by_actor_id == "analyst-1"
+    assert fake_store.enqueued_work_items[0].payload["quote_price"] == 980
+    assert fake_store.claimed_work_items[0].claimed_by == "paper-execution-api"
+    assert fake_store.completed_work_items[0].status == "completed"
+    assert fake_store.completed_work_items[0].decision["status"] == "accepted"
     assert fake_store.recorded_decisions[0]["decision"]["status"] == "accepted"
     combined_payload = str(
         [
@@ -524,6 +598,12 @@ def test_paper_api_returns_rejection_when_postgres_ledger_insert_conflicts(
     assert execute_response.json()["status"] == "rejected"
     assert execute_response.json()["decision"]["status"] == "rejected"
     assert "duplicate_idempotency_key" in execute_response.json()["decision"]["reasons"]
+    assert fake_store.enqueued_work_items[0].idempotency_key == "idem-api-conflict"
+    assert fake_store.claimed_work_items[0].idempotency_key == "idem-api-conflict"
+    assert fake_store.completed_work_items[0].status == "failed"
+    assert "duplicate_idempotency_key" in fake_store.completed_work_items[0].decision[
+        "reasons"
+    ]
     assert fake_store.recorded_decisions == []
     assert "db-secret" not in str(execute_response.json()).lower()
 
@@ -592,6 +672,13 @@ def test_paper_api_uses_persisted_grant_capacity_in_postgres_mode(
     assert execute_response.status_code == 409
     assert execute_response.json()["decision"]["status"] == "rejected"
     assert "gross_notional_limit_exceeded" in execute_response.json()["decision"][
+        "reasons"
+    ]
+    assert fake_store.enqueued_work_items[0].payload["current_gross_notional"] == 39_000.0
+    assert fake_store.enqueued_work_items[0].payload["current_net_notional"] == 39_000.0
+    assert fake_store.claimed_work_items[0].idempotency_key == "idem-api-persisted-capacity"
+    assert fake_store.completed_work_items[0].status == "failed"
+    assert "gross_notional_limit_exceeded" in fake_store.completed_work_items[0].decision[
         "reasons"
     ]
     assert fake_store.recorded_decisions == []

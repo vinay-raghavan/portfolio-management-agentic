@@ -252,6 +252,42 @@ def test_store_claims_next_work_item_with_skip_locked_and_tenant_scope() -> None
     assert connection.committed is True
 
 
+def test_store_claims_specific_work_item_with_skip_locked_and_tenant_scope() -> None:
+    cursor = _FakeCursor(
+        rows=[
+            _work_item_row(
+                status="claimed",
+                attempt_count=1,
+                claimed_by="paper-worker-1",
+                claimed_at=NOW,
+                updated_at=NOW,
+            )
+        ],
+        columns=_work_item_columns(),
+    )
+    connection = _FakeConnection(cursor)
+    store = _store(cursor, connection)
+
+    claimed = store.claim_execution_work_item(
+        work_item_id=WORK_ITEM_ID,
+        worker_id="paper-worker-1",
+        now=NOW,
+    )
+
+    assert claimed is not None
+    sql, params = cursor.executed[0]
+    assert "FOR UPDATE SKIP LOCKED" in sql
+    assert "id = %(work_item_id)s" in sql
+    assert "status = 'queued'" in sql
+    assert "attempt_count = paper_execution_work_items.attempt_count + 1" in sql
+    assert params["tenant_id"] == TENANT_ID
+    assert params["work_item_id"] == WORK_ITEM_ID
+    assert params["worker_id"] == "paper-worker-1"
+    assert claimed.status == "claimed"
+    assert claimed.work_item_id == WORK_ITEM_ID
+    assert connection.committed is True
+
+
 def test_store_completes_work_item_with_redacted_decision_payload() -> None:
     decision = _decision()
     cursor = _FakeCursor(
