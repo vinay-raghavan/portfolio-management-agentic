@@ -3132,7 +3132,13 @@ body:has(.app-shell[data-theme="light"]) {
 }
 
 .candidate-table {
+  gap: 8px;
   padding: 8px;
+  overflow: visible;
+}
+
+.table-row {
+  padding: 10px 14px;
 }
 
 .app-shell[data-theme="light"] .workflow-list,
@@ -3253,7 +3259,49 @@ body:has(.app-shell[data-theme="light"]) {
 .preflight-grid div,
 .preflight-policy,
 .preflight-blockers {
+  border: 1px solid color-mix(in srgb, var(--base-border-weak-default) 72%, transparent);
   border-radius: var(--widget-inset-radius);
+}
+
+.provider-row,
+.validation-row,
+.readiness-row,
+.profile-row,
+.source-row,
+.template-row,
+.onboarding-row,
+.preview-row,
+.reconciliation-row,
+.factor-card,
+.detail-row,
+.approval-card,
+.paper-order-card {
+  padding: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--base-border-weak-default) 72%, transparent);
+}
+
+.provider-row:first-child,
+.validation-row:first-child,
+.readiness-row:first-child,
+.profile-row:first-child,
+.source-row:first-child,
+.template-row:first-child,
+.onboarding-row:first-child,
+.preview-row:first-child,
+.reconciliation-row:first-child,
+.factor-card:first-child,
+.detail-row:first-child,
+.approval-card:first-child,
+.paper-order-card:first-child,
+.table-row:first-child {
+  border-top: 1px solid color-mix(in srgb, var(--base-border-weak-default) 72%, transparent);
+}
+
+.approval-card .approval-row,
+.paper-order-card .detail-row {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 .template-row pre,
