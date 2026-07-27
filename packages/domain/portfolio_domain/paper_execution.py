@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, time, timezone
+from collections.abc import Callable
 from typing import Any, Iterable, Mapping
 
 
@@ -253,6 +254,60 @@ class PaperExecutionDecision:
             "fill": dict(self.fill) if self.fill is not None else None,
             "audit_event": dict(self.audit_event),
         }
+
+
+@dataclass(frozen=True)
+class PaperExecutionWorkerRequest:
+    policy: PaperExecutionPolicyCeiling
+    grant: PaperExecutionGrant
+    batch_request: PaperBatchRequest
+    order: PaperExecutionOrder
+    idempotency_key: str
+    quote_price: float
+    quote_as_of: datetime
+    now: datetime
+    used_idempotency_keys: Iterable[str] = ()
+    available_cash: float | None = None
+    current_gross_notional: float = 0.0
+    current_net_notional: float = 0.0
+    kill_switch_active: bool = False
+    exposure_after: Mapping[str, Any] | None = None
+
+
+PaperExecutionRecorder = Callable[
+    [PaperExecutionDecision, PaperExecutionWorkerRequest],
+    PaperExecutionDecision,
+]
+
+
+@dataclass(frozen=True)
+class DeterministicPaperExecutionWorker:
+    """Evaluate and optionally record one paper-only execution decision."""
+
+    record_decision: PaperExecutionRecorder | None = None
+
+    def execute(
+        self,
+        request: PaperExecutionWorkerRequest,
+    ) -> PaperExecutionDecision:
+        decision = evaluate_paper_execution_order(
+            policy=request.policy,
+            grant=request.grant,
+            batch_request=request.batch_request,
+            order=request.order,
+            idempotency_key=request.idempotency_key,
+            quote_price=request.quote_price,
+            quote_as_of=request.quote_as_of,
+            now=request.now,
+            used_idempotency_keys=request.used_idempotency_keys,
+            available_cash=request.available_cash,
+            current_gross_notional=request.current_gross_notional,
+            current_net_notional=request.current_net_notional,
+            kill_switch_active=request.kill_switch_active,
+        )
+        if decision.status != "accepted" or self.record_decision is None:
+            return decision
+        return self.record_decision(decision, request)
 
 
 def issue_paper_execution_grant(

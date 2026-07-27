@@ -114,11 +114,13 @@ from .paper_ledger import (
     simulate_fixture_approved_paper_fill,
 )
 from .paper_execution import (
+    DeterministicPaperExecutionWorker,
     PaperBatchRequest,
     PaperExecutionDecision,
     PaperExecutionGrant,
     PaperExecutionOrder,
     PaperExecutionPolicyCeiling,
+    PaperExecutionWorkerRequest,
     evaluate_paper_execution_order,
     issue_paper_execution_grant,
 )
@@ -233,10 +235,12 @@ __all__ = [
     "OHLCVBar",
     "PaperAuditExport",
     "PaperBatchRequest",
+    "DeterministicPaperExecutionWorker",
     "PaperExecutionDecision",
     "PaperExecutionGrant",
     "PaperExecutionOrder",
     "PaperExecutionPolicyCeiling",
+    "PaperExecutionWorkerRequest",
     "PaperFill",
     "PaperOrder",
     "PaperPortfolioAccounting",
