@@ -3,7 +3,9 @@ name = "portfolio-management-agentic"
 version = "0.1.0"
 description = "Agentic portfolio and paper-trading capstone monorepo"
 requires-python = ">=3.11,<3.14"
-dependencies = []
+dependencies = [
+    "fyers-apiv3==3.1.14",
+]
 
 [dependency-groups]
 dev = [
