@@ -45,6 +45,11 @@ Current coverage:
   duplicate idempotency keys, stale quotes, kill-switch activation, and
   quantity/notional violations reject without mutation, and accepted fills are
   paper-only with no FYERS/live/credential fields.
+- Postgres paper-execution store contracts verify Alembic adds explicit
+  `permitted_symbols`, protected policy/batch/grant/ledger writes are
+  tenant-scoped and committed, grant approval identity is not requester-spoofed,
+  idempotent ledger rows use `ON CONFLICT ... DO NOTHING`, and FYERS or
+  credential-looking payloads fail closed before storage.
 - Capstone evidence manifest contracts build a repo-safe submission evidence summary without local paths, broker/provider secrets, real account data, or raw provider payloads.
 - Model-backed eval checks build the official `agents-cli eval generate` and `agents-cli eval grade` commands, skip without credentials, write a redacted baseline summary, produce deterministic failure triage, expose a manual credentialed baseline workflow, and never print secret values.
 - Eval dataset contracts verify the selected metrics include the LLM response-quality rubric plus deterministic forbidden-action and workflow-tool-trajectory code metrics, and execute representative trajectory-policy examples directly from `eval_config.yaml`.

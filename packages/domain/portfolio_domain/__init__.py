@@ -122,6 +122,7 @@ from .paper_execution import (
     evaluate_paper_execution_order,
     issue_paper_execution_grant,
 )
+from .paper_execution_store import PostgresPaperExecutionStore
 from .provider_profiles import (
     PROVIDER_CONFIG_DB_ENV,
     ProviderProfileStore,
@@ -248,6 +249,7 @@ __all__ = [
     "PatternStore",
     "PostgresResearchSearchPlan",
     "PostgresResearchStore",
+    "PostgresPaperExecutionStore",
     "PostgresSessionMemoryStore",
     "PortfolioSummary",
     "PreMarketBriefing",

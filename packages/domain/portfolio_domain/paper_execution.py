@@ -262,6 +262,7 @@ def issue_paper_execution_grant(
     approved_by_actor_id: str,
     expires_at: datetime,
     now: datetime,
+    grant_id: str | None = None,
 ) -> PaperExecutionGrant:
     if policy.tenant_id != batch_request.tenant_id:
         raise ValueError("Policy and batch request tenant mismatch")
@@ -287,7 +288,7 @@ def issue_paper_execution_grant(
     _validate_batch_within_policy(policy, batch_request)
     scope = _grant_scope(policy, batch_request)
     return PaperExecutionGrant(
-        grant_id=f"grant-{batch_request.batch_request_id}-{policy.policy_id}",
+        grant_id=grant_id or f"grant-{batch_request.batch_request_id}-{policy.policy_id}",
         tenant_id=batch_request.tenant_id,
         batch_request_id=batch_request.batch_request_id,
         policy_ceiling_id=policy.policy_id,

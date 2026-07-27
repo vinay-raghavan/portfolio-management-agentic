@@ -43,6 +43,11 @@ This slice establishes the safe contract between research, simulation, and the f
   idempotency keys, stale quotes, inactive policies, kill-switch activation,
   tenant/scope mismatches, insufficient paper cash, and quantity/notional
   ceiling violations before returning any fill payload.
+- `PostgresPaperExecutionStore` persists protected policy ceilings, batch
+  requests, execution grants, and idempotent ledger decision rows into the
+  tenant-scoped Postgres tables created by Alembic. It stores JSON-safe
+  summaries only and rejects FYERS, broker trading-token, and credential-looking
+  payload contamination before writing.
 - Simulated fills update only the paper ledger and paper positions.
 - Approval cannot authorize live trading.
 - Broker trading-token access and live order placement remain forbidden.
@@ -55,6 +60,11 @@ This slice establishes the safe contract between research, simulation, and the f
 The default Python import path remains fixture-backed and in memory when no
 database path is configured. Local and container runtimes can enable durable
 strategy, backtest, and paper-ledger state with `PAPER_LEDGER_DB_PATH`.
+
+Production-like runtimes use the Postgres platform schema for bounded paper
+execution state. Alembic migration `20260727_0003` adds explicit
+`permitted_symbols` to `paper_execution_policy_ceilings` so policy ceilings can
+bound both symbols and future universe scopes without overloading fields.
 
 Docker or Podman Compose sets `PAPER_LEDGER_DB_PATH=/data/paper-ledger.db` for
 both the agent service and MCP server, backed by the `paper-ledger-data` volume.
