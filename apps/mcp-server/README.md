@@ -23,6 +23,13 @@ start/callback/status/disconnect, provider app administration, and any broker
 mutation surface stay outside MCP/model-visible bundles. Unknown FYERS symbols
 return unavailable/error context; they are not converted to empty holdings,
 zero funds, or another provider's data.
+Use `search_curated_research` to retrieve read-only curated research hits from
+the repository `ResearchStore` contract. The current MCP payload is
+fixture-backed lexical retrieval over versioned public-safe pattern documents;
+runtime Postgres retrieval is constrained to tenant-scoped enabled research
+sources and available documents through full-text search. The model cannot
+submit arbitrary URLs, administer source allowlists, or ingest user-supplied
+pages through MCP.
 Use `validate_data_provider_imports` to validate configured local JSON files before running provider-backed workflows. It reports validation status and sample identifiers without exposing local paths or credential values.
 Use `list_provider_source_templates` to retrieve synthetic, adapter-valid JSON
 templates and accepted wrapper names for each configured source kind without

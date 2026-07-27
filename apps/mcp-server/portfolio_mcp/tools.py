@@ -47,6 +47,7 @@ from portfolio_domain import (
     record_screener_run,
     run_fixture_screener,
     run_demo_momentum_screener,
+    search_research_documents,
     search_pattern_cards,
     simulate_fixture_approved_paper_fill,
     refresh_provider_import_profile_metadata,
@@ -85,6 +86,7 @@ EXPOSED_TOOL_NAMES = {
     "list_screener_runs",
     "explain_candidate_evidence",
     "search_pattern_library",
+    "search_curated_research",
     "get_pattern_playbook",
     "cite_strategy_evidence",
     "explain_factor_stack",
@@ -945,6 +947,34 @@ def search_pattern_library(
             pattern.to_dict()
             for pattern in search_pattern_cards(query, tag_values, limit)
         ],
+    }
+
+
+def search_curated_research(query: str, limit: int = 5) -> dict[str, Any]:
+    """Read-only curated research search over allowlisted fixture-backed documents."""
+    tool_name = "search_curated_research"
+    decision = authorize_tool_call(tool_name)
+    if not decision.allowed:
+        return _blocked(tool_name, {"query": query, "limit": limit})
+    bounded_limit = max(1, min(int(limit), 20))
+    try:
+        hits = search_research_documents(query, limit=bounded_limit)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "policy": decision.to_dict(),
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "policy": decision.to_dict(),
+        "retrieval": {
+            "mode": "file_backed_fixture",
+            "backend": "lexical",
+            "vector_retrieval": "disabled",
+            "source_policy": "admin_allowlist_only",
+        },
+        "hits": [hit.to_dict() for hit in hits],
     }
 
 

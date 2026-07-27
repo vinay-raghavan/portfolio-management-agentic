@@ -21,7 +21,7 @@ from .models import (
 from .provider_profiles import list_provider_import_reconciliation
 from .provider_profiles import list_provider_refresh_readiness
 from .providers import DataProviderRegistry, get_data_provider_registry
-from .research_store import FileBackedPatternStore
+from .research_store import FileBackedPatternStore, RetrievalHit, normalize_research_query
 
 OFFLINE_SOURCE = "offline_fixture"
 
@@ -216,6 +216,11 @@ PATTERN_CARDS = [
 ]
 
 PATTERN_STORE = FileBackedPatternStore(PATTERN_CARDS)
+RESEARCH_STORE = PATTERN_STORE.as_research_store()
+
+
+def search_research_documents(query: str, limit: int = 5) -> list[RetrievalHit]:
+    return RESEARCH_STORE.search(normalize_research_query(query), limit=limit)
 
 _COMPONENTS: dict[str, list[ScoreComponent]] = {
     "TATAMOTORS": [

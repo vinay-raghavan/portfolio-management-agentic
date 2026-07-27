@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from hashlib import sha256
+import re
 from typing import Any, Iterable, Protocol
 
 from .models import PatternCard
@@ -58,6 +59,71 @@ class RetrievalHit:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class PostgresResearchSearchPlan:
+    sql: str
+    params: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+BUILTIN_RESEARCH_SOURCES: tuple[ResearchSource, ...] = (
+    ResearchSource(
+        source_id="sebi-publications",
+        name="SEBI Publications",
+        source_type="regulator",
+        allowlisted=True,
+        status="enabled",
+        refresh_policy="daily",
+        license="public_reference",
+        notes=[
+            "Admin-managed public regulator source; URL configuration stays outside MCP.",
+            "Used for policy, circular, and market-structure research provenance.",
+        ],
+    ),
+    ResearchSource(
+        source_id="nse-announcements",
+        name="NSE Announcements",
+        source_type="exchange",
+        allowlisted=True,
+        status="enabled",
+        refresh_policy="daily_plus_exchange_incremental",
+        license="public_reference",
+        notes=[
+            "Admin-managed public exchange announcement source.",
+            "Incremental refresh is scheduled by source identifier and normalized query.",
+        ],
+    ),
+    ResearchSource(
+        source_id="bse-announcements",
+        name="BSE Announcements",
+        source_type="exchange",
+        allowlisted=True,
+        status="enabled",
+        refresh_policy="daily_plus_exchange_incremental",
+        license="public_reference",
+        notes=[
+            "Admin-managed public exchange announcement source.",
+            "The agent can request refresh by registered source identifier only.",
+        ],
+    ),
+    ResearchSource(
+        source_id="issuer-investor-relations",
+        name="Registered Issuer Investor Relations",
+        source_type="issuer_ir",
+        allowlisted=True,
+        status="enabled",
+        refresh_policy="daily",
+        license="issuer_public_reference",
+        notes=[
+            "Admin-managed issuer domains only; arbitrary user-supplied pages are excluded.",
+            "Issuer domains must be registered before documents enter the research store.",
+        ],
+    ),
+)
 
 
 class ResearchStore(Protocol):
@@ -191,6 +257,70 @@ class FileBackedPatternStore:
 
     def as_research_store(self) -> FileBackedResearchStore:
         return FileBackedResearchStore.from_pattern_cards(self._cards.values())
+
+
+def normalize_research_query(query: str) -> str:
+    normalized = " ".join(query.strip().split())
+    lowered = normalized.lower()
+    if (
+        "://" in lowered
+        or lowered.startswith("www.")
+        or re.search(r"\b[a-z0-9.-]+\.(com|in|org|net|io|co)\b", lowered)
+    ):
+        raise ValueError(
+            "Research query must target a registered research source, symbol, or normalized topic; arbitrary URLs are not accepted."
+        )
+    return normalized
+
+
+def build_postgres_research_search_query(
+    *,
+    tenant_id: str,
+    query: str,
+    normalized_symbol: str | None = None,
+    limit: int = 5,
+) -> PostgresResearchSearchPlan:
+    normalized_query = normalize_research_query(query)
+    bounded_limit = max(1, min(int(limit), 20))
+    return PostgresResearchSearchPlan(
+        sql="""
+        SELECT
+            d.id,
+            d.source_id,
+            d.document_key,
+            d.title,
+            d.normalized_symbol,
+            d.published_at,
+            d.fetched_at,
+            d.checksum,
+            d.source_status,
+            d.content,
+            d.provenance,
+            d.license_metadata,
+            ts_rank_cd(d.search_vector, plainto_tsquery('english', %(query)s)) AS score
+        FROM research_documents d
+        JOIN research_sources s
+            ON s.id = d.source_id
+           AND s.tenant_id = d.tenant_id
+        WHERE d.tenant_id = %(tenant_id)s
+          AND s.status = 'enabled'
+          AND d.source_status = 'available'
+          AND d.search_vector @@ plainto_tsquery('english', %(query)s)
+          AND (
+              %(normalized_symbol)s IS NULL
+              OR d.normalized_symbol IS NULL
+              OR d.normalized_symbol = %(normalized_symbol)s
+          )
+        ORDER BY score DESC, d.published_at DESC NULLS LAST, d.fetched_at DESC, d.id
+        LIMIT %(limit)s
+        """.strip(),
+        params={
+            "tenant_id": tenant_id,
+            "query": normalized_query,
+            "normalized_symbol": normalized_symbol,
+            "limit": bounded_limit,
+        },
+    )
 
 
 def pattern_card_to_research_document(

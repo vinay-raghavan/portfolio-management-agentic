@@ -50,6 +50,7 @@ from .tools import (
     list_universes,
     run_screener,
     run_momentum_screener,
+    search_curated_research,
     search_pattern_library,
     simulate_approved_paper_fill,
     refresh_provider_import_profile,
@@ -114,6 +115,7 @@ def build_server():
     server.tool()(list_screener_runs)
     server.tool()(explain_candidate_evidence)
     server.tool()(search_pattern_library)
+    server.tool()(search_curated_research)
     server.tool()(get_pattern_playbook)
     server.tool()(cite_strategy_evidence)
     server.tool()(explain_factor_stack)

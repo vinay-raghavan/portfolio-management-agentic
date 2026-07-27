@@ -56,6 +56,7 @@ ACTION_TIERS: dict[str, ActionTier] = {
     "list_screener_runs": ActionTier.READ_ONLY,
     "explain_candidate_evidence": ActionTier.READ_ONLY,
     "search_pattern_library": ActionTier.READ_ONLY,
+    "search_curated_research": ActionTier.READ_ONLY,
     "get_pattern_playbook": ActionTier.READ_ONLY,
     "cite_strategy_evidence": ActionTier.READ_ONLY,
     "explain_factor_stack": ActionTier.READ_ONLY,

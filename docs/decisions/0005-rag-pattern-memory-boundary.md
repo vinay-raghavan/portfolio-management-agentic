@@ -38,6 +38,13 @@ full-text search over versioned, provenance-aware documents. Vector retrieval
 stays deferred until a labeled retrieval benchmark proves a material quality
 gain without weakening citation precision, recall, or latency.
 
+The current runtime contract exposes `search_curated_research` as a read-only
+MCP tool backed by the same fixture document contract as pattern cards. The
+Postgres runtime path is tenant-scoped full-text search over `research_sources`
+and `research_documents`; a migration keeps each document search field current
+on insert or update. Source administration, arbitrary URL ingestion, and
+research-source refresh configuration stay outside MCP/model-visible tools.
+
 ## Consequences
 
 - Algo and paper-trading flows remain deterministic and auditable.
@@ -53,5 +60,7 @@ gain without weakening citation precision, recall, or latency.
 - Contract tests assert citation payloads include source identifiers and version metadata.
 - Store contract tests assert pattern cards seed file-backed stores through the
   same document/provenance contract used by future runtime retrieval.
+- Postgres contract tests assert tenant-scoped full-text search, enabled-source
+  filtering, available-document filtering, and no vector retrieval path.
 - Eval cases check that pattern-grounded answers cite retrieved context and still refuse live trading.
 - Security tests prove retrieval tools cannot expose secrets, local-only notes, or broker credentials.
