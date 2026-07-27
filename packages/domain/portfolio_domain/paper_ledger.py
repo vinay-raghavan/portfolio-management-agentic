@@ -4,11 +4,18 @@ import json
 import os
 import re
 import sqlite3
+from collections.abc import Callable
+from collections.abc import Mapping
+from collections.abc import Sequence
 from dataclasses import replace
+from datetime import UTC
 from datetime import date
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .database_runtime import DatabaseBackend
+from .database_runtime import load_database_runtime_profile
 from .models import (
     ApprovalRequest,
     AuditEvent,
@@ -1411,12 +1418,868 @@ class SQLitePaperLedgerStore:
         )
 
 
+class PostgresPaperLedgerStore:
+    """Tenant-scoped Postgres paper-only strategy, backtest, and ledger repository."""
+
+    def __init__(
+        self,
+        *,
+        tenant_id: str,
+        connection_factory: Callable[[], Any],
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        if not tenant_id.strip():
+            raise ValueError("tenant_id is required for Postgres paper-ledger storage")
+        self._tenant_id = tenant_id.strip()
+        self._connection_factory = connection_factory
+        self._now = now or (lambda: datetime.now(UTC))
+
+    def storage_status(self) -> dict[str, Any]:
+        return {
+            "status": "persisted",
+            "backend": "postgres",
+            "configured": True,
+            "tenant_scoped": True,
+        }
+
+    def create_strategy_draft(self, symbol: str, rationale: str) -> StrategyDraft:
+        draft = _build_strategy_draft(symbol, rationale)
+        params = {
+            "tenant_id": self._tenant_id,
+            "strategy_id": draft.strategy_id,
+            "symbol": draft.symbol,
+            "status": draft.status,
+            "payload": draft.to_dict(),
+            "created_at": draft.created_at,
+            "recorded_at": _aware_utc(self._now()),
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    INSERT INTO paper_strategy_drafts (
+                        tenant_id,
+                        strategy_id,
+                        symbol,
+                        status,
+                        payload,
+                        created_at,
+                        recorded_at
+                    ) VALUES (
+                        %(tenant_id)s,
+                        %(strategy_id)s,
+                        %(symbol)s,
+                        %(status)s,
+                        %(payload)s,
+                        %(created_at)s,
+                        %(recorded_at)s
+                    )
+                    ON CONFLICT (tenant_id, strategy_id)
+                    DO NOTHING
+                    """.strip(),
+                    params,
+                )
+            connection.commit()
+        return draft
+
+    def list_strategy_drafts(self) -> list[StrategyDraft]:
+        rows = self._select_payload_rows(
+            """
+            SELECT payload
+            FROM paper_strategy_drafts
+            WHERE tenant_id = %(tenant_id)s
+            ORDER BY created_at, strategy_id
+            """,
+            {},
+        )
+        return [_strategy_from_payload(_payload_from_row(row)) for row in rows]
+
+    def get_strategy_draft(self, strategy_id: str) -> StrategyDraft:
+        row = self._select_payload_one(
+            """
+            SELECT payload
+            FROM paper_strategy_drafts
+            WHERE tenant_id = %(tenant_id)s
+              AND strategy_id = %(strategy_id)s
+            """,
+            {"strategy_id": strategy_id},
+        )
+        if row is None:
+            raise ValueError(f"Unknown strategy_id: {strategy_id}")
+        return _strategy_from_payload(_payload_from_row(row))
+
+    def create_backtest_request(
+        self,
+        symbol: str,
+        setup: str,
+        start_date: str,
+        end_date: str,
+    ) -> BacktestRequest:
+        request = _build_backtest_request(symbol, setup, start_date, end_date)
+        params = {
+            "tenant_id": self._tenant_id,
+            "request_id": request.request_id,
+            "symbol": request.symbol,
+            "setup": request.setup,
+            "status": request.status,
+            "payload": request.to_dict(),
+            "start_date": request.start_date,
+            "end_date": request.end_date,
+            "created_at": FIXTURE_TIMESTAMP,
+            "recorded_at": _aware_utc(self._now()),
+        }
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(
+                    """
+                    INSERT INTO paper_backtest_requests (
+                        tenant_id,
+                        request_id,
+                        symbol,
+                        setup,
+                        status,
+                        payload,
+                        start_date,
+                        end_date,
+                        created_at,
+                        recorded_at
+                    ) VALUES (
+                        %(tenant_id)s,
+                        %(request_id)s,
+                        %(symbol)s,
+                        %(setup)s,
+                        %(status)s,
+                        %(payload)s,
+                        %(start_date)s,
+                        %(end_date)s,
+                        %(created_at)s,
+                        %(recorded_at)s
+                    )
+                    ON CONFLICT (tenant_id, request_id)
+                    DO NOTHING
+                    """.strip(),
+                    params,
+                )
+            connection.commit()
+        return request
+
+    def list_backtest_requests(self) -> list[BacktestRequest]:
+        rows = self._select_payload_rows(
+            """
+            SELECT payload
+            FROM paper_backtest_requests
+            WHERE tenant_id = %(tenant_id)s
+            ORDER BY start_date, end_date, request_id
+            """,
+            {},
+        )
+        return [_backtest_request_from_payload(_payload_from_row(row)) for row in rows]
+
+    def get_backtest_request(self, request_id: str) -> BacktestRequest:
+        row = self._select_payload_one(
+            """
+            SELECT payload
+            FROM paper_backtest_requests
+            WHERE tenant_id = %(tenant_id)s
+              AND request_id = %(request_id)s
+            """,
+            {"request_id": request_id},
+        )
+        if row is None:
+            raise ValueError(f"Unknown backtest request_id: {request_id}")
+        return _backtest_request_from_payload(_payload_from_row(row))
+
+    def get_backtest_result(self, request_id: str) -> BacktestResult:
+        return _build_backtest_result(self.get_backtest_request(request_id))
+
+    def create_order_proposal(
+        self,
+        strategy_id: str,
+        symbol: str,
+        side: str,
+        quantity: int,
+        order_type: str = "market",
+        requested_price: float | None = None,
+        *,
+        readiness_preflight: dict[str, Any],
+    ) -> tuple[PaperOrder, ApprovalRequest, AuditEvent]:
+        order, approval, event = _build_order_proposal_artifacts(
+            strategy_id,
+            symbol,
+            side,
+            quantity,
+            order_type,
+            requested_price,
+            readiness_preflight,
+        )
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                self._upsert_order(cursor, order, update=False)
+                self._upsert_approval(cursor, approval, update=False)
+                self._insert_audit_event(cursor, event)
+            connection.commit()
+        return order, approval, event
+
+    def approve_order_simulation(
+        self,
+        order_id: str,
+        approved_by: str,
+        approval_note: str = "",
+    ) -> tuple[PaperOrder, ApprovalRequest, AuditEvent]:
+        event = _approval_event(order_id, approved_by, approval_note)
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                order = self._get_order(cursor, order_id)
+                if order is None:
+                    raise ValueError(f"Unknown paper order_id: {order_id}")
+                approval = self._get_approval(cursor, order.approval_request_id)
+                if approval is None:
+                    raise ValueError(f"Missing approval request for order_id: {order_id}")
+                if approval.status != "approved":
+                    approval = replace(approval, status="approved")
+                    self._upsert_approval(cursor, approval, update=True)
+                if order.status == "pending_approval":
+                    order = replace(order, status="approved")
+                    self._upsert_order(cursor, order, update=True)
+                self._insert_audit_event(cursor, event)
+            connection.commit()
+        return order, approval, event
+
+    def simulate_approved_fill(
+        self,
+        order_id: str,
+        fill_price: float | None = None,
+    ) -> tuple[PaperFill, PaperOrder, PaperPosition, AuditEvent]:
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                order = self._get_order(cursor, order_id)
+                if order is None:
+                    raise ValueError(f"Unknown paper order_id: {order_id}")
+                approval = self._get_approval(cursor, order.approval_request_id)
+                if approval is None or approval.status != "approved":
+                    raise ValueError(
+                        "Paper order simulation requires human approval first."
+                    )
+
+                fill_id = f"fill-{order.order_id}"
+                existing_fill = self._get_fill(cursor, fill_id)
+                if existing_fill is not None:
+                    current_order = self._get_order(cursor, order.order_id)
+                    current_position = self._get_position(cursor, existing_fill.symbol)
+                    fill_event = self._get_audit_event(
+                        cursor,
+                        f"audit-{existing_fill.fill_id}",
+                    )
+                    if (
+                        current_order is None
+                        or current_position is None
+                        or fill_event is None
+                    ):
+                        raise ValueError("Persisted paper fill is missing related state.")
+                    return existing_fill, current_order, current_position, fill_event
+
+                current_position = self._get_position(cursor, order.symbol)
+                resolved_price = _resolve_fill_price(order, fill_price, current_position)
+                fill = _build_fill(order, resolved_price)
+                base_position = current_position or self._fixture_position_for_symbol(
+                    order.symbol
+                )
+                position = _apply_fill_to_position(base_position, fill)
+                fill_event = _fill_event(fill)
+                filled_order = replace(
+                    order,
+                    status="filled",
+                    filled_quantity=order.quantity,
+                    fill_ids=[fill.fill_id],
+                )
+                self._insert_fill(cursor, fill)
+                self._upsert_order(cursor, filled_order, update=True)
+                self._upsert_position(cursor, position)
+                self._insert_audit_event(cursor, fill_event)
+            connection.commit()
+        return fill, filled_order, position, fill_event
+
+    def list_orders(self) -> list[PaperOrder]:
+        rows = self._select_payload_rows(
+            """
+            SELECT payload
+            FROM paper_orders
+            WHERE tenant_id = %(tenant_id)s
+            ORDER BY created_at, order_id
+            """,
+            {},
+        )
+        return [_order_from_payload(_payload_from_row(row)) for row in rows]
+
+    def list_fills(self) -> list[PaperFill]:
+        rows = self._select_payload_rows(
+            """
+            SELECT payload
+            FROM paper_fills
+            WHERE tenant_id = %(tenant_id)s
+            ORDER BY filled_at, fill_id
+            """,
+            {},
+        )
+        return [_fill_from_payload(_payload_from_row(row)) for row in rows]
+
+    def list_positions(self) -> list[PaperPosition]:
+        rows = self._select_payload_rows(
+            """
+            SELECT payload
+            FROM paper_positions
+            WHERE tenant_id = %(tenant_id)s
+            ORDER BY sort_order, symbol
+            """,
+            {},
+        )
+        positions = [_position_from_payload(_payload_from_row(row)) for row in rows]
+        if not positions:
+            return _fixture_positions()
+        by_symbol = {position.symbol: position for position in positions}
+        for fixture in _fixture_positions():
+            by_symbol.setdefault(fixture.symbol, fixture)
+        return sorted(by_symbol.values(), key=lambda position: position.symbol)
+
+    def approval_queue(self) -> list[ApprovalRequest]:
+        rows = self._select_payload_rows(
+            """
+            SELECT payload
+            FROM paper_approval_requests
+            WHERE tenant_id = %(tenant_id)s
+              AND status = 'pending'
+            ORDER BY requested_at, approval_id
+            """,
+            {},
+        )
+        return [_approval_from_payload(_payload_from_row(row)) for row in rows]
+
+    def audit_events(self) -> list[AuditEvent]:
+        rows = self._select_payload_rows(
+            """
+            SELECT payload
+            FROM paper_audit_events
+            WHERE tenant_id = %(tenant_id)s
+            ORDER BY created_at, event_id
+            """,
+            {},
+        )
+        return [_audit_event_from_payload(_payload_from_row(row)) for row in rows]
+
+    def portfolio_accounting(self) -> PaperPortfolioAccounting:
+        return _build_accounting(
+            self.list_positions(),
+            self.list_orders(),
+            self.list_fills(),
+        )
+
+    def _set_tenant_context(self, cursor: Any) -> None:
+        cursor.execute(
+            "SELECT set_config('app.tenant_id', %(tenant_id)s, true)",
+            {"tenant_id": self._tenant_id},
+        )
+
+    def _select_payload_one(
+        self,
+        sql: str,
+        params: Mapping[str, Any],
+    ) -> dict[str, Any] | None:
+        query_params = {"tenant_id": self._tenant_id, **dict(params)}
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(sql.strip(), query_params)
+                return _cursor_one(cursor)
+
+    def _select_payload_rows(
+        self,
+        sql: str,
+        params: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        query_params = {"tenant_id": self._tenant_id, **dict(params)}
+        with self._connection_factory() as connection:
+            with connection.cursor() as cursor:
+                self._set_tenant_context(cursor)
+                cursor.execute(sql.strip(), query_params)
+                return _cursor_rows(cursor)
+
+    def _get_order(self, cursor: Any, order_id: str) -> PaperOrder | None:
+        cursor.execute(
+            """
+            SELECT payload
+            FROM paper_orders
+            WHERE tenant_id = %(tenant_id)s
+              AND order_id = %(order_id)s
+            """.strip(),
+            {"tenant_id": self._tenant_id, "order_id": order_id},
+        )
+        row = _cursor_one(cursor)
+        return _order_from_payload(_payload_from_row(row)) if row is not None else None
+
+    def _get_approval(self, cursor: Any, approval_id: str) -> ApprovalRequest | None:
+        cursor.execute(
+            """
+            SELECT payload
+            FROM paper_approval_requests
+            WHERE tenant_id = %(tenant_id)s
+              AND approval_id = %(approval_id)s
+            """.strip(),
+            {"tenant_id": self._tenant_id, "approval_id": approval_id},
+        )
+        row = _cursor_one(cursor)
+        return (
+            _approval_from_payload(_payload_from_row(row)) if row is not None else None
+        )
+
+    def _get_fill(self, cursor: Any, fill_id: str) -> PaperFill | None:
+        cursor.execute(
+            """
+            SELECT payload
+            FROM paper_fills
+            WHERE tenant_id = %(tenant_id)s
+              AND fill_id = %(fill_id)s
+            """.strip(),
+            {"tenant_id": self._tenant_id, "fill_id": fill_id},
+        )
+        row = _cursor_one(cursor)
+        return _fill_from_payload(_payload_from_row(row)) if row is not None else None
+
+    def _get_position(self, cursor: Any, symbol: str) -> PaperPosition | None:
+        normalized_symbol = _normalize_symbol(symbol)
+        cursor.execute(
+            """
+            SELECT payload
+            FROM paper_positions
+            WHERE tenant_id = %(tenant_id)s
+              AND symbol = %(symbol)s
+            """.strip(),
+            {"tenant_id": self._tenant_id, "symbol": normalized_symbol},
+        )
+        row = _cursor_one(cursor)
+        if row is not None:
+            return _position_from_payload(_payload_from_row(row))
+        return self._fixture_position_for_symbol(normalized_symbol)
+
+    def _get_audit_event(self, cursor: Any, event_id: str) -> AuditEvent | None:
+        cursor.execute(
+            """
+            SELECT payload
+            FROM paper_audit_events
+            WHERE tenant_id = %(tenant_id)s
+              AND event_id = %(event_id)s
+            """.strip(),
+            {"tenant_id": self._tenant_id, "event_id": event_id},
+        )
+        row = _cursor_one(cursor)
+        return (
+            _audit_event_from_payload(_payload_from_row(row))
+            if row is not None
+            else None
+        )
+
+    def _upsert_order(self, cursor: Any, order: PaperOrder, *, update: bool) -> None:
+        conflict = (
+            """
+            DO UPDATE SET
+                status = EXCLUDED.status,
+                filled_quantity = EXCLUDED.filled_quantity,
+                fill_ids = EXCLUDED.fill_ids,
+                payload = EXCLUDED.payload,
+                recorded_at = EXCLUDED.recorded_at
+            """
+            if update
+            else "DO NOTHING"
+        )
+        cursor.execute(
+            f"""
+            INSERT INTO paper_orders (
+                tenant_id,
+                order_id,
+                strategy_id,
+                symbol,
+                side,
+                status,
+                payload,
+                created_at,
+                filled_quantity,
+                fill_ids,
+                recorded_at
+            ) VALUES (
+                %(tenant_id)s,
+                %(order_id)s,
+                %(strategy_id)s,
+                %(symbol)s,
+                %(side)s,
+                %(status)s,
+                %(payload)s,
+                %(created_at)s,
+                %(filled_quantity)s,
+                %(fill_ids)s,
+                %(recorded_at)s
+            )
+            ON CONFLICT (tenant_id, order_id)
+            {conflict}
+            """.strip(),
+            {
+                "tenant_id": self._tenant_id,
+                "order_id": order.order_id,
+                "strategy_id": order.strategy_id,
+                "symbol": order.symbol,
+                "side": order.side,
+                "status": order.status,
+                "payload": order.to_dict(),
+                "created_at": order.created_at,
+                "filled_quantity": order.filled_quantity,
+                "fill_ids": order.fill_ids,
+                "recorded_at": _aware_utc(self._now()),
+            },
+        )
+
+    def _upsert_approval(
+        self,
+        cursor: Any,
+        approval: ApprovalRequest,
+        *,
+        update: bool,
+    ) -> None:
+        conflict = (
+            """
+            DO UPDATE SET
+                status = EXCLUDED.status,
+                payload = EXCLUDED.payload,
+                recorded_at = EXCLUDED.recorded_at
+            """
+            if update
+            else "DO NOTHING"
+        )
+        cursor.execute(
+            f"""
+            INSERT INTO paper_approval_requests (
+                tenant_id,
+                approval_id,
+                related_id,
+                action_type,
+                status,
+                payload,
+                requested_at,
+                recorded_at
+            ) VALUES (
+                %(tenant_id)s,
+                %(approval_id)s,
+                %(related_id)s,
+                %(action_type)s,
+                %(status)s,
+                %(payload)s,
+                %(requested_at)s,
+                %(recorded_at)s
+            )
+            ON CONFLICT (tenant_id, approval_id)
+            {conflict}
+            """.strip(),
+            {
+                "tenant_id": self._tenant_id,
+                "approval_id": approval.approval_id,
+                "related_id": approval.related_id,
+                "action_type": approval.action_type,
+                "status": approval.status,
+                "payload": approval.to_dict(),
+                "requested_at": approval.requested_at,
+                "recorded_at": _aware_utc(self._now()),
+            },
+        )
+
+    def _insert_fill(self, cursor: Any, fill: PaperFill) -> None:
+        cursor.execute(
+            """
+            INSERT INTO paper_fills (
+                tenant_id,
+                fill_id,
+                order_id,
+                symbol,
+                side,
+                payload,
+                filled_at,
+                recorded_at
+            ) VALUES (
+                %(tenant_id)s,
+                %(fill_id)s,
+                %(order_id)s,
+                %(symbol)s,
+                %(side)s,
+                %(payload)s,
+                %(filled_at)s,
+                %(recorded_at)s
+            )
+            ON CONFLICT (tenant_id, fill_id)
+            DO NOTHING
+            """.strip(),
+            {
+                "tenant_id": self._tenant_id,
+                "fill_id": fill.fill_id,
+                "order_id": fill.order_id,
+                "symbol": fill.symbol,
+                "side": fill.side,
+                "payload": fill.to_dict(),
+                "filled_at": fill.filled_at,
+                "recorded_at": _aware_utc(self._now()),
+            },
+        )
+
+    def _upsert_position(self, cursor: Any, position: PaperPosition) -> None:
+        cursor.execute(
+            """
+            INSERT INTO paper_positions (
+                tenant_id,
+                symbol,
+                payload,
+                quantity,
+                sort_order,
+                recorded_at
+            ) VALUES (
+                %(tenant_id)s,
+                %(symbol)s,
+                %(payload)s,
+                %(quantity)s,
+                %(sort_order)s,
+                %(recorded_at)s
+            )
+            ON CONFLICT (tenant_id, symbol)
+            DO UPDATE SET
+                payload = EXCLUDED.payload,
+                quantity = EXCLUDED.quantity,
+                recorded_at = EXCLUDED.recorded_at
+            """.strip(),
+            {
+                "tenant_id": self._tenant_id,
+                "symbol": position.symbol,
+                "payload": position.to_dict(),
+                "quantity": position.quantity,
+                "sort_order": _fixture_position_sort_order(position.symbol),
+                "recorded_at": _aware_utc(self._now()),
+            },
+        )
+
+    def _insert_audit_event(self, cursor: Any, event: AuditEvent) -> None:
+        cursor.execute(
+            """
+            INSERT INTO paper_audit_events (
+                tenant_id,
+                event_id,
+                event_type,
+                entity_id,
+                actor,
+                payload,
+                created_at,
+                recorded_at
+            ) VALUES (
+                %(tenant_id)s,
+                %(event_id)s,
+                %(event_type)s,
+                %(entity_id)s,
+                %(actor)s,
+                %(payload)s,
+                %(created_at)s,
+                %(recorded_at)s
+            )
+            ON CONFLICT (tenant_id, event_id)
+            DO NOTHING
+            """.strip(),
+            {
+                "tenant_id": self._tenant_id,
+                "event_id": event.event_id,
+                "event_type": event.event_type,
+                "entity_id": event.entity_id,
+                "actor": event.actor,
+                "payload": event.to_dict(),
+                "created_at": event.created_at,
+                "recorded_at": _aware_utc(self._now()),
+            },
+        )
+
+    def _fixture_position_for_symbol(self, symbol: str) -> PaperPosition | None:
+        normalized_symbol = _normalize_symbol(symbol)
+        for position in _fixture_positions():
+            if position.symbol == normalized_symbol:
+                return position
+        return None
+
+
 def _to_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True)
 
 
 def _from_json(value: str) -> Any:
     return json.loads(value)
+
+
+def _strategy_from_payload(payload: Mapping[str, Any]) -> StrategyDraft:
+    return StrategyDraft(
+        strategy_id=str(payload["strategy_id"]),
+        symbol=str(payload["symbol"]),
+        mode=str(payload["mode"]),
+        status=str(payload["status"]),
+        source=str(payload["source"]),
+        created_at=str(payload["created_at"]),
+        rationale=str(payload["rationale"]),
+        entry_rule=str(payload["entry_rule"]),
+        exit_rule=str(payload["exit_rule"]),
+        risk_notes=[str(item) for item in payload["risk_notes"]],
+    )
+
+
+def _backtest_request_from_payload(payload: Mapping[str, Any]) -> BacktestRequest:
+    return BacktestRequest(
+        request_id=str(payload["request_id"]),
+        symbol=str(payload["symbol"]),
+        setup=str(payload["setup"]),
+        start_date=str(payload["start_date"]),
+        end_date=str(payload["end_date"]),
+        mode=str(payload["mode"]),
+        status=str(payload["status"]),
+        source=str(payload["source"]),
+        assumptions=[str(item) for item in payload["assumptions"]],
+        notes=[str(item) for item in payload["notes"]],
+    )
+
+
+def _order_from_payload(payload: Mapping[str, Any]) -> PaperOrder:
+    return PaperOrder(
+        order_id=str(payload["order_id"]),
+        strategy_id=str(payload["strategy_id"]),
+        symbol=str(payload["symbol"]),
+        side=str(payload["side"]),
+        quantity=int(payload["quantity"]),
+        order_type=str(payload["order_type"]),
+        mode=str(payload["mode"]),
+        status=str(payload["status"]),
+        requested_price=(
+            None
+            if payload.get("requested_price") is None
+            else float(payload["requested_price"])
+        ),
+        filled_quantity=int(payload["filled_quantity"]),
+        fill_ids=[str(item) for item in payload["fill_ids"]],
+        approval_request_id=str(payload["approval_request_id"]),
+        created_at=str(payload["created_at"]),
+        readiness_preflight=dict(payload["readiness_preflight"]),
+        notes=[str(item) for item in payload["notes"]],
+    )
+
+
+def _approval_from_payload(payload: Mapping[str, Any]) -> ApprovalRequest:
+    return ApprovalRequest(
+        approval_id=str(payload["approval_id"]),
+        action_type=str(payload["action_type"]),
+        status=str(payload["status"]),
+        summary=str(payload["summary"]),
+        related_id=str(payload["related_id"]),
+        required_approval=str(payload["required_approval"]),
+        requested_at=str(payload["requested_at"]),
+        risk_notes=[str(item) for item in payload["risk_notes"]],
+    )
+
+
+def _audit_event_from_payload(payload: Mapping[str, Any]) -> AuditEvent:
+    return AuditEvent(
+        event_id=str(payload["event_id"]),
+        event_type=str(payload["event_type"]),
+        entity_type=str(payload["entity_type"]),
+        entity_id=str(payload["entity_id"]),
+        message=str(payload["message"]),
+        created_at=str(payload["created_at"]),
+        actor=str(payload["actor"]),
+        redacted_payload=dict(payload["redacted_payload"]),
+    )
+
+
+def _position_from_payload(payload: Mapping[str, Any]) -> PaperPosition:
+    return PaperPosition(
+        symbol=str(payload["symbol"]),
+        quantity=int(payload["quantity"]),
+        average_price=float(payload["average_price"]),
+        last_price=float(payload["last_price"]),
+        mode=str(payload["mode"]),
+        source=str(payload["source"]),
+        notes=[str(item) for item in payload["notes"]],
+    )
+
+
+def _fill_from_payload(payload: Mapping[str, Any]) -> PaperFill:
+    return PaperFill(
+        fill_id=str(payload["fill_id"]),
+        order_id=str(payload["order_id"]),
+        symbol=str(payload["symbol"]),
+        side=str(payload["side"]),
+        quantity=int(payload["quantity"]),
+        fill_price=float(payload["fill_price"]),
+        filled_at=str(payload["filled_at"]),
+        mode=str(payload["mode"]),
+        source=str(payload["source"]),
+        notes=[str(item) for item in payload["notes"]],
+    )
+
+
+def _cursor_one(cursor: Any) -> dict[str, Any] | None:
+    row = cursor.fetchone()
+    return _row_mapping(row) if row is not None else None
+
+
+def _cursor_rows(cursor: Any) -> list[dict[str, Any]]:
+    return [_row_mapping(row) for row in cursor.fetchall()]
+
+
+def _row_mapping(row: Any) -> dict[str, Any]:
+    if isinstance(row, dict):
+        return dict(row)
+    if hasattr(row, "keys"):
+        return {key: row[key] for key in row.keys()}
+    if isinstance(row, Sequence) and len(row) == 1:
+        return {"payload": row[0]}
+    raise TypeError(f"Unsupported Postgres row shape: {type(row).__name__}")
+
+
+def _payload_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    payload = row["payload"]
+    if isinstance(payload, str):
+        return dict(json.loads(payload))
+    return dict(payload)
+
+
+def _aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _fixture_position_sort_order(symbol: str) -> int:
+    normalized_symbol = _normalize_symbol(symbol)
+    for index, position in enumerate(_fixture_positions(), start=1):
+        if position.symbol == normalized_symbol:
+            return index
+    return 50
+
+
+def _postgres_connection_factory(database_url: str) -> Callable[[], Any]:
+    connection_url = _psycopg_database_url(database_url)
+
+    def connection_factory():
+        import psycopg
+
+        return psycopg.connect(connection_url)
+
+    return connection_factory
+
+
+def _psycopg_database_url(database_url: str) -> str:
+    stripped = database_url.strip()
+    if stripped.startswith("postgresql+psycopg://"):
+        return "postgresql://" + stripped.removeprefix("postgresql+psycopg://")
+    return stripped
 
 
 def _row_to_strategy_draft(row: sqlite3.Row) -> StrategyDraft:
@@ -1581,8 +2444,23 @@ def _fixture_trades(symbol: str, setup: str) -> list[BacktestTrade]:
     ]
 
 
-def build_paper_ledger_store() -> PaperLedgerStore | SQLitePaperLedgerStore:
-    db_path = os.getenv("PAPER_LEDGER_DB_PATH", "").strip()
+def build_paper_ledger_store(
+    env: Mapping[str, str] | None = None,
+) -> PaperLedgerStore | SQLitePaperLedgerStore | PostgresPaperLedgerStore:
+    config = env if env is not None else os.environ
+    profile = load_database_runtime_profile(config)
+    if profile.backend == DatabaseBackend.POSTGRES:
+        if not profile.database_url:
+            raise ValueError("PORTFOLIO_DATABASE_URL is required for Postgres storage")
+        tenant_id = str(config.get("PORTFOLIO_TENANT_ID", "")).strip()
+        if not tenant_id:
+            raise ValueError("PORTFOLIO_TENANT_ID is required for Postgres storage")
+        return PostgresPaperLedgerStore(
+            tenant_id=tenant_id,
+            connection_factory=_postgres_connection_factory(profile.database_url),
+        )
+
+    db_path = str(config.get("PAPER_LEDGER_DB_PATH", "")).strip()
     if db_path:
         return SQLitePaperLedgerStore(db_path)
     return PaperLedgerStore()

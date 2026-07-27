@@ -38,7 +38,7 @@ explicit safety policy.
   ledger.
 - Recommendation explanations join screener/factor evidence, provider refresh readiness, import-reconciliation gates, strategy history, backtest history, risk gates, paper-ledger state, citations, and allowed next actions into one read-only decision record.
 - Paper-trading reports return read-only review summaries with readiness preflight review sections, redacted audit exports, paper orders, approvals, fills, accounting, risk state, and optional recommendation context.
-- Strategy, backtest, and paper-ledger contracts persist paper strategy drafts and backtest request history, return offline results, require a ready recommendation preflight before paper order proposals enter approval, keep approval and simulated-fill mutation on protected human/API paths, update paper positions/accounting, expose approval queues, and emit redacted audit events with the readiness snapshot.
+- Strategy, backtest, and paper-ledger contracts persist paper strategy drafts, backtest request history, paper orders, positions, fills, approvals, and redacted audit events in tenant-scoped Postgres for production-like runs, return offline results, require a ready recommendation preflight before paper order proposals enter approval, keep approval and simulated-fill mutation on protected human/API paths, update paper positions/accounting, expose approval queues, and retain an explicit SQLite fallback through `PAPER_LEDGER_DB_PATH`.
 - Bounded paper-execution domain contracts define disabled-by-default policy
   ceilings, proposed paper batches, authenticated-human execution grants,
   deterministic grant/order decisions, idempotency, quote freshness,
@@ -67,13 +67,13 @@ explicit safety policy.
   Worker JSON summaries expose backed-off tenant workers and the sanitized
   schedule-state backend, and operators can run a read-only health snapshot
   without claiming queue items.
-- Market-data, provider-context, and provider-profile persistence store fixture/configured-provider market snapshots, screener runs, universes, fundamentals, sentiment, volatility, macro context, provider configuration profiles, and import-refresh jobs in tenant-scoped Postgres tables for production-like runs, using the same sanitized JSON payload shape returned by the tools. `MARKET_DATA_DB_PATH` and `PROVIDER_CONFIG_DB_PATH` remain explicit SQLite offline fallbacks.
+- Paper-ledger, market-data, provider-context, and provider-profile persistence store strategy/backtest/order ledger state, fixture/configured-provider market snapshots, screener runs, universes, fundamentals, sentiment, volatility, macro context, provider configuration profiles, and import-refresh jobs in tenant-scoped Postgres tables for production-like runs, using the same sanitized JSON payload shape returned by the tools. `PAPER_LEDGER_DB_PATH`, `MARKET_DATA_DB_PATH`, and `PROVIDER_CONFIG_DB_PATH` remain explicit SQLite offline fallbacks.
 - Configured source templates, guided onboarding, dry-run import previews, and import reconciliation provide synthetic, adapter-valid JSON shapes, live validation state, setup gaps, refresh readiness, normalized counts, target stores, stored row counts, and safe next actions for market, universe, fundamentals, sentiment, volatility, and macro inputs. Configured refreshes can import normalized market and provider-context records into tenant-scoped Postgres when `PORTFOLIO_STORAGE_BACKEND=postgres`, or into the SQLite fallback behind `MARKET_DATA_DB_PATH` for offline runs. Scheduled refresh orchestration reports ready, stale, retry-due, and backoff readiness without resolved local file paths or raw provider payloads.
 - Model-backed eval infrastructure is credential-gated through `scripts/run_agent_evals.py`, which preflights `agents-cli eval generate` and `agents-cli eval grade`, writes redacted baseline summaries, and produces deterministic triage reports for grade-result failures without printing secret values. The eval config combines an LLM response-quality rubric with deterministic forbidden-action and workflow-tool-trajectory code metrics. A manual GitHub Actions workflow can run the credentialed baseline and upload ignored eval artifacts.
 - Capstone evidence manifest generation is available through `scripts/build_capstone_evidence.py`; it summarizes deterministic verification, container services, implemented workflow evidence, eval baseline status, eval submission readiness, and remaining submission gaps without local paths or secret values.
 - Agent workflow-routing guidance is embedded in the ADK instruction and eval rubric so pre-market, provider-readiness, candidate explanation, recommendation-to-paper-order, reporting, feature-navigation, and forbidden-action requests have explicit safe tool paths before the first credentialed baseline, while approval/fill mutations route to protected human/API paths outside model-visible MCP. Compose runs the ADK agent through the private streamable-HTTP MCP tool boundary by default via `AGENT_TOOL_TRANSPORT=mcp` and `AGENT_MCP_URL=http://mcp-server:8081/mcp`; the in-process adapter remains available for deterministic local/unit tests. Model-facing MCP tool descriptions now name policy tiers and high-risk workflow sequencing constraints.
 - Web console is available in `apps/web`, backed by `/console/overview` and `/console/workflows` endpoints. It includes focused pages for screeners, strategy/backtest review, paper approvals, reports, and provider settings with paper-order readiness preflight cards, guided configured-source onboarding, required env-key visibility, active adapter modes, setup-gap feedback, schema/template guidance, configured-file validation, dry-run import previews, import reconciliation, import-gate visibility on decision pages, provider profiles, refresh readiness, full-refresh controls, per-provider backoff state, and import-job feedback. The visual system keeps the CapacityForecast cockpit palette while intentionally shifting the app into uniformly rounded widgets, including the navigation dock, panels, table rows, trays, controls, and light-mode surfaces.
-- Storage mode is explicit through `PORTFOLIO_STORAGE_BACKEND`. Root Compose defaults to `postgres` for production-like testing and runs Alembic migrations before app services start. Local/offline app runs may set `PORTFOLIO_STORAGE_BACKEND=sqlite`; SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`, market-data/provider-context/screener-run persistence through `MARKET_DATA_DB_PATH`, and provider profile/import-job metadata through `PROVIDER_CONFIG_DB_PATH`.
+- Storage mode is explicit through `PORTFOLIO_STORAGE_BACKEND`. Root Compose defaults to `postgres` for production-like testing and runs Alembic migrations before app services start. Production-like paper-ledger, market-data, provider-context, and provider-profile tools require `PORTFOLIO_DATABASE_URL` and `PORTFOLIO_TENANT_ID`. Local/offline app runs may set `PORTFOLIO_STORAGE_BACKEND=sqlite`; SQLite-backed paper-ledger persistence is available through `PAPER_LEDGER_DB_PATH`, market-data/provider-context/screener-run persistence through `MARKET_DATA_DB_PATH`, and provider profile/import-job metadata through `PROVIDER_CONFIG_DB_PATH`.
 - Docker or Podman Compose runs the agent service, MCP server, web console, and optional Ollama profile. The agent service depends on the MCP server and uses its private `mcp-server:8081/mcp` URL for model-visible tools; the MCP service still does not expose broker mutation or human-approval APIs.
 - A public-safe capstone package includes a presentation deck, 16:9 architecture and workflow visuals, selected product screenshots, a redacted eval summary, a Kaggle writeup, and a sub-five-minute video storyboard under `docs/capstone`.
 - No copied portfolio data.
@@ -277,8 +277,8 @@ flowchart TB
     PaperWorker --> Postgres
     MCP --> Domain["Domain packages<br/>policy, screeners, recommendations,<br/>paper ledger, provider adapters"]
     Agent --> Domain
-    Domain --> Volume["paper-ledger-data volume<br/>/data/*.db SQLite local stores"]
-    Domain --> Postgres["postgres service<br/>Postgres 16<br/>production-like state target"]
+    Domain --> Volume["paper-ledger-data volume<br/>/data/*.db explicit SQLite fallback"]
+    Domain --> Postgres["postgres service<br/>Postgres 16<br/>tenant-scoped production-like state"]
     Migrations["migrations job<br/>Alembic upgrade head"] --> Postgres
     Redis["redis service<br/>jobs, queues, rate limits,<br/>short-lived cache"] --> Agent
     Redis --> MCP
@@ -307,17 +307,19 @@ profile redacts database and Redis credentials in status/readiness payloads and
 fails production-like readiness when Postgres is not selected or the database
 URL is missing. SQLite paths remain available for explicit local/offline
 compatibility: `PAPER_LEDGER_DB_PATH`, `MARKET_DATA_DB_PATH`, and
-`PROVIDER_CONFIG_DB_PATH`. Market snapshots,
-screener runs, provider-context records, provider configuration profiles, and
-provider import-refresh jobs now use tenant-scoped Postgres in production-like
-mode, while the compatibility paths remain `/data/paper-ledger.db`,
+`PROVIDER_CONFIG_DB_PATH`. Strategy drafts, backtest requests, paper orders,
+approval requests, simulated fills, paper positions, paper-ledger audit events,
+market snapshots, screener runs, provider-context records, provider
+configuration profiles, and provider import-refresh jobs now use tenant-scoped
+Postgres in production-like mode, while the compatibility paths remain
+`/data/paper-ledger.db`,
 `/data/market-data.db`, and `/data/provider-config.db` on the
 `paper-ledger-data` volume; the agent-service-local `.env.example` keeps
 relative `../../data/*.db` paths for fast credential-free tests.
 
 The production-like storage target is Postgres, with tenant-scoped tables for
 sessions, FYERS/provider connections, normalized snapshots, research documents,
-paper policies, grants, ledger entries, market snapshots, screener runs,
+strategy/backtest/order paper-ledger state, paper policies, grants, ledger entries, market snapshots, screener runs,
 provider universe/factor context, model-usage telemetry, and immutable audit
 events. SQLite remains useful for offline capstone mode and fast deterministic
 tests while Postgres-backed contract tests are introduced feature-by-feature.

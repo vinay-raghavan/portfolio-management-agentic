@@ -113,16 +113,17 @@ TTL and deletion semantics in process memory without durable preference or raw
 account retention.
 When SQLite/local mode is selected, those HTTP contracts keep
 their process-local deterministic fallback for API tests and offline
-development. When
-`PAPER_LEDGER_DB_PATH` is configured, strategy, backtest, and paper-ledger
-tools use SQLite-backed state for local/offline compatibility while the
-production-like path runs on Postgres-backed stores.
+development. When `PORTFOLIO_STORAGE_BACKEND=postgres`,
+`PORTFOLIO_DATABASE_URL`, and `PORTFOLIO_TENANT_ID` are configured, strategy,
+backtest, and paper-ledger tools use tenant-scoped Postgres state for
+production-like runs. When `PAPER_LEDGER_DB_PATH` is configured in SQLite/local
+mode, those same tools use SQLite-backed state for local/offline compatibility.
 The repository Compose file mounts `/data/paper-ledger.db` on a named volume
 for local container runs.
 When `PORTFOLIO_STORAGE_BACKEND=postgres`, `PORTFOLIO_DATABASE_URL`, and
 `PORTFOLIO_TENANT_ID` are configured, market snapshot, screener-run, universe,
-factor-context, provider-profile, and import-job tools use tenant-scoped
-Postgres state.
+factor-context, provider-profile, import-job, and strategy/backtest/paper-ledger
+tools use tenant-scoped Postgres state.
 `MARKET_DATA_DB_PATH` and `PROVIDER_CONFIG_DB_PATH` remain explicit SQLite
 fallbacks for offline market snapshots, provider context, screener runs,
 provider profiles, and import-job metadata. The repository Compose file mounts
