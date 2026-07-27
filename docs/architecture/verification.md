@@ -244,6 +244,12 @@ curl http://localhost:8000/v1/models/ollama/status
 curl "http://localhost:8000/v1/storage/status?require_production_like=true"
 ```
 
+For the optional Compose-managed Ollama profile, run
+`podman compose --profile ollama run --rm ollama-model-prepull` with
+`OLLAMA_PREPULL_MODEL=llama3.1:8b` to hydrate the private `ollama-data` volume.
+The Ollama service is intentionally unexposed; no `11434:11434` host port is
+published.
+
 ## GitHub Actions
 
 CI runs on pull requests into `develop` or `main`, pushes to `develop`, `main`,
