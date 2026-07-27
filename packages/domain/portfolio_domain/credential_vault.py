@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import subprocess
+from collections.abc import Callable
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -83,6 +86,153 @@ class CredentialVaultWritePlan:
             "expires_at_configured": self.expires_at_configured,
             "blocking_reasons": list(self.blocking_reasons),
         }
+
+
+@dataclass(frozen=True, repr=False)
+class CredentialVaultWriteResult:
+    written: bool
+    backend: CredentialVaultBackend
+    credential_ref_configured: bool
+    sensitive_field_count: int
+    expires_at_configured: bool
+    blocking_reasons: tuple[str, ...]
+
+    def __repr__(self) -> str:
+        return (
+            "CredentialVaultWriteResult("
+            f"written={self.written}, "
+            f"backend={self.backend.value!r}, "
+            f"credential_ref_configured={self.credential_ref_configured}, "
+            f"sensitive_field_count={self.sensitive_field_count}, "
+            f"expires_at_configured={self.expires_at_configured}, "
+            f"blocking_reasons={self.blocking_reasons!r})"
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "written": self.written,
+            "backend": self.backend.value,
+            "credential_ref_configured": self.credential_ref_configured,
+            "sensitive_field_count": self.sensitive_field_count,
+            "expires_at_configured": self.expires_at_configured,
+            "blocking_reasons": list(self.blocking_reasons),
+        }
+
+
+class DisabledCredentialVaultWriter:
+    def __init__(self, profile: CredentialVaultProfile) -> None:
+        self._profile = profile
+
+    def write(
+        self,
+        *,
+        credential_ref: str,
+        material: CredentialVaultSecretMaterial,
+    ) -> CredentialVaultWriteResult:
+        plan = plan_credential_vault_write(
+            profile=self._profile,
+            credential_ref=credential_ref,
+            material=material,
+        )
+        return _write_result(plan=plan, written=False)
+
+
+class MacOSKeychainCredentialVaultWriter:
+    def __init__(
+        self,
+        *,
+        profile: CredentialVaultProfile,
+        command_runner: Callable[[tuple[str, ...]], None] | None = None,
+        security_binary: str = "/usr/bin/security",
+    ) -> None:
+        self._profile = profile
+        self._command_runner = command_runner or _run_security_command
+        self._security_binary = security_binary
+
+    def write(
+        self,
+        *,
+        credential_ref: str,
+        material: CredentialVaultSecretMaterial,
+    ) -> CredentialVaultWriteResult:
+        plan = plan_credential_vault_write(
+            profile=self._profile,
+            credential_ref=credential_ref,
+            material=material,
+        )
+        if not plan.ready:
+            return _write_result(plan=plan, written=False)
+
+        args = (
+            self._security_binary,
+            "add-generic-password",
+            "-U",
+            "-a",
+            credential_ref,
+            "-s",
+            self._profile.service_name or "",
+            "--stdin",
+        )
+        self._command_runner(args, input_text=_serialize_secret_material(material))
+        return _write_result(plan=plan, written=True)
+
+
+class KmsCredentialVaultWriter:
+    def __init__(
+        self,
+        *,
+        profile: CredentialVaultProfile,
+        kms_writer: Callable[..., str] | None = None,
+    ) -> None:
+        self._profile = profile
+        self._kms_writer = kms_writer
+
+    def write(
+        self,
+        *,
+        credential_ref: str,
+        material: CredentialVaultSecretMaterial,
+    ) -> CredentialVaultWriteResult:
+        plan = plan_credential_vault_write(
+            profile=self._profile,
+            credential_ref=credential_ref,
+            material=material,
+        )
+        blocking_reasons = list(plan.blocking_reasons)
+        if plan.ready and self._kms_writer is None:
+            blocking_reasons.append("credential_vault_kms_writer_missing")
+        if blocking_reasons:
+            return CredentialVaultWriteResult(
+                written=False,
+                backend=plan.backend,
+                credential_ref_configured=plan.credential_ref_configured,
+                sensitive_field_count=plan.sensitive_field_count,
+                expires_at_configured=plan.expires_at_configured,
+                blocking_reasons=tuple(blocking_reasons),
+            )
+
+        self._kms_writer(
+            key_uri=self._profile.kms_key_uri or "",
+            credential_ref=credential_ref,
+            plaintext=_serialize_secret_material(material).encode("utf-8"),
+        )
+        return _write_result(plan=plan, written=True)
+
+
+def build_credential_vault_writer(
+    profile: CredentialVaultProfile,
+    *,
+    command_runner: Callable[..., None] | None = None,
+    kms_writer: Callable[..., str] | None = None,
+) -> DisabledCredentialVaultWriter | MacOSKeychainCredentialVaultWriter | KmsCredentialVaultWriter:
+    if profile.backend == CredentialVaultBackend.MACOS_KEYCHAIN:
+        return MacOSKeychainCredentialVaultWriter(
+            profile=profile,
+            command_runner=command_runner,
+        )
+    if profile.backend == CredentialVaultBackend.KMS:
+        return KmsCredentialVaultWriter(profile=profile, kms_writer=kms_writer)
+    return DisabledCredentialVaultWriter(profile)
 
 
 def build_credential_vault_ref(
@@ -193,3 +343,39 @@ def _safe_ref_part(value: str) -> str:
 
 def _contains_live_broker_secret(payload: Mapping[str, Any]) -> bool:
     return any("trading" in str(key).lower() for key in payload)
+
+
+def _write_result(
+    *,
+    plan: CredentialVaultWritePlan,
+    written: bool,
+) -> CredentialVaultWriteResult:
+    return CredentialVaultWriteResult(
+        written=written,
+        backend=plan.backend,
+        credential_ref_configured=plan.credential_ref_configured,
+        sensitive_field_count=plan.sensitive_field_count,
+        expires_at_configured=plan.expires_at_configured,
+        blocking_reasons=plan.blocking_reasons,
+    )
+
+
+def _serialize_secret_material(material: CredentialVaultSecretMaterial) -> str:
+    return json.dumps(
+        {
+            "payload": dict(material.payload),
+            "expires_at": material.expires_at.isoformat() if material.expires_at else None,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _run_security_command(args: tuple[str, ...], *, input_text: str) -> None:
+    subprocess.run(
+        args,
+        input=input_text,
+        text=True,
+        check=True,
+        capture_output=True,
+    )

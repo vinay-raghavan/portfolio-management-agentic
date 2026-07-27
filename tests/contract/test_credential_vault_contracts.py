@@ -5,7 +5,11 @@ import pytest
 from portfolio_domain import (
     CredentialVaultBackend,
     CredentialVaultSecretMaterial,
+    CredentialVaultWriteResult,
     FyersConnection,
+    KmsCredentialVaultWriter,
+    MacOSKeychainCredentialVaultWriter,
+    build_credential_vault_writer,
     build_credential_vault_ref,
     evaluate_credential_vault_readiness,
     load_credential_vault_profile,
@@ -210,3 +214,114 @@ def test_kms_vault_requires_key_uri_and_hosted_runtime() -> None:
     assert missing.ready is False
     assert "credential_vault_kms_key_uri_missing" in missing.blocking_reasons
     assert ready.ready is True
+
+
+def test_macos_keychain_writer_passes_secret_material_on_stdin_not_arguments() -> None:
+    profile = load_credential_vault_profile(
+        {
+            "CREDENTIAL_VAULT_BACKEND": "macos_keychain",
+            "CREDENTIAL_VAULT_SERVICE": "portfolio-agentic-fyers",
+            "CREDENTIAL_VAULT_LOCAL_RUNTIME": "true",
+        }
+    )
+    credential_ref = build_credential_vault_ref(
+        tenant_id="tenant-1",
+        provider="fyers",
+        purpose="data_access_token",
+        subject_hash="sha256:user",
+        backend=CredentialVaultBackend.MACOS_KEYCHAIN,
+    )
+    material = CredentialVaultSecretMaterial(
+        payload={
+            "access_token": "fyers-access-token-secret",
+            "refresh_token": "fyers-refresh-token-secret",
+        },
+    )
+    captured: dict[str, object] = {}
+
+    def runner(args: tuple[str, ...], *, input_text: str) -> None:
+        captured["args"] = args
+        captured["input_text"] = input_text
+
+    writer = MacOSKeychainCredentialVaultWriter(
+        profile=profile,
+        command_runner=runner,
+    )
+    result = writer.write(credential_ref=credential_ref, material=material)
+
+    args = captured["args"]
+    assert isinstance(result, CredentialVaultWriteResult)
+    assert result.written is True
+    assert result.backend == CredentialVaultBackend.MACOS_KEYCHAIN
+    assert result.credential_ref_configured is True
+    assert result.to_dict()["sensitive_field_count"] == 2
+    assert "/usr/bin/security" in args
+    assert "add-generic-password" in args
+    assert "--stdin" in args
+    assert "-w" not in args
+    assert "portfolio-agentic-fyers" in args
+    assert credential_ref in args
+    serialized_args = str(args).lower()
+    serialized_result = f"{result!r} {result.to_dict()}".lower()
+    assert "fyers-access-token-secret" not in serialized_args
+    assert "fyers-refresh-token-secret" not in serialized_args
+    assert "fyers-access-token-secret" not in serialized_result
+    assert "fyers-refresh-token-secret" not in serialized_result
+    assert "access_token" not in serialized_result
+    assert "refresh_token" not in serialized_result
+    assert "fyers-access-token-secret" in captured["input_text"]
+
+
+def test_credential_vault_writer_fails_closed_when_write_plan_is_not_ready() -> None:
+    profile = load_credential_vault_profile({})
+    material = CredentialVaultSecretMaterial(payload={"access_token": "secret"})
+
+    writer = build_credential_vault_writer(profile)
+    result = writer.write(
+        credential_ref="credential-vault://disabled/fyers/not-real",
+        material=material,
+    )
+
+    assert result.written is False
+    assert result.backend == CredentialVaultBackend.DISABLED
+    assert "credential_vault_disabled" in result.blocking_reasons
+    assert "secret" not in str(result.to_dict()).lower()
+
+
+def test_kms_writer_uses_key_uri_without_returning_plaintext() -> None:
+    profile = load_credential_vault_profile(
+        {
+            "CREDENTIAL_VAULT_BACKEND": "kms",
+            "CREDENTIAL_VAULT_KMS_KEY_URI": "projects/p/locations/l/keyRings/r/cryptoKeys/k",
+            "CREDENTIAL_VAULT_HOSTED_RUNTIME": "true",
+        }
+    )
+    credential_ref = build_credential_vault_ref(
+        tenant_id="tenant-1",
+        provider="fyers",
+        purpose="data_access_token",
+        subject_hash="sha256:user",
+        backend=CredentialVaultBackend.KMS,
+    )
+    material = CredentialVaultSecretMaterial(payload={"access_token": "hosted-secret"})
+    captured: dict[str, object] = {}
+
+    def kms_writer(*, key_uri: str, credential_ref: str, plaintext: bytes) -> str:
+        captured["key_uri"] = key_uri
+        captured["credential_ref"] = credential_ref
+        captured["plaintext"] = plaintext
+        return "kms://ciphertext-handle"
+
+    writer = KmsCredentialVaultWriter(profile=profile, kms_writer=kms_writer)
+    result = writer.write(credential_ref=credential_ref, material=material)
+
+    assert result.written is True
+    assert result.backend == CredentialVaultBackend.KMS
+    assert result.credential_ref_configured is True
+    assert captured["key_uri"] == profile.kms_key_uri
+    assert captured["credential_ref"] == credential_ref
+    assert b"hosted-secret" in captured["plaintext"]
+    serialized_result = f"{result!r} {result.to_dict()}".lower()
+    assert "hosted-secret" not in serialized_result
+    assert "access_token" not in serialized_result
+    assert "kms://ciphertext-handle" not in serialized_result
