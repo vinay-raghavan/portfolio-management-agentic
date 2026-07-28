@@ -99,3 +99,30 @@ def test_research_refresh_accepts_only_registered_source_id_and_normalized_query
     assert unknown.json()["detail"] == "research_source_not_registered"
     assert arbitrary_url.status_code == 400
     assert arbitrary_url.json()["detail"] == "research_query_invalid"
+
+
+def test_research_refresh_kill_switch_blocks_queue_intents_without_blocking_reads(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("RESEARCH_REFRESH_KILL_SWITCH", "true")
+    client = TestClient(app)
+
+    sources = client.get("/v1/research/sources", headers=_headers(roles="viewer"))
+    search = client.post(
+        "/v1/research/search",
+        headers=_headers(),
+        json={"query": "volatility sizing", "limit": 2},
+    )
+    refresh = client.post(
+        "/v1/research/refresh/nse-announcements",
+        headers=_headers(),
+        json={"normalized_query_or_symbol": "NSE:INFY-EQ"},
+    )
+
+    assert sources.status_code == 200
+    assert search.status_code == 200
+    assert refresh.status_code == 503
+    assert refresh.json()["detail"] == "research_refresh_kill_switch_active"
+    serialized = str(refresh.json()).lower()
+    assert "nse-announcements" not in serialized
+    assert "nse:infy-eq" not in serialized

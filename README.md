@@ -482,7 +482,10 @@ stores, and `POST /v1/research/refresh/{source_id}` accepts only a registered
 source id plus a normalized query or symbol. These endpoints require
 `ActorContext`, reject arbitrary URLs, keep source administration outside the
 model-visible surface, and do not use embeddings or store raw prompt/response
-payloads.
+payloads. Set `RESEARCH_REFRESH_KILL_SWITCH=true` or
+`PORTFOLIO_RESEARCH_REFRESH_KILL_SWITCH=true` on `agent-service` to keep source
+listing/search readable while refresh queue-intent requests fail closed before
+source lookup or query normalization.
 
 The default data-provider mode is offline-safe fixtures. To enable configured
 read-only market-data, universe, fundamentals, sentiment, volatility, and macro
