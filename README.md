@@ -359,11 +359,19 @@ Protected API identity is derived by `ActorContext`. Local/offline mode still
 accepts trusted `X-Actor-Sub`, `X-Tenant-Id`, `X-Actor-Roles`, and
 `X-Request-Id` headers so deterministic tests and fixture demos stay
 credential-free. Production-like mode can set `OIDC_AUTH_ENABLED=true` with
-`OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_JSON`, `OIDC_TENANT_CLAIM`, and
-`OIDC_ROLES_CLAIM`; protected endpoints then require a signed Bearer token,
-verify issuer, audience, signature, expiry, subject, tenant claim, roles, and
-optional `X-OIDC-Nonce`, and derive immutable user identity from `sub`.
-OIDC authorization callback state is validated with constant-time comparison.
+`OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_AUTHORIZATION_ENDPOINT`,
+`OIDC_TOKEN_ENDPOINT`, `OIDC_CLIENT_ID`, `OIDC_REDIRECT_URI`,
+`OIDC_JWKS_JSON`, `OIDC_TENANT_CLAIM`, and `OIDC_ROLES_CLAIM`. Browser login
+starts through `/v1/auth/oidc/start`, which generates server-retained state,
+nonce, and PKCE verifier values and returns only the provider authorization URL
+plus a SHA-256 state hash. `/v1/auth/oidc/callback` consumes the one-time state,
+exchanges the code with the private verifier, validates issuer, audience,
+signature, expiry, subject, tenant claim, roles, and nonce from the ID token,
+and returns only public `ActorContext` metadata. Direct protected API calls may
+also present a signed Bearer token; the dependency validates the same issuer,
+audience, signature, expiry, subject, tenant claim, roles, and optional
+`X-OIDC-Nonce`, and derives immutable user identity from `sub`. OIDC state,
+PKCE verifiers, ID tokens, and provider token responses are never returned.
 When a Postgres-backed store needs an actor foreign key, the service resolves
 `issuer + sub` through `actor_identities` and passes that stable UUID to the
 tenant-scoped table instead of storing raw subjects in UUID fields.

@@ -44,6 +44,11 @@ class OidcProviderConfig:
     audience: str = ""
     tenant_claim: str = "tenant_id"
     roles_claim: str = "roles"
+    authorization_endpoint: str = ""
+    token_endpoint: str = ""
+    client_id: str = ""
+    redirect_uri: str = ""
+    scopes: tuple[str, ...] = ("openid", "profile", "email")
     allowed_algorithms: tuple[str, ...] = ("RS256", "ES256")
     clock_skew_seconds: int = 60
     jwks_json: str | None = field(default=None, repr=False)
@@ -57,6 +62,18 @@ def load_oidc_provider_config(env: Mapping[str, str] | None = None) -> OidcProvi
         audience=(active_env.get("OIDC_AUDIENCE") or "").strip(),
         tenant_claim=(active_env.get("OIDC_TENANT_CLAIM") or "tenant_id").strip(),
         roles_claim=(active_env.get("OIDC_ROLES_CLAIM") or "roles").strip(),
+        authorization_endpoint=(
+            active_env.get("OIDC_AUTHORIZATION_ENDPOINT") or ""
+        ).strip(),
+        token_endpoint=(active_env.get("OIDC_TOKEN_ENDPOINT") or "").strip(),
+        client_id=(active_env.get("OIDC_CLIENT_ID") or "").strip(),
+        redirect_uri=(active_env.get("OIDC_REDIRECT_URI") or "").strip(),
+        scopes=tuple(
+            scope.strip()
+            for scope in (active_env.get("OIDC_SCOPES") or "openid profile email").split()
+            if scope.strip()
+        )
+        or ("openid",),
         allowed_algorithms=tuple(
             algorithm.strip()
             for algorithm in (active_env.get("OIDC_ALLOWED_ALGORITHMS") or "RS256,ES256").split(",")

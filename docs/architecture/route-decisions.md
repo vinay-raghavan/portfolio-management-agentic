@@ -39,9 +39,12 @@ The router currently returns a `RouteDecision` for:
   output or request JSON. In production-like mode,
   `OIDC_AUTH_ENABLED=true` makes protected routes derive `ActorContext` from a
   signed Bearer token after issuer, audience, signature, expiry, subject,
-  tenant, role, and optional nonce validation; trusted actor headers remain
-  only the local/offline fallback. Missing actor subject or tenant metadata
-  fails before protected paper state is read or written.
+  tenant, role, and optional nonce validation. Browser login uses
+  `/v1/auth/oidc/start` and `/v1/auth/oidc/callback` with server-retained
+  one-time state, nonce, and PKCE verifier values; callbacks exchange codes
+  with the private verifier and return only public actor metadata. Trusted
+  actor headers remain only the local/offline fallback. Missing actor subject
+  or tenant metadata fails before protected paper state is read or written.
 - Pre-market briefing routes may expose only the read-only
   `pre_market_briefing` capability tools.
 - Paper proposal routes may expose only the draft-only

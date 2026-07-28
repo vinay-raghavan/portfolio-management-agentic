@@ -74,9 +74,17 @@ Forbidden live-order and broker-token functions are not exposed to the agent.
 Protected endpoints derive identity through `ActorContext`. Local/offline mode
 accepts trusted `X-Actor-*` headers for deterministic tests. Production-like
 deployments can enable signed OIDC bearer-token validation with
-`OIDC_AUTH_ENABLED=true`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_JSON`,
-`OIDC_TENANT_CLAIM`, and `OIDC_ROLES_CLAIM`; the dependency verifies issuer,
-audience, signature, expiry, immutable `sub`, tenant claim, roles, and optional
+`OIDC_AUTH_ENABLED=true`, `OIDC_ISSUER`, `OIDC_AUDIENCE`,
+`OIDC_AUTHORIZATION_ENDPOINT`, `OIDC_TOKEN_ENDPOINT`, `OIDC_CLIENT_ID`,
+`OIDC_REDIRECT_URI`, `OIDC_JWKS_JSON`, `OIDC_TENANT_CLAIM`, and
+`OIDC_ROLES_CLAIM`. Browser login starts at `/v1/auth/oidc/start`, which
+returns a provider authorization URL but never the PKCE verifier. The callback
+at `/v1/auth/oidc/callback` consumes one-time state, exchanges the code with
+the server-retained verifier, validates the ID token issuer, audience,
+signature, expiry, immutable `sub`, tenant claim, roles, and nonce, and returns
+only public `ActorContext` metadata. Direct protected API calls may also use a
+signed Bearer token; the dependency verifies the same issuer, audience,
+signature, expiry, immutable `sub`, tenant claim, roles, and optional
 `X-OIDC-Nonce` before any protected route reads or writes state. In Postgres
 mode, storage paths that require an actor foreign key upsert `issuer + sub`
 into `actor_identities` and use the returned UUID, while audit payloads keep

@@ -73,6 +73,11 @@ def test_oidc_config_loads_generic_provider_settings_without_secrets() -> None:
             "OIDC_AUTH_ENABLED": "true",
             "OIDC_ISSUER": "https://issuer.example.com",
             "OIDC_AUDIENCE": "portfolio-agent",
+            "OIDC_AUTHORIZATION_ENDPOINT": "https://issuer.example.com/auth",
+            "OIDC_TOKEN_ENDPOINT": "https://issuer.example.com/token",
+            "OIDC_CLIENT_ID": "portfolio-console",
+            "OIDC_REDIRECT_URI": "http://localhost:8000/v1/auth/oidc/callback",
+            "OIDC_SCOPES": "openid profile email",
             "OIDC_TENANT_CLAIM": "tenant_id",
             "OIDC_ROLES_CLAIM": "roles",
             "OIDC_ALLOWED_ALGORITHMS": "RS256,ES256",
@@ -84,6 +89,11 @@ def test_oidc_config_loads_generic_provider_settings_without_secrets() -> None:
     assert config.enabled is True
     assert config.issuer == "https://issuer.example.com"
     assert config.audience == "portfolio-agent"
+    assert config.authorization_endpoint == "https://issuer.example.com/auth"
+    assert config.token_endpoint == "https://issuer.example.com/token"
+    assert config.client_id == "portfolio-console"
+    assert config.redirect_uri == "http://localhost:8000/v1/auth/oidc/callback"
+    assert config.scopes == ("openid", "profile", "email")
     assert config.tenant_claim == "tenant_id"
     assert config.roles_claim == "roles"
     assert config.allowed_algorithms == ("RS256", "ES256")

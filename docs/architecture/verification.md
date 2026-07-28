@@ -121,10 +121,13 @@ Current coverage:
 - Agent definition contracts verify the ADK instruction contains eval-aligned workflow routes and refusal guidance, that local/unit imports use an in-process adapter by default, that production-like `AGENT_TOOL_TRANSPORT=mcp` builds a private streamable-HTTP `McpToolset` filtered to `EXPOSED_TOOL_NAMES`, that public MCP URLs are rejected, and that runtime callbacks short-circuit forbidden/human-API routes, filter paper-proposal tools to the capability manifest, and block out-of-route stale tool calls before model-backed evals run.
 - MCP tool-description and runtime contracts verify every exposed model-facing tool names its policy tier, high-risk provider-readiness, recommendation-to-paper-order, and report tools include trajectory hints before model-backed evals run, and human-approval, legacy fill-mutation, and forbidden compatibility traps are absent from both MCP transport registration and the package-level `portfolio_mcp` public API.
 - Web console contracts verify the Vite/React app, safe product surfaces, Compose wiring, `/console/overview`, focused `/console/workflows` pages, paper-order readiness preflight visibility, provider source setup visibility, guided onboarding, required env-key display, active adapter modes, setup-gap feedback, schema/template guidance, provider import validation feedback, provider profile/import-job settings, import-gate visibility on decision pages, full provider refresh controls, per-provider backoff state, `ActorContext`-derived approval identity, body-spoof rejection for `approved_by`, and the paper-only action lifecycle.
-- OIDC identity contracts validate generic provider settings, issuer, audience,
-  signed JWTs, expiry, immutable subject, tenant claim, roles, nonce, and
-  constant-time authorization state comparison. When `OIDC_AUTH_ENABLED=true`,
-  protected API dependencies require a signed Bearer token; trusted actor
+- OIDC identity contracts validate generic provider settings, Authorization
+  Code + PKCE start/callback, server-retained one-time state, S256 code
+  challenge, private verifier exchange, issuer, audience, signed JWTs, expiry,
+  immutable subject, tenant claim, roles, nonce, and constant-time
+  authorization state comparison. When `OIDC_AUTH_ENABLED=true`, protected API
+  dependencies require a signed Bearer token or the browser flow must complete
+  through `/v1/auth/oidc/start` and `/v1/auth/oidc/callback`; trusted actor
   headers remain only the local/offline fallback.
 - Actor identity storage contracts upsert verified `issuer + subject` pairs in
   `actor_identities`, store only hashed/optional profile fields, and ensure
