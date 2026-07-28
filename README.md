@@ -683,9 +683,18 @@ or stored in this table.
 GitHub Actions are split into CI and CD:
 
 - CI runs deterministic tests, Docker Compose validation, container builds, web readiness, and MCP safe-tool smoke checks for PRs and topic-branch pushes.
-- CD publishes agent-service, MCP-server, and web-console images to GHCR only for `v*` tags or explicit manual dispatch.
+- The manual Eval baseline workflow runs credentialed model evals when
+  provider credentials are configured as repository secrets/variables, and
+  uploads exact-commit artifacts named
+  `portfolio-agentic-eval-artifacts-${{ github.sha }}`.
+- CD publishes agent-service, MCP-server, and web-console images to GHCR only
+  for `v*` tags or explicit manual dispatch, and first verifies a successful
+  exact-commit eval artifact with completed baseline, passed triage, 45/45
+  metric coverage, zero failures, traces, and grade-result JSON.
 
-No workflow requires broker credentials, model provider keys, or live-trading access.
+No workflow requires broker credentials or live-trading access. Model provider
+keys are required only for the manual credentialed eval workflow that produces
+the CD release artifact; CI remains credential-free.
 
 ## Branching Model
 
