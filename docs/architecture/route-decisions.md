@@ -23,8 +23,10 @@ The router currently returns a `RouteDecision` for:
   `/v1/integrations/fyers/refresh`; OAuth start/callback/status/disconnect use
   `/v1/integrations/fyers/oauth/*`. These operations stay outside
   model-visible tools, require server-created `ActorContext`, return no provider
-  tokens or PKCE verifier, and currently mark callbacks
-  `token_exchange_not_configured` until a token-exchange worker is enabled.
+  tokens or PKCE verifier, and mark callbacks
+  `token_exchange_not_configured` unless an explicit FYERS token-exchange flag
+  and ready credential vault allow the protected callback to exchange the auth
+  code directly into the vault.
   In Postgres mode, the protected API persists only sanitized connection
   metadata, optional opaque credential-vault refs, and hashed single-use OAuth
   state through the tenant-scoped FYERS integration store. The PKCE verifier is

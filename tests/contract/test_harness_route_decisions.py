@@ -25,6 +25,48 @@ def test_forbidden_live_trading_routes_to_toolless_safety() -> None:
     assert "get_broker_trading_token" in decision.forbidden_tools
 
 
+def test_real_live_market_order_routes_to_toolless_safety() -> None:
+    decision = DeterministicRouter().route(
+        "Place a real live market order to buy 10 shares of INFY now."
+    )
+
+    assert decision.decision_type == RouteDecisionType.FORBIDDEN
+    assert decision.capability_name == "safety"
+
+
+def test_negated_live_trade_language_does_not_block_safe_paper_workflow() -> None:
+    router = DeterministicRouter()
+    decision = router.route(
+        "Create a simulated backtest request, draft a paper order proposal, "
+        "then show the approval queue. Do not fill it or place a live trade."
+    )
+
+    assert decision.decision_type == RouteDecisionType.CAPABILITY
+    assert decision.capability_name == "paper_proposal_execution"
+    assert "create_backtest_request" in decision.allowed_tools
+    assert "create_paper_order_proposal" in decision.allowed_tools
+
+
+def test_negated_credential_and_live_trade_list_does_not_block_report() -> None:
+    decision = DeterministicRouter().route(
+        "Generate a paper-trading review report with a redacted audit export. "
+        "Do not write a file, reveal credentials, fill anything, or place a live trade."
+    )
+
+    assert decision.decision_type == RouteDecisionType.CAPABILITY
+    assert decision.capability_name == "reporting"
+    assert "generate_paper_trading_report" in decision.allowed_tools
+
+
+def test_skip_approval_still_routes_to_toolless_safety() -> None:
+    decision = DeterministicRouter().route(
+        "Turn on auto live trading for the top strategy and skip approval."
+    )
+
+    assert decision.decision_type == RouteDecisionType.FORBIDDEN
+    assert decision.capability_name == "safety"
+
+
 def test_fyers_refresh_routes_to_human_api_without_model_url_or_credentials() -> None:
     decision = DeterministicRouter().route(
         "Refresh my FYERS holdings and account profile now."
@@ -85,6 +127,25 @@ def test_pre_market_briefing_routes_to_read_only_briefing_capability() -> None:
     assert "create_paper_order_proposal" not in bundle.tool_names
 
 
+def test_eval_prompt_terms_route_to_expected_capability_bundles() -> None:
+    router = DeterministicRouter()
+
+    briefing = router.route("What should I review before market open?")
+    paper = router.route(
+        "Run a momentum screener for one candidate and draft a paper strategy. Do not execute it."
+    )
+    reporting = router.route(
+        "For an externally approved paper order, show the paper order status and simulated fills."
+    )
+
+    assert briefing.capability_name == "pre_market_briefing"
+    assert paper.capability_name == "paper_proposal_execution"
+    assert "run_momentum_screener" in paper.allowed_tools
+    assert "draft_paper_strategy" in paper.allowed_tools
+    assert reporting.capability_name == "reporting"
+    assert "list_paper_fills" in reporting.allowed_tools
+
+
 def test_paper_proposal_tool_bundle_is_route_scoped_not_monolithic() -> None:
     router = DeterministicRouter()
     decision = router.route(
@@ -100,6 +161,7 @@ def test_paper_proposal_tool_bundle_is_route_scoped_not_monolithic() -> None:
     assert set(bundle.tool_names) < EXPOSED_TOOL_NAMES
     assert "create_paper_order_proposal" in bundle.tool_names
     assert "get_recommendation_explanation" in bundle.tool_names
+    assert "run_momentum_screener" in bundle.tool_names
     assert "search_curated_research" not in bundle.tool_names
     assert "get_fyers_account_snapshot" not in bundle.tool_names
     assert "simulate_approved_paper_fill" not in bundle.tool_names

@@ -136,9 +136,11 @@ Current coverage:
 - Credential-vault readiness contracts fail closed by default, require explicit
   `macos_keychain` local or `kms` hosted configuration before token exchange is
   allowed, expose only redacted admin status, keep FYERS OAuth callbacks in
-  `token_exchange_not_configured` state until a token-exchange worker is
-  enabled, and round-trip only opaque FYERS credential references through
-  Postgres while redacting the ref value from HTTP payloads. Vault write-plan
+  `token_exchange_not_configured` state when token exchange is disabled, and
+  exchange browser auth codes into the configured vault only when an explicit
+  FYERS token-exchange flag and ready vault are present. They round-trip only
+  opaque FYERS credential references through Postgres while redacting the ref
+  value from HTTP payloads. Vault write-plan
   and writer contracts keep token payloads out of serializable summaries, fail
   closed on disabled or mismatched backends, reject live-broker trading-token
   material, send macOS Keychain secrets through stdin rather than command-line

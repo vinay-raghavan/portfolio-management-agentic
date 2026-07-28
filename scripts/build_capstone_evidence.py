@@ -270,6 +270,21 @@ def _eval_submission_readiness(
     candidate_commit: str,
     triage_candidate_commit: str,
 ) -> dict[str, Any]:
+    if baseline_status == "ready":
+        return {
+            "status": "preflight_ready",
+            "source": "baseline_summary",
+            "blocking_reasons": _safe_string_list(
+                summary_readiness.get("blocking_reasons")
+            )
+            or ["Eval preflight passed, but credentialed generate/grade has not run."],
+            "required_next_actions": _safe_string_list(
+                summary_readiness.get("required_next_actions")
+            )
+            or [
+                "Run uv run python scripts/run_agent_evals.py run --fail-on-skip."
+            ],
+        }
     if baseline_status != "completed":
         return {
             "status": "blocked",
@@ -392,13 +407,22 @@ def _remaining_gaps(
     readiness = _as_dict(eval_baseline.get("submission_readiness"))
     readiness_status = str(readiness.get("status") or "blocked")
     if eval_baseline.get("status") != "completed":
-        gaps.append(
-            {
-                "id": "credentialed_model_eval_baseline",
-                "status": "blocked_without_model_credentials",
-                "next_action": "Configure model or judge credentials and run uv run python scripts/run_agent_evals.py run --fail-on-skip.",
-            }
-        )
+        if readiness_status == "preflight_ready":
+            gaps.append(
+                {
+                    "id": "credentialed_model_eval_baseline",
+                    "status": "ready_to_run",
+                    "next_action": "Run uv run python scripts/run_agent_evals.py run --fail-on-skip for the exact candidate commit.",
+                }
+            )
+        else:
+            gaps.append(
+                {
+                    "id": "credentialed_model_eval_baseline",
+                    "status": "blocked_without_model_credentials",
+                    "next_action": "Configure model or judge credentials and run uv run python scripts/run_agent_evals.py run --fail-on-skip.",
+                }
+            )
     elif readiness_status == "needs_triage":
         gaps.append(
             {

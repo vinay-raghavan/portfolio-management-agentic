@@ -6,13 +6,17 @@
   "allowed_tools": [
     "explain_candidate_evidence",
     "explain_factor_stack",
+    "cite_strategy_evidence",
     "get_market_data_snapshot",
+    "get_pattern_playbook",
     "get_universe_members",
     "list_market_data_snapshots",
     "list_screener_runs",
     "list_universes",
     "run_momentum_screener",
-    "run_screener"
+    "run_screener",
+    "search_curated_research",
+    "search_pattern_library"
   ],
   "context_sources": [
     "market snapshots",

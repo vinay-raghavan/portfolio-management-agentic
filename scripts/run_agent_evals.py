@@ -839,10 +839,22 @@ def build_run_summary(
         next_actions = [
             "Remove --dry-run in a credentialed environment to generate traces and grade results.",
         ]
+    elif status == "ready":
+        next_actions = [
+            "Run uv run python scripts/run_agent_evals.py run --fail-on-skip to generate traces and grade results.",
+        ]
     else:
         next_actions = [
             "Use the preflight output to decide whether credentials, files, or agents-cli are missing.",
         ]
+
+    produced_artifacts = status in {"completed", "failed"}
+    trace_files = (
+        _artifact_files(config.app_dir, config.traces_dir) if produced_artifacts else []
+    )
+    grade_result_files = (
+        _artifact_files(config.app_dir, config.results_dir) if produced_artifacts else []
+    )
 
     return EvalRunSummary(
         status=status,
@@ -856,8 +868,8 @@ def build_run_summary(
             "traces_dir": _path_string(config.traces_dir),
             "results_dir": _path_string(config.results_dir),
             "summary_output": _path_string(config.summary_output),
-            "trace_files": _artifact_files(config.app_dir, config.traces_dir),
-            "grade_result_files": _artifact_files(config.app_dir, config.results_dir),
+            "trace_files": trace_files,
+            "grade_result_files": grade_result_files,
         },
         commands={
             **preflight.commands,
@@ -868,8 +880,8 @@ def build_run_summary(
         submission_readiness=_run_submission_readiness(
             status=status,
             command_results=command_results,
-            trace_files=_artifact_files(config.app_dir, config.traces_dir),
-            grade_result_files=_artifact_files(config.app_dir, config.results_dir),
+            trace_files=trace_files,
+            grade_result_files=grade_result_files,
             missing_environment=preflight.missing_environment,
             missing_binaries=preflight.missing_binaries,
             missing_files=preflight.missing_files,
@@ -933,6 +945,14 @@ def _run_submission_readiness(
             blocking_reasons.append("Missing eval files: " + ", ".join(missing_files))
         required_next_actions.append(
             "Configure the missing preflight requirements and rerun uv run python scripts/run_agent_evals.py run --fail-on-skip."
+        )
+    elif status == "ready":
+        readiness_status = "preflight_ready"
+        blocking_reasons.append(
+            "Eval preflight passed, but credentialed generate/grade has not run."
+        )
+        required_next_actions.append(
+            "Run uv run python scripts/run_agent_evals.py run --fail-on-skip."
         )
     elif status == "failed":
         readiness_status = "failed"

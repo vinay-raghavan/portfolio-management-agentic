@@ -263,7 +263,7 @@ Workflow routes:
 - Candidate explanation: use list_universes or get_universe_members when universe context matters, run_screener or run_momentum_screener for candidates, then call explain_candidate_evidence or explain_factor_stack before answering. If the user asks for pattern evidence, source grounding, citations, or relevant pattern sources, call cite_strategy_evidence or search_pattern_library/search_curated_research/get_pattern_playbook after the candidate/factor evidence; do not rely only on citations embedded inside factor output. Do not stop after the screener when explanation or citations are requested.
 - Recommendation to paper order: always call get_recommendation_explanation before create_paper_order_proposal, even when the user starts from a backtest request. If the user asks for paper execution, create or inspect simulated backtest evidence with create_backtest_request, get_backtest_request, get_backtest_result, and list_backtest_requests, then call create_paper_order_proposal only when the readiness preflight can stay pending approval. Show get_approval_queue and get_audit_events after proposal attempts.
 - Approval-gated simulated fill: approval and fill mutation must come from the verified human approval API or protected paper-execution worker, never from the model. The model cannot approve orders, simulate fills, or supply approver identity. For already-approved, externally approved, post-approval, or simulated-fill paper-state inspection, first call get_approval_queue and list_paper_orders to verify approval/order context, then list_paper_positions, list_paper_fills, get_paper_portfolio_accounting, and get_audit_events.
-- Strategy and backtest history: use draft_paper_strategy for new paper strategy drafts. When a user explicitly asks to draft from screener/backtest evidence, infer a concise rationale from the observed tool evidence instead of asking a follow-up. Use list_strategy_drafts/get_strategy_draft for stored strategy context, and list_backtest_requests/get_backtest_request/get_backtest_result for stored simulation context.
+- Strategy and backtest history: use draft_paper_strategy for new paper strategy drafts. When a user explicitly asks to draft from screener/backtest evidence, infer a concise rationale from the observed tool evidence instead of asking a follow-up. Paper strategy draft responses must summarize the screener evidence, screener counterevidence, and returned strategy risk_notes, including elevated volatility, sizing, stop, approval, and paper-only constraints when present. Use list_strategy_drafts/get_strategy_draft for stored strategy context, and list_backtest_requests/get_backtest_request/get_backtest_result for stored simulation context.
 - Paper-trading report: use generate_paper_trading_report for read-only review, accounting, positions, orders, fills, approvals, risk state, recommendation context, and redacted audit export requests. Use get_audit_events when the user asks for the raw redacted audit trail.
 - Feature navigation: summarize dashboard, portfolio, watchlist, screeners, provider settings, strategy/backtest, recommendation, approvals, simulated fills, reports, risk, and audit capabilities as paper-only or read-only. Mention that configured data adapters are for data fetching only.
 - Forbidden requests: for live order placement, live strategy enablement, broker trading token use, credential disclosure, provider secret disclosure, or approval bypass, refuse without calling a tool. State the safe paper-only alternative and the no live-trading fallback.
@@ -285,8 +285,22 @@ def _extract_text_from_content(content: Any) -> str:
     return "\n".join(text_parts)
 
 
-def _route_scope_model_request(context: Any, llm_request: Any) -> LlmResponse | None:
+def _route_scope_model_request(
+    context: Any | None = None,
+    llm_request: Any | None = None,
+    **kwargs: Any,
+) -> LlmResponse | None:
     """Filter model-visible tools to the deterministic route bundle."""
+    if context is None:
+        context = kwargs.get("callback_context")
+    if llm_request is None:
+        llm_request = kwargs.get("llm_request")
+    if llm_request is None:
+        return _safe_route_response(
+            error_code="portfolio_route_invalid_callback",
+            message="The route-scope callback could not inspect the model request.",
+            metadata={"model_visible": False, "tool_names": []},
+        )
     user_text = _extract_text_from_content(getattr(context, "user_content", None))
     decision = ROUTER.route(user_text)
     if decision.decision_type == RouteDecisionType.NEEDS_CLASSIFICATION:
@@ -299,9 +313,12 @@ def _route_scope_model_request(context: Any, llm_request: Any) -> LlmResponse | 
         return _safe_route_response(
             error_code="portfolio_route_forbidden",
             message=(
-                "I can’t help with live trading, broker-token use, credential "
-                "disclosure, or approval bypass. I can help with the safe "
-                "paper-only workflow instead."
+                "I can’t help with live trading, live strategy enablement, "
+                "broker-token use, credential disclosure, provider-secret "
+                "disclosure, or approval bypass. There is no live-trading "
+                "fallback in this agent. I can help with the safe paper-only "
+                "workflow instead; approval and fill mutation belong to the "
+                "verified human API or protected paper-execution worker."
             ),
             metadata=bundle.to_dict(),
         )
@@ -347,8 +364,17 @@ def _route_scope_model_request(context: Any, llm_request: Any) -> LlmResponse | 
     return None
 
 
-def _route_scope_tool_call(tool: Any, args: dict[str, Any], context: Any) -> dict | None:
+def _route_scope_tool_call(
+    tool: Any | None = None,
+    args: dict[str, Any] | None = None,
+    context: Any | None = None,
+    **kwargs: Any,
+) -> dict | None:
     del args
+    if tool is None:
+        tool = kwargs.get("tool")
+    if context is None:
+        context = kwargs.get("tool_context") or kwargs.get("context")
     user_text = _extract_text_from_content(getattr(context, "user_content", None))
     decision = ROUTER.route(user_text)
     if decision.decision_type == RouteDecisionType.NEEDS_CLASSIFICATION:

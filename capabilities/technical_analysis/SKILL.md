@@ -11,17 +11,21 @@ Use this capability for chart/factor explanations, screener evidence, and candid
 
 - `explain_candidate_evidence`
 - `explain_factor_stack`
+- `cite_strategy_evidence`
 - `get_market_data_snapshot`
+- `get_pattern_playbook`
 - `get_universe_members`
 - `list_market_data_snapshots`
 - `list_screener_runs`
 - `list_universes`
 - `run_momentum_screener`
 - `run_screener`
+- `search_curated_research`
+- `search_pattern_library`
 
 ## Context contract
 
-Use market snapshots, universe members, screener runs, and factor evidence. Report missing/stale data explicitly instead of filling gaps with model intuition.
+Use market snapshots, universe members, screener runs, factor evidence, and allowlisted pattern/research citations when source grounding is requested. Report missing/stale data explicitly instead of filling gaps with model intuition.
 
 ## Response contract
 

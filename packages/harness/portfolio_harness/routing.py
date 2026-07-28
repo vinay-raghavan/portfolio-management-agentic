@@ -96,7 +96,7 @@ class DeterministicRouter:
 
     def route(self, user_text: str) -> RouteDecision:
         text = _normalize(user_text)
-        if _contains_any(text, FORBIDDEN_TERMS):
+        if _contains_non_negated_any(text, FORBIDDEN_TERMS):
             return RouteDecision.from_manifest(
                 decision_type=RouteDecisionType.FORBIDDEN,
                 manifest=self.manifests["safety"],
@@ -124,6 +124,13 @@ class DeterministicRouter:
                 decision_type=RouteDecisionType.CAPABILITY,
                 manifest=self.manifests["pre_market_briefing"],
                 reason="Pre-market briefing request routes to read-only briefing capability.",
+                confidence=1.0,
+            )
+        if _contains_any(text, REPORTING_TERMS):
+            return RouteDecision.from_manifest(
+                decision_type=RouteDecisionType.CAPABILITY,
+                manifest=self.manifests["reporting"],
+                reason="Read-only reporting or feature-navigation request routes to reporting capability.",
                 confidence=1.0,
             )
         if _contains_all(text, ("paper", "proposal")) or _contains_any(
@@ -294,6 +301,8 @@ class DeterministicRouter:
 
 
 FORBIDDEN_TERMS = (
+    "live market order",
+    "real live market order",
     "live order",
     "place a live",
     "place live",
@@ -302,10 +311,15 @@ FORBIDDEN_TERMS = (
     "trading token",
     "enable live strategy",
     "enable auto trade",
+    "auto live trading",
     "print all credentials",
+    "print broker credentials",
+    "reveal credentials",
     "show credentials",
+    "provider secrets",
     "approval bypass",
     "bypass approval",
+    "skip approval",
 )
 
 FYERS_REFRESH_TERMS = (
@@ -334,6 +348,7 @@ PRE_MARKET_BRIEFING_TERMS = (
     "pre market briefing",
     "morning briefing",
     "market briefing",
+    "before market open",
 )
 
 PAPER_PROPOSAL_TERMS = (
@@ -341,7 +356,25 @@ PAPER_PROPOSAL_TERMS = (
     "paper trade proposal",
     "create a paper order",
     "draft paper strategy",
+    "paper strategy",
+    "paper backtest",
+    "simulated backtest",
+    "recommendation explanation workflow",
     "backtest and risk",
+)
+
+REPORTING_TERMS = (
+    "paper-trading review report",
+    "paper trading review report",
+    "paper-trading report",
+    "paper trading report",
+    "redacted audit export",
+    "already approved",
+    "externally approved",
+    "simulated fills",
+    "paper order status",
+    "what this portfolio agent can do",
+    "features are paper-only",
 )
 
 READ_ONLY_CLASSIFICATION_TERMS = {
@@ -360,6 +393,10 @@ READ_ONLY_CLASSIFICATION_TERMS = {
         "configured data",
         "data health",
         "provider health",
+        "data providers are available",
+        "providers are available",
+        "before using real market data",
+        "fixture provider",
         "import reconciliation",
         "import preview",
         "source onboarding",
@@ -367,6 +404,8 @@ READ_ONLY_CLASSIFICATION_TERMS = {
     ),
     "reporting": (
         "paper trading report",
+        "paper-trading report",
+        "paper-trading review report",
         "audit report",
         "fills report",
         "accounting report",
@@ -383,11 +422,14 @@ READ_ONLY_CLASSIFICATION_TERMS = {
     ),
     "risk_review": (
         "risk review",
+        "paper-trading risk",
+        "paper trading risk",
         "risk state",
         "exposure",
         "concentration",
         "drawdown",
         "safety switch",
+        "should be paused",
     ),
     "technical_analysis": (
         "technical analysis",
@@ -407,6 +449,37 @@ def _normalize(value: str) -> str:
 
 def _contains_any(value: str, terms: tuple[str, ...]) -> bool:
     return any(term in value for term in terms)
+
+
+def _contains_non_negated_any(value: str, terms: tuple[str, ...]) -> bool:
+    return any(_contains_non_negated_term(value, term) for term in terms)
+
+
+def _contains_non_negated_term(value: str, term: str) -> bool:
+    start = value.find(term)
+    while start != -1:
+        prefix = value[max(0, start - 160) : start]
+        if not _is_negated_prefix(prefix):
+            return True
+        start = value.find(term, start + 1)
+    return False
+
+
+def _is_negated_prefix(prefix: str) -> bool:
+    sentence_start = max(prefix.rfind("."), prefix.rfind("?"), prefix.rfind("!"), prefix.rfind(";"))
+    scoped_prefix = prefix[sentence_start + 1 :] if sentence_start >= 0 else prefix
+    return any(
+        marker in scoped_prefix
+        for marker in (
+            "do not ",
+            "don't ",
+            "dont ",
+            "never ",
+            "without ",
+            "not ",
+            "no ",
+        )
+    )
 
 
 def _contains_all(value: str, terms: tuple[str, ...]) -> bool:
