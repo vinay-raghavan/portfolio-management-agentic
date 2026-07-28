@@ -18,7 +18,8 @@ def _compose_command() -> list[str] | None:
 def test_root_env_example_uses_safe_portable_defaults() -> None:
     env_example = Path(".env.example").read_text()
 
-    assert "LLM_PROVIDER=gemini" in env_example
+    assert "LLM_PROVIDER=ollama" in env_example
+    assert "LLM_MODEL=llama3.1:8b" in env_example
     assert "ENABLE_CLOUD_TELEMETRY=false" in env_example
     assert "MCP_TRANSPORT=streamable-http" in env_example
     assert "AGENT_TOOL_TRANSPORT=mcp" in env_example
@@ -50,14 +51,13 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "PORTFOLIO_MACRO_PROVIDER=fixture" in env_example
     assert "# PORTFOLIO_MACRO_PROVIDER=json_file" in env_example
     assert "# PORTFOLIO_MACRO_JSON_PATH=data/macro.json" in env_example
-    assert "# LLM_MODEL=llama3.1:8b" in env_example
-    assert "# OLLAMA_BASE_URL=http://host.containers.internal:11434" in env_example
-    assert "# OLLAMA_IMAGE_TAG=0.32.3" in env_example
-    assert "# OLLAMA_PREPULL_MODEL=llama3.1:8b" in env_example
-    assert "# OLLAMA_MODEL_DIGEST=sha256:<pinned-local-model-digest>" in env_example
-    assert "# OLLAMA_STATUS_TIMEOUT_SECONDS=1.5" in env_example
-    assert "# OLLAMA_AVAILABLE_MODEL_DIGESTS=llama3.1:8b=sha256:<pinned-local-model-digest>" in env_example
-    assert "# MODEL_TUNING_CANDIDATES=llama3.1:8b,gemma:7b,gemma4:12b" in env_example
+    assert "OLLAMA_BASE_URL=http://host.containers.internal:11434" in env_example
+    assert "OLLAMA_IMAGE_TAG=0.32.3" in env_example
+    assert "OLLAMA_PREPULL_MODEL=llama3.1:8b" in env_example
+    assert "OLLAMA_MODEL_DIGEST=sha256:<pinned-local-model-digest>" in env_example
+    assert "OLLAMA_STATUS_TIMEOUT_SECONDS=1.5" in env_example
+    assert "OLLAMA_AVAILABLE_MODEL_DIGESTS=llama3.1:8b=sha256:<pinned-local-model-digest>" in env_example
+    assert "MODEL_TUNING_CANDIDATES=llama3.1:8b,gemma:7b,gemma4:12b" in env_example
     assert "FYERS_CLIENT_ID" not in env_example.upper()
     assert "FYERS_CLIENT_SECRET" not in env_example.upper()
     assert "FYERS_ACCESS_TOKEN" not in env_example.upper()
@@ -84,6 +84,8 @@ def test_dockerignore_excludes_local_references_and_env_files() -> None:
 def test_compose_mounts_paper_ledger_volume() -> None:
     compose = Path("docker-compose.yml").read_text()
 
+    assert "LLM_PROVIDER: ${LLM_PROVIDER:-ollama}" in compose
+    assert "LLM_MODEL: ${LLM_MODEL:-llama3.1:8b}" in compose
     assert "PAPER_LEDGER_DB_PATH: ${PAPER_LEDGER_DB_PATH:-/data/paper-ledger.db}" in compose
     assert "PAPER_EXECUTION_KILL_SWITCH: ${PAPER_EXECUTION_KILL_SWITCH:-false}" in compose
     assert "FYERS_CONNECTOR_KILL_SWITCH: ${FYERS_CONNECTOR_KILL_SWITCH:-false}" in compose
@@ -134,10 +136,13 @@ def test_compose_mounts_paper_ledger_volume() -> None:
 
 def test_agent_service_image_includes_shared_runtime_packages() -> None:
     dockerfile = Path("apps/agent-service/Dockerfile").read_text()
+    pyproject = Path("apps/agent-service/pyproject.toml").read_text()
 
     assert "COPY ./packages/capabilities ./packages/capabilities" in dockerfile
     assert "COPY ./packages/harness ./packages/harness" in dockerfile
     assert "COPY ./packages/model-provider ./packages/model-provider" in dockerfile
+    assert '"google-adk[gcp]>=2.0.0,<3.0.0"' in pyproject
+    assert '"litellm>=1.85.6,<2.0.0"' in pyproject
 
 
 def test_compose_exposes_web_console() -> None:

@@ -44,8 +44,8 @@ services:
       context: .
       dockerfile: apps/agent-service/Dockerfile
     environment:
-      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
-      LLM_MODEL: ${LLM_MODEL:-gemini-flash-latest}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-llama3.1:8b}
       GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-False}
       ENABLE_CLOUD_TELEMETRY: ${ENABLE_CLOUD_TELEMETRY:-false}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}

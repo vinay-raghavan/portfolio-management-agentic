@@ -338,7 +338,7 @@ KNOWN_LOCAL_MODEL_CAPABILITIES: dict[str, dict[str, object]] = {
 
 
 def load_model_provider_config(env: Mapping[str, str]) -> ModelProviderConfig:
-    provider = ModelProvider(env.get("LLM_PROVIDER", ModelProvider.GEMINI.value))
+    provider = ModelProvider(env.get("LLM_PROVIDER", ModelProvider.OLLAMA.value))
     model = env.get("LLM_MODEL", DEFAULT_MODELS[provider])
 
     if provider == ModelProvider.GEMINI:

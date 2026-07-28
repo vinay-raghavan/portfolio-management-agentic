@@ -6,17 +6,17 @@ Accepted.
 
 ## Context
 
-The first capstone implementation can use Google Gemini through the ADK stack, but the project should not become permanently coupled to one hosted model provider. Future development may use a local model through Ollama or another OpenAI-compatible endpoint.
+The first capstone implementation can use Google Gemini through the ADK stack, but the project should not become permanently coupled to one hosted model provider. Production-like local development now uses a private Ollama profile with `llama3.1:8b`; hosted Gemini and OpenAI-compatible endpoints remain swappable alternatives.
 
 The project is also finance-adjacent. Safety cannot depend only on model instructions because model behavior differs by provider and local models may have weaker tool-use or refusal behavior.
 
 ## Decision
 
-Use Gemini as the first working provider, while designing the agent service around model-provider configuration and capability checks.
+Use provider-neutral model configuration and capability checks. Native private Ollama with `llama3.1:8b` is the default local profile, while Gemini remains a supported hosted provider.
 
 Provider targets:
 
-- `gemini`: primary capstone provider.
+- `gemini`: supported hosted capstone provider.
 - `ollama`: local provider through a private native Ollama gateway, with
   `llama3.1:8b` as the first pilot model.
 - `openai_compatible`: planned generic provider for local gateways or hosted APIs.
