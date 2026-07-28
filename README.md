@@ -35,10 +35,14 @@ explicit safety policy.
   `/oauth/refresh` compatibility alias). They require server-created
   `ActorContext`, generate OAuth state and PKCE challenge without returning a
   verifier, store the verifier in a short-lived in-memory/Redis cache only,
-  keep callback token exchange disabled until a credential vault is wired, and
-  refresh only through the read-only normalized FYERS connector
+  keep callback token exchange disabled by default, and can exchange the
+  browser auth code into the configured credential vault only when explicitly
+  enabled with a ready vault. The API persists only an opaque credential
+  reference and returns only redacted write evidence. Refreshes run only
+  through the read-only normalized FYERS connector
   surface with no Yahoo fallback, broker mutation, provider token, or
-  paper-ledger mixing. `FYERS_CONNECTOR_KILL_SWITCH=true` or
+  paper-ledger mixing. `FYERS_TOKEN_EXCHANGE_ENABLED=false` keeps the callback
+  in reconnect/configuration mode, while `FYERS_CONNECTOR_KILL_SWITCH=true` or
   `PORTFOLIO_FYERS_CONNECTOR_KILL_SWITCH=true` stops protected refreshes before
   any connector call or refresh-result persistence.
   In production-like Postgres mode, sanitized connection metadata and hashed
@@ -387,10 +391,17 @@ Credential-vault readiness is exposed through the protected admin-only
 `CREDENTIAL_VAULT_KMS_KEY_URI` and `CREDENTIAL_VAULT_HOSTED_RUNTIME=true`.
 Status payloads report only configured/not-configured booleans and blocking
 reasons, never provider secrets, access tokens, refresh tokens, or client
-secrets. FYERS OAuth callback responses include the same redacted readiness and
-continue to return `token_exchange_not_configured` until the token-exchange
-worker is enabled. Vault references are internal storage pointers, not model or
-API-visible credentials.
+secrets. FYERS OAuth callback responses include the same redacted readiness.
+When neither `FYERS_TOKEN_EXCHANGE_ENABLED` nor
+`PORTFOLIO_FYERS_TOKEN_EXCHANGE_ENABLED` is true, callbacks return
+`token_exchange_not_configured` and require reconnect/configuration. With an
+explicit token-exchange flag enabled, the callback exchanges the browser auth
+code using the server-retained PKCE verifier, writes only the resulting
+data-app token material to the configured vault, stores only an opaque
+`credential_ref`, and returns redacted counts/write status. FYERS app client
+configuration must be provided through local or hosted secret configuration,
+not committed `.env.example` values. Vault references are internal storage
+pointers, not model or API-visible credentials.
 
 The domain also defines backend-neutral credential-vault write plans and
 writer abstractions. They accept secret material only inside non-serializing

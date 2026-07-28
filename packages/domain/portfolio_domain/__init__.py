@@ -98,6 +98,12 @@ from .fyers_integration import (
     actor_hash,
     hash_oauth_state,
 )
+from .fyers_token_exchange import (
+    FyersAuthCodeExchangeClient as FyersAuthCodeExchangeClient,
+    FyersSdkAuthCodeExchangeClient as FyersSdkAuthCodeExchangeClient,
+    FyersTokenExchangeResult as FyersTokenExchangeResult,
+    exchange_fyers_auth_code_to_vault as exchange_fyers_auth_code_to_vault,
+)
 from .actor_identity_store import ActorIdentityRecord, PostgresActorIdentityStore
 from .credential_vault import (
     CredentialVaultBackend,

@@ -66,7 +66,7 @@ def _batch_payload(batch_id: str) -> dict:
 
 
 def _grant_expiry() -> str:
-    return datetime(2026, 7, 28, tzinfo=UTC).isoformat()
+    return (datetime.now(UTC) + timedelta(minutes=30)).replace(microsecond=0).isoformat()
 
 
 def _patch_postgres_actor_identity_ids(monkeypatch) -> dict[str, str]:
