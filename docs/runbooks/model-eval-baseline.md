@@ -87,13 +87,36 @@ The manual Eval baseline workflow can run the same loop in GitHub Actions:
 .github/workflows/eval-baseline.yml
 ```
 
-Dispatch it from the Actions tab with the desired provider. The workflow uses
-repository secrets for model credentials, runs preflight, runs the baseline,
+Dispatch it from the Actions tab with the desired provider and
+`fail_on_skip=true` for release evidence. The workflow uses repository
+secrets/variables for model credentials, runs preflight, runs the baseline,
 executes deterministic triage, and uploads `apps/agent-service/artifacts/evals`
 as an artifact named `portfolio-agentic-eval-artifacts-${{ github.sha }}`.
-The CD workflow requires that exact commit-scoped artifact and verifies the
-workflow run that produced it completed successfully before image build or
-publish.
+
+For the default `gemini` provider, configure GitHub repository settings with
+one of these credential sets before dispatch:
+
+- Secret `GOOGLE_API_KEY` plus variable `GOOGLE_CLOUD_PROJECT`, when the
+  provider path can use API-key auth.
+- Secret `GOOGLE_APPLICATION_CREDENTIALS_JSON` plus variable
+  `GOOGLE_CLOUD_PROJECT`, when the provider path needs Application Default
+  Credentials.
+
+The workflow deliberately prints only missing key names. If those secrets/vars
+are absent, preflight skips, the run fails with `--fail-on-skip`, and any
+uploaded skipped artifact is not release-ready.
+
+The CD workflow requires a successful exact commit-scoped artifact before image
+build or publish. It verifies:
+
+- artifact name matches `portfolio-agentic-eval-artifacts-${GITHUB_SHA}`;
+- producing workflow run concluded successfully;
+- `baseline-summary.json` is bound to the exact commit and has
+  `status: completed`;
+- `triage-report.json` is bound to the exact commit and has `status: passed`;
+- triage readiness is `ready_for_capstone_submission`;
+- metric coverage is exactly 45/45 with zero failures; and
+- trace JSON and grade-result JSON files are present.
 
 ## Deterministic Triage
 
