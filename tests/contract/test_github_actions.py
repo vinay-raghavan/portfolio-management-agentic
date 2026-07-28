@@ -47,6 +47,16 @@ def test_cd_workflow_is_release_gated_and_publishes_only_images() -> None:
     assert "portfolio-agentic-eval-artifacts-${GITHUB_SHA}" in cd
     assert "workflow_run.head_sha == env.GITHUB_SHA" in cd
     assert "Eval artifact workflow run did not conclude successfully" in cd
+    assert 'load_required("baseline-summary.json")' in cd
+    assert 'load_required("triage-report.json")' in cd
+    assert 'baseline.get("candidate_commit") != expected_commit' in cd
+    assert 'triage.get("candidate_commit") != expected_commit' in cd
+    assert 'baseline.get("status") != "completed"' in cd
+    assert 'triage.get("status") != "passed"' in cd
+    assert 'readiness.get("status") != "ready_for_capstone_submission"' in cd
+    assert 'metric_coverage.get("observed_total_metric_results") != 45' in cd
+    assert 'artifact_dir.rglob("traces/*.json")' in cd
+    assert 'artifact_dir.rglob("grade-results/*.json")' in cd
     assert "packages: write" in cd
     assert "docker/build-push-action" in cd
     assert "portfolio-management-agentic-agent-service" in cd

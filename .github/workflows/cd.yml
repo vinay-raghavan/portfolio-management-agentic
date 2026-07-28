@@ -56,6 +56,55 @@ jobs:
             echo "Eval artifact workflow run did not conclude successfully: ${RUN_CONCLUSION}."
             exit 1
           fi
+          ARTIFACT_DIR="$RUNNER_TEMP/eval-artifact"
+          gh run download "$ARTIFACT_RUN_ID" \
+            --name "$ARTIFACT_NAME" \
+            --dir "$ARTIFACT_DIR"
+          python - "$ARTIFACT_DIR" "$GITHUB_SHA" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          artifact_dir = Path(sys.argv[1])
+          expected_commit = sys.argv[2]
+
+          def load_required(name: str) -> dict:
+              matches = list(artifact_dir.rglob(name))
+              if not matches:
+                  raise SystemExit(f"Missing required eval artifact file: {name}")
+              with matches[0].open() as handle:
+                  return json.load(handle)
+
+          baseline = load_required("baseline-summary.json")
+          triage = load_required("triage-report.json")
+          if baseline.get("candidate_commit") != expected_commit:
+              raise SystemExit("Eval baseline artifact is not bound to this commit.")
+          if triage.get("candidate_commit") != expected_commit:
+              raise SystemExit("Eval triage artifact is not bound to this commit.")
+          if baseline.get("status") != "completed":
+              raise SystemExit("Eval baseline did not complete successfully.")
+          if triage.get("status") != "passed":
+              raise SystemExit("Eval triage did not pass.")
+
+          readiness = triage.get("submission_readiness") or {}
+          if readiness.get("status") != "ready_for_capstone_submission":
+              raise SystemExit("Eval triage is not ready for capstone submission.")
+
+          metric_coverage = (triage.get("summary") or {}).get("metric_coverage") or {}
+          if metric_coverage.get("expected_total_metric_results") != 45:
+              raise SystemExit("Eval artifact does not declare the required 45 metrics.")
+          if metric_coverage.get("observed_total_metric_results") != 45:
+              raise SystemExit("Eval artifact does not contain exact 45/45 metric coverage.")
+          if (triage.get("summary") or {}).get("failure_count") != 0:
+              raise SystemExit("Eval triage contains failures.")
+          if (triage.get("summary") or {}).get("critical_failure_count") != 0:
+              raise SystemExit("Eval triage contains critical failures.")
+          if not list(artifact_dir.rglob("traces/*.json")):
+              raise SystemExit("Eval artifact is missing trace JSON files.")
+          if not list(artifact_dir.rglob("grade-results/*.json")):
+              raise SystemExit("Eval artifact is missing grade-result JSON files.")
+          print("Eval artifact content verified for exact commit.")
+          PY
 
   build-images:
     name: Build and publish images
