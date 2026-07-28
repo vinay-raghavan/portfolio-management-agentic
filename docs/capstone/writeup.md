@@ -31,9 +31,9 @@ simulation.
 
 A user can ask the agent to review market conditions, screen candidates,
 explain a recommendation, draft a strategy, run a simulated backtest, create a
-paper order proposal, review approvals, simulate an approved fill, and produce
-a redacted report. Each step is visible, reviewable, and tied back to the
-evidence that produced it.
+paper order proposal, review approvals, inspect protected paper-execution
+outcomes, and produce a redacted report. Each step is visible, reviewable, and
+tied back to the evidence that produced it.
 
 The capstone deliberately stops at paper simulation. That is the evidence path
 for this submission, not the permanent product boundary. Future execution
@@ -93,10 +93,12 @@ draft a strategy. A simulated backtest provides additional evidence before the
 system creates a paper order proposal.
 
 The proposal is saved as pending approval. A human must explicitly approve the
-simulation. Only then can the MCP tool create a simulated paper fill. The paper
-ledger updates positions and accounting and emits audit events with sensitive
-details removed. A report brings the readiness snapshot, approval, fill,
-accounting, risk state, and audit rows into one reviewable result.
+simulation through the protected API, which issues a bounded paper-execution
+grant. Only the protected deterministic worker can simulate a paper fill under
+that grant. The paper ledger updates positions and accounting and emits audit
+events with sensitive details removed. A report brings the readiness snapshot,
+approval, fill, accounting, risk state, and audit rows into one reviewable
+result.
 
 The action tiers are simple:
 
@@ -122,10 +124,12 @@ credential redaction, provider-path redaction, human approval, and audit events
 create defense in depth beyond the model prompt.
 
 **Deployability:** Docker Compose and Podman Compose start the web console,
-agent service, MCP server, shared SQLite state, and optional Ollama profile.
-GitHub Actions run contract tests, agent tests, the web build, container smoke
-tests, and safe-tool verification. Release automation publishes images only on
-release tags or explicit dispatch.
+agent service, MCP server, Postgres, Redis, Alembic migrations, the protected
+paper-execution worker, and optional Ollama profile. SQLite remains an explicit
+offline fallback rather than the production-like default. GitHub Actions run
+contract tests, agent tests, the web build, container smoke tests, and
+safe-tool verification. Release automation publishes images only on release
+tags or explicit dispatch.
 
 **Agents CLI skills and evals:** Reusable development skills define tests-first
 implementation, security review, documentation synchronization, release gates,
@@ -141,15 +145,13 @@ metrics.
 
 The recorded mean scores are:
 
-- Response quality: **4.9167 out of 5**.
+- Response quality: **5.0000 out of 5**.
 - Forbidden-action policy: **1.0000**.
-- Workflow tool trajectory: **0.8000**.
+- Workflow tool trajectory: **1.0000**.
 
-Deterministic triage reported zero failures and zero critical failures. The
-trajectory score points to a concrete follow-up: tighten routing so the agent
-selects the preferred tool sequence more consistently. Three response-quality
-judge outputs produced parse errors; they are retained as a known baseline
-limitation.
+Deterministic triage reported zero failures, zero critical failures, and zero
+judge errors for the exact candidate commit used by the capstone evidence
+manifest.
 
 Credential-free tests still verify imports, contracts, policy, persistence,
 API behavior, web compilation, Compose configuration, and MCP tool exposure.

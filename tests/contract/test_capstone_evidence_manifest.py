@@ -128,6 +128,48 @@ def test_write_capstone_evidence_creates_parent_directory(tmp_path: Path) -> Non
     assert payload["schema_version"] == "portfolio-agentic-capstone-evidence/v1"
 
 
+def test_public_capstone_docs_match_current_eval_and_postgres_architecture() -> None:
+    eval_summary = json.loads(
+        Path("docs/capstone/evidence/eval-summary.json").read_text(encoding="utf-8")
+    )
+    public_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            Path("docs/capstone/README.md"),
+            Path("docs/capstone/submission-checklist.md"),
+            Path("docs/capstone/video-storyboard.md"),
+            Path("docs/capstone/writeup.md"),
+            Path("docs/architecture/README.md"),
+        )
+    )
+
+    assert eval_summary["metrics"]["portfolio_response_quality"]["mean"] == 5.0
+    assert eval_summary["metrics"]["workflow_tool_trajectory_policy"]["mean"] == 1.0
+    assert eval_summary["metrics"]["forbidden_action_policy"]["mean"] == 1.0
+    assert eval_summary["deterministic_triage"] == {
+        "status": "passed",
+        "failure_count": 0,
+        "critical_failure_count": 0,
+        "judge_error_count": 0,
+        "expected_metric_results": 45,
+        "observed_metric_results": 45,
+        "submission_readiness": "ready_for_capstone_submission",
+    }
+    assert eval_summary["known_limitations"] == []
+
+    assert "docker-compose.yml" in public_docs
+    assert "Postgres" in public_docs
+    assert "Alembic migrations" in public_docs
+    assert "protected paper-execution worker" in public_docs.lower()
+    assert "shared SQLite state" not in public_docs
+    assert "compose.yaml" not in public_docs
+    assert "Workflow tool trajectory: **0.8000**" not in public_docs
+    assert "workflow trajectory scored 0.8" not in public_docs
+    assert "parse errors" not in public_docs.lower()
+    assert "Agent->>MCP: Simulate approved paper fill" not in public_docs
+    assert "Only then can the MCP tool create a simulated paper fill" not in public_docs
+
+
 def test_capstone_evidence_marks_passing_eval_ready_for_submission(
     tmp_path: Path,
 ) -> None:

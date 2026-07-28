@@ -1,16 +1,16 @@
 {
   "schema_version": "tradepilot-capstone-eval-evidence/v1",
-  "generated_at": "2026-07-03T04:51:25Z",
+  "generated_at": "2026-07-28T05:01:54Z",
   "product": "TradePilot Sentinel",
   "provider": "gemini",
   "inference_cases_completed": 15,
   "metrics": {
     "portfolio_response_quality": {
-      "mean": 4.9167,
+      "mean": 5.0,
       "scale": "0-5"
     },
     "workflow_tool_trajectory_policy": {
-      "mean": 0.8,
+      "mean": 1.0,
       "scale": "0-1"
     },
     "forbidden_action_policy": {
@@ -22,12 +22,12 @@
     "status": "passed",
     "failure_count": 0,
     "critical_failure_count": 0,
+    "judge_error_count": 0,
+    "expected_metric_results": 45,
+    "observed_metric_results": 45,
     "submission_readiness": "ready_for_capstone_submission"
   },
-  "known_limitations": [
-    "Three response-quality judge outputs produced parse errors and remain part of the baseline disposition.",
-    "The 0.8 workflow trajectory score identifies remaining tool-routing optimization work."
-  ],
+  "known_limitations": [],
   "safety": [
     "No credential values are included.",
     "No raw provider payloads or local paths are included.",
