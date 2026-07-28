@@ -71,7 +71,7 @@
 | Agent / multi-agent system using ADK | `apps/agent-service/app/agent.py` | Agent prompt, multi-tool response, architecture slide |
 | MCP server | `apps/mcp-server/portfolio_mcp/server.py` | Architecture and safety slides |
 | Security features | `packages/policy`, MCP catalog tests | Approval sequence, refusal, safety slide |
-| Deployability | `compose.yaml`, Dockerfiles, GitHub Actions | Evaluation and deployability slide |
+| Deployability | `docker-compose.yml`, Dockerfiles, GitHub Actions | Evaluation and deployability slide |
 | Agent skills and Agents CLI | skills, eval datasets, eval runner | Eval results and development explanation |
 
 Do not claim Antigravity evidence unless the final video actually demonstrates

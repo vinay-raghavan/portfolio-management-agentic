@@ -31,9 +31,9 @@ product, and evaluation visuals are exported as individual 16:9 PNG files in
 A user can ask the agent to review market conditions, screen candidates,
 explain a factor stack, retrieve pattern citations, draft a strategy, request a
 simulated backtest, create a paper order proposal, review approval state,
-simulate an approved fill, and generate a redacted report. The agent does not
-replace deterministic scoring or policy. It coordinates those services and
-summarizes their outputs into a workflow the user can review.
+inspect protected paper-execution outcomes, and generate a redacted report. The
+agent does not replace deterministic scoring or policy. It coordinates those
+services and summarizes their outputs into a workflow the user can review.
 
 The implemented evidence path is:
 
@@ -49,7 +49,7 @@ intent -> evidence -> recommendation -> strategy -> backtest -> proposal
 | Google ADK agent | `apps/agent-service/app/agent.py` | Architecture and workflow slides; live prompt demo |
 | MCP server | `apps/mcp-server/portfolio_mcp/server.py` | Architecture and safety slides |
 | Security controls | `packages/policy` and contract tests | Safety slide; approval and refusal demo |
-| Deployability | `compose.yaml`, Dockerfiles, GitHub Actions | Evaluation and deployment slide |
+| Deployability | `docker-compose.yml`, Dockerfiles, GitHub Actions | Evaluation and deployment slide |
 | Agents CLI evals and skills | eval datasets, wrapper, skills, and runbook | Public eval summary and video evidence |
 
 ## Evidence Status

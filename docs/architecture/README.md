@@ -31,7 +31,7 @@ flowchart LR
     A --> P["MCP policy boundary<br/>safe registered tools only"]
     P --> D["Deterministic domain services"]
     R["Read-only provider adapters"] --> D
-    D --> S["SQLite state and audit stores"]
+    D --> S["Postgres production-like stores<br/>SQLite explicit offline fallback"]
     E["Tests, evals, CI, Docker or Podman"] --> A
     E --> P
     D -. "future release only" .-> X["Execution adapters<br/>disabled and unregistered"]
@@ -70,11 +70,11 @@ sequenceDiagram
     Domain-->>Agent: Backtest evidence and allowed next actions
     Agent->>MCP: Create paper order proposal
     MCP->>Ledger: Persist pending approval and audit event
-    Human->>MCP: Approve simulation
-    MCP->>Ledger: Persist human approval
-    User->>Agent: Simulate approved fill
-    Agent->>MCP: Simulate approved paper fill
-    MCP->>Ledger: Update paper positions, accounting, and audit
+    Human->>Ledger: Approve through protected human API
+    Ledger->>Ledger: Issue scoped paper-execution grant
+    User->>Agent: Review approved paper state
+    Ledger->>Ledger: Protected worker simulates paper fill under grant
+    Ledger->>Ledger: Update paper positions, accounting, and audit
     Agent-->>User: Explain result and generate redacted report
 ```
 
@@ -134,12 +134,19 @@ Docker Compose and Podman Compose start:
 - Web console on port `3000`.
 - FastAPI and ADK agent service on port `8000`.
 - Streamable HTTP MCP server on port `8081`.
+- Postgres for production-like tenant-scoped state.
+- Redis for queues, rate limits, and short-lived scheduling/cache state.
+- Alembic migrations before application services start.
+- Protected paper-execution worker for execution-under-grant processing.
 - Optional Ollama service through the `ollama` profile.
 
-The services share a named volume for local SQLite state. CI runs contract and
-security tests, agent-service tests, the web build, Compose validation,
-container smoke checks, and an MCP safe-tool catalog assertion. CD publishes
-images only for release tags or explicit manual dispatch.
+Root Compose defaults to Postgres for production-like testing through
+`PORTFOLIO_STORAGE_BACKEND=postgres`. SQLite remains available only as an
+explicit local/offline fallback through the documented `*_DB_PATH` variables.
+CI runs contract and security tests, agent-service tests, the web build,
+Compose validation, container smoke checks, and an MCP safe-tool catalog
+assertion. CD publishes images only for release tags or explicit manual
+dispatch.
 
 ## Current And Future Boundary
 

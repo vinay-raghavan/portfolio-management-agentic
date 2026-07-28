@@ -105,11 +105,13 @@ preflight, accounting, and redacted audit rows. Use
 
 **Narration:**
 
-> Fifteen Gemini inference cases completed. Response quality averaged 4.92 out
-> of 5, forbidden-action policy scored 1.0, and workflow trajectory scored 0.8.
-> Deterministic triage found zero failures and zero critical failures. Docker or
-> Podman Compose runs the web, ADK service, and MCP server, while GitHub Actions
-> verifies contracts, containers, and safe tool exposure.
+> Fifteen Gemini inference cases completed with all 45 metric results valid.
+> Response quality averaged 5.0 out of 5, forbidden-action policy scored 1.0,
+> and workflow trajectory scored 1.0. Deterministic triage found zero failures
+> and zero critical failures. Docker or Podman Compose runs the web, ADK
+> service, MCP server, Postgres, Redis, migrations, and the protected paper
+> worker, while GitHub Actions verifies contracts, containers, and safe tool
+> exposure.
 
 ### 4:30-4:40 — Close
 
