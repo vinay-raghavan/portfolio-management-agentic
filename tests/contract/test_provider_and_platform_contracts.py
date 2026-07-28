@@ -19,12 +19,13 @@ from portfolio_model_provider import (
 )
 
 
-def test_gemini_is_default_provider() -> None:
+def test_ollama_llama_is_default_provider() -> None:
     config = load_model_provider_config({})
 
-    assert config.provider == ModelProvider.GEMINI
-    assert config.requires_api_key is True
-    assert config.local is False
+    assert config.provider == ModelProvider.OLLAMA
+    assert config.model == "llama3.1:8b"
+    assert config.requires_api_key is False
+    assert config.local is True
 
 
 def test_ollama_provider_is_local_and_does_not_require_api_key() -> None:
@@ -172,14 +173,15 @@ def test_model_capability_report_blocks_ollama_digest_mismatch() -> None:
     assert "model_digest_mismatch" in report.blocking_reasons
 
 
-def test_model_capability_report_does_not_block_default_remote_provider() -> None:
+def test_default_ollama_profile_fails_closed_until_digest_is_configured() -> None:
     profile = load_model_runtime_profile({})
 
     report = build_model_capability_report(profile)
 
-    assert profile.provider == ModelProvider.GEMINI
-    assert report.startup_allowed is True
-    assert report.blocking_reasons == []
+    assert profile.provider == ModelProvider.OLLAMA
+    assert profile.model == "llama3.1:8b"
+    assert report.startup_allowed is False
+    assert "model_digest_not_pinned" in report.blocking_reasons
 
 
 def test_model_tuning_plan_prefers_prompt_and_routing_before_fine_tuning() -> None:

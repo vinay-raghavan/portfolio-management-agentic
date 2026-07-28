@@ -129,7 +129,7 @@ Primary constraints:
 - Broker/provider credentials may be used only for data fetching, never live order execution.
 - Private source, local paths, and real financial data are excluded from the repo.
 - Docker or Podman Compose is the first deployment target.
-- Gemini is the first model provider, but the design must support other hosted and local providers such as Claude, OpenAI-compatible APIs, and Ollama later.
+- Native private Ollama with `llama3.1:8b` is the default local model profile for production-like runs; Gemini, Claude, and OpenAI-compatible providers remain supported alternatives.
 - ADK is the first capstone runtime, but the reusable tool, policy, skill, and eval layers must remain portable to Codex, Claude Code, and generic MCP clients.
 
 ## Architecture Overview
