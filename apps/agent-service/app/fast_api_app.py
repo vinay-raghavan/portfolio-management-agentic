@@ -19,12 +19,13 @@ import sys
 from base64 import urlsafe_b64encode
 from collections.abc import Mapping
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from typing import Annotated
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin
+from urllib.request import Request as UrlRequest
 from urllib.request import urlopen
 from uuid import uuid4
 
@@ -36,8 +37,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.actor_context import (
     ActorContext,
+    OidcProviderConfig,
     actor_context_dependency,
     build_actor_context,
+    build_actor_context_from_oidc_claims,
+    decode_oidc_id_token,
+    load_oidc_provider_config,
 )
 from app.app_utils.telemetry import setup_telemetry
 from app.app_utils.typing import Feedback
@@ -221,6 +226,13 @@ class FyersOAuthCallbackRequest(BaseModel):
     auth_code: str = Field(min_length=1, max_length=512)
 
 
+class OidcAuthorizationCallbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: str = Field(min_length=8, max_length=256)
+    code: str = Field(min_length=1, max_length=512)
+
+
 class FyersRefreshRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -334,6 +346,7 @@ _FYERS_OAUTH_STATES: dict[tuple[str, str], FyersOAuthSession] = {}
 _FYERS_PKCE_VERIFIER_CACHE = InMemoryFyersPkceVerifierCache()
 _FYERS_REDIS_PKCE_VERIFIER_CACHES: dict[str, RedisFyersPkceVerifierCache] = {}
 _SESSION_MEMORY: dict[tuple[str, str, str], SessionMemoryRecord] = {}
+_OIDC_AUTH_STATES: dict[str, dict[str, object]] = {}
 
 
 def cloud_telemetry_enabled() -> bool:
@@ -462,6 +475,114 @@ def _positive_float(value: str | None, default: float) -> float:
     return parsed if parsed > 0 else default
 
 
+def _require_oidc_authorization_code_config(config: OidcProviderConfig) -> None:
+    if not config.enabled:
+        raise HTTPException(status_code=503, detail="oidc_auth_not_enabled")
+    missing = [
+        name
+        for name, value in (
+            ("issuer", config.issuer),
+            ("audience", config.audience),
+            ("authorization_endpoint", config.authorization_endpoint),
+            ("token_endpoint", config.token_endpoint),
+            ("client_id", config.client_id),
+            ("redirect_uri", config.redirect_uri),
+            ("jwks", config.jwks_json),
+        )
+        if not str(value or "").strip()
+    ]
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "oidc_authorization_config_missing",
+                "fields": missing,
+            },
+        )
+
+
+def _pkce_s256_challenge(code_verifier: str) -> str:
+    return (
+        urlsafe_b64encode(sha256(code_verifier.encode("utf-8")).digest())
+        .decode("ascii")
+        .rstrip("=")
+    )
+
+
+def _prune_oidc_auth_states(now: datetime | None = None) -> None:
+    active_now = now or datetime.now(UTC)
+    expired_state_hashes = [
+        state_hash
+        for state_hash, session in _OIDC_AUTH_STATES.items()
+        if not isinstance(session.get("expires_at"), datetime)
+        or session["expires_at"] <= active_now
+    ]
+    for state_hash in expired_state_hashes:
+        _OIDC_AUTH_STATES.pop(state_hash, None)
+
+
+def _pop_oidc_auth_session(state: str) -> dict[str, object]:
+    _prune_oidc_auth_states()
+    state_hash = hash_oauth_state(state)
+    session = _OIDC_AUTH_STATES.pop(state_hash, None)
+    if session is None:
+        raise HTTPException(status_code=409, detail="oidc_state_unknown_or_expired")
+    expected_state = str(session.get("state") or "")
+    expires_at = session.get("expires_at")
+    if not secrets.compare_digest(state, expected_state):
+        raise HTTPException(status_code=401, detail="oidc_state_invalid")
+    if not isinstance(expires_at, datetime) or expires_at <= datetime.now(UTC):
+        raise HTTPException(status_code=409, detail="oidc_state_unknown_or_expired")
+    return session
+
+
+def _exchange_oidc_authorization_code(
+    *,
+    config: OidcProviderConfig,
+    code: str,
+    code_verifier: str,
+) -> dict[str, object]:
+    body = urlencode(
+        {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": config.redirect_uri,
+            "client_id": config.client_id,
+            "code_verifier": code_verifier,
+        }
+    ).encode("utf-8")
+    request = UrlRequest(
+        config.token_endpoint,
+        data=body,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        method="POST",
+    )
+    timeout = _positive_float(os.getenv("OIDC_TOKEN_EXCHANGE_TIMEOUT_SECONDS"), 5.0)
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="oidc_token_exchange_failed",
+        ) from exc
+    if not isinstance(payload, Mapping):
+        raise HTTPException(status_code=502, detail="oidc_token_exchange_failed")
+    return dict(payload)
+
+
+def _actor_public_payload(actor: ActorContext) -> dict[str, object]:
+    return {
+        "tenant_id": actor.tenant_id,
+        "user_id": actor.user_id,
+        "roles": sorted(actor.roles),
+        "issuer": actor.issuer,
+    }
+
+
 def _probe_ollama_inventory(
     base_url: str | None,
 ) -> dict[str, OllamaModelMetadata] | None:
@@ -505,6 +626,77 @@ def _ollama_inventory(
         {name: item.digest for name, item in inventory.items() if item.digest},
         [item.to_dict() for item in inventory.values()],
     )
+
+
+@app.post("/v1/auth/oidc/start")
+def start_oidc_authorization_code_flow() -> dict:
+    """Start generic OIDC Authorization Code + PKCE without exposing verifier."""
+    config = load_oidc_provider_config()
+    _require_oidc_authorization_code_config(config)
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = _pkce_s256_challenge(code_verifier)
+    expires_at = datetime.now(UTC) + timedelta(minutes=10)
+    state_hash = hash_oauth_state(state)
+    _OIDC_AUTH_STATES[state_hash] = {
+        "state": state,
+        "state_hash": state_hash,
+        "nonce": nonce,
+        "code_verifier": code_verifier,
+        "expires_at": expires_at,
+    }
+    authorization_url = (
+        f"{config.authorization_endpoint}?"
+        + urlencode(
+            {
+                "response_type": "code",
+                "client_id": config.client_id,
+                "redirect_uri": config.redirect_uri,
+                "scope": " ".join(config.scopes),
+                "state": state,
+                "nonce": nonce,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+            }
+        )
+    )
+    return {
+        "status": "authorization_required",
+        "authorization_url": authorization_url,
+        "expires_at": expires_at.isoformat(),
+        "state_hash": state_hash,
+        "pkce": {"method": "S256", "verifier_returned": False},
+    }
+
+
+@app.post("/v1/auth/oidc/callback")
+def complete_oidc_authorization_code_flow(
+    request: OidcAuthorizationCallbackRequest,
+) -> dict:
+    """Complete OIDC Authorization Code + PKCE and return server actor metadata."""
+    config = load_oidc_provider_config()
+    _require_oidc_authorization_code_config(config)
+    session = _pop_oidc_auth_session(request.state)
+    token_payload = _exchange_oidc_authorization_code(
+        config=config,
+        code=request.code,
+        code_verifier=str(session["code_verifier"]),
+    )
+    id_token = str(token_payload.get("id_token") or "").strip()
+    if not id_token:
+        raise HTTPException(status_code=502, detail="oidc_id_token_missing")
+    claims = decode_oidc_id_token(id_token, config=config)
+    actor = build_actor_context_from_oidc_claims(
+        claims,
+        config=config,
+        request_id=None,
+        expected_nonce=str(session["nonce"]),
+    )
+    return {
+        "status": "authenticated",
+        "actor": _actor_public_payload(actor),
+    }
 
 
 @app.get("/v1/research/sources")

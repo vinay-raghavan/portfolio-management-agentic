@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from urllib.parse import parse_qs, urlparse
 
 from authlib.jose import JsonWebToken
 from fastapi.testclient import TestClient
 
+import app.fast_api_app as fast_api_app
 from app.fast_api_app import app
 
 
@@ -741,6 +743,111 @@ def test_session_summary_api_can_derive_actor_from_oidc_bearer_token(monkeypatch
     assert missing_token.json()["detail"] == "oidc_bearer_token_required"
     assert authorized.status_code == 404
     assert authorized.json()["detail"] == "session_memory_not_found"
+
+
+def test_oidc_authorization_code_pkce_start_and_callback(monkeypatch) -> None:
+    monkeypatch.setenv("OIDC_AUTH_ENABLED", "true")
+    monkeypatch.setenv("OIDC_ISSUER", "https://issuer.example.com")
+    monkeypatch.setenv("OIDC_AUDIENCE", "portfolio-agent")
+    monkeypatch.setenv("OIDC_AUTHORIZATION_ENDPOINT", "https://issuer.example.com/auth")
+    monkeypatch.setenv("OIDC_TOKEN_ENDPOINT", "https://issuer.example.com/token")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "portfolio-console")
+    monkeypatch.setenv("OIDC_REDIRECT_URI", "http://localhost:8000/v1/auth/oidc/callback")
+    monkeypatch.setenv("OIDC_TENANT_CLAIM", "tenant_id")
+    monkeypatch.setenv("OIDC_ROLES_CLAIM", "roles")
+    monkeypatch.setenv("OIDC_ALLOWED_ALGORITHMS", "HS256")
+    monkeypatch.setenv(
+        "OIDC_JWKS_JSON",
+        json.dumps({"kty": "oct", "k": "dGVzdC1zaWduaW5nLXNlY3JldA"}),
+    )
+    fast_api_app._OIDC_AUTH_STATES.clear()
+    captured_exchange: dict[str, str] = {}
+    captured_nonce: dict[str, str] = {}
+
+    def _fake_exchange(*, config, code: str, code_verifier: str) -> dict[str, str]:
+        captured_exchange.update(
+            {
+                "token_endpoint": config.token_endpoint,
+                "code": code,
+                "code_verifier": code_verifier,
+            }
+        )
+        token = JsonWebToken(["HS256"]).encode(
+            {"alg": "HS256"},
+            {
+                "iss": "https://issuer.example.com",
+                "aud": "portfolio-agent",
+                "sub": "immutable-subject-123",
+                "tenant_id": "tenant-oidc",
+                "roles": ["analyst"],
+                "exp": int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
+                "nonce": captured_nonce["value"],
+            },
+            "test-signing-secret",
+        )
+        return {"id_token": token.decode("utf-8")}
+
+    monkeypatch.setattr(
+        fast_api_app,
+        "_exchange_oidc_authorization_code",
+        _fake_exchange,
+    )
+    client = TestClient(app)
+
+    start = client.post("/v1/auth/oidc/start")
+    start_payload = start.json()
+    query = parse_qs(urlparse(start_payload["authorization_url"]).query)
+    state = query["state"][0]
+    captured_nonce["value"] = str(
+        fast_api_app._OIDC_AUTH_STATES[start_payload["state_hash"]]["nonce"]
+    )
+
+    callback = client.post(
+        "/v1/auth/oidc/callback",
+        json={"state": state, "code": "browser-auth-code"},
+    )
+
+    assert start.status_code == 200
+    assert start_payload["status"] == "authorization_required"
+    assert query["response_type"] == ["code"]
+    assert query["client_id"] == ["portfolio-console"]
+    assert query["code_challenge_method"] == ["S256"]
+    assert query["nonce"]
+    assert "code_verifier" not in str(start_payload).lower()
+    assert callback.status_code == 200
+    assert callback.json()["status"] == "authenticated"
+    assert callback.json()["actor"] == {
+        "tenant_id": "tenant-oidc",
+        "user_id": "immutable-subject-123",
+        "roles": ["analyst"],
+        "issuer": "https://issuer.example.com",
+    }
+    assert captured_exchange["token_endpoint"] == "https://issuer.example.com/token"
+    assert captured_exchange["code"] == "browser-auth-code"
+    assert len(captured_exchange["code_verifier"]) >= 43
+    assert "id_token" not in str(callback.json()).lower()
+    assert not fast_api_app._OIDC_AUTH_STATES
+
+
+def test_oidc_authorization_callback_rejects_unknown_state(monkeypatch) -> None:
+    monkeypatch.setenv("OIDC_AUTH_ENABLED", "true")
+    monkeypatch.setenv("OIDC_ISSUER", "https://issuer.example.com")
+    monkeypatch.setenv("OIDC_AUDIENCE", "portfolio-agent")
+    monkeypatch.setenv("OIDC_AUTHORIZATION_ENDPOINT", "https://issuer.example.com/auth")
+    monkeypatch.setenv("OIDC_TOKEN_ENDPOINT", "https://issuer.example.com/token")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "portfolio-console")
+    monkeypatch.setenv("OIDC_REDIRECT_URI", "http://localhost:8000/v1/auth/oidc/callback")
+    monkeypatch.setenv("OIDC_JWKS_JSON", json.dumps({"kty": "oct", "k": "unused"}))
+    fast_api_app._OIDC_AUTH_STATES.clear()
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/auth/oidc/callback",
+        json={"state": "unknown-state", "code": "browser-auth-code"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "oidc_state_unknown_or_expired"
 
 
 def test_session_summary_api_uses_postgres_store_when_configured(monkeypatch) -> None:

@@ -24,6 +24,13 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "MCP_TRANSPORT=streamable-http" in env_example
     assert "AGENT_TOOL_TRANSPORT=mcp" in env_example
     assert "AGENT_MCP_URL=http://mcp-server:8081/mcp" in env_example
+    assert "OIDC_AUTH_ENABLED=false" in env_example
+    assert "OIDC_AUTHORIZATION_ENDPOINT=" in env_example
+    assert "OIDC_TOKEN_ENDPOINT=" in env_example
+    assert "OIDC_CLIENT_ID=" in env_example
+    assert "OIDC_REDIRECT_URI=http://localhost:8000/v1/auth/oidc/callback" in env_example
+    assert "OIDC_SCOPES=openid profile email" in env_example
+    assert "OIDC_JWKS_JSON=" in env_example
     assert "PAPER_LEDGER_DB_PATH=data/paper-ledger.db" in env_example
     assert "PAPER_EXECUTION_KILL_SWITCH=false" in env_example
     assert "FYERS_TOKEN_EXCHANGE_ENABLED=false" in env_example
@@ -129,6 +136,16 @@ def test_compose_mounts_paper_ledger_volume() -> None:
     assert "MODEL_TUNING_CANDIDATES: ${MODEL_TUNING_CANDIDATES:-llama3.1:8b,gemma:7b,gemma4:12b}" in compose
     assert "AGENT_TOOL_TRANSPORT: ${AGENT_TOOL_TRANSPORT:-mcp}" in compose
     assert "AGENT_MCP_URL: ${AGENT_MCP_URL:-http://mcp-server:8081/mcp}" in compose
+    assert "OIDC_AUTH_ENABLED: ${OIDC_AUTH_ENABLED:-false}" in compose
+    assert "OIDC_AUTHORIZATION_ENDPOINT: ${OIDC_AUTHORIZATION_ENDPOINT:-}" in compose
+    assert "OIDC_TOKEN_ENDPOINT: ${OIDC_TOKEN_ENDPOINT:-}" in compose
+    assert "OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}" in compose
+    assert (
+        "OIDC_REDIRECT_URI: "
+        "${OIDC_REDIRECT_URI:-http://localhost:8000/v1/auth/oidc/callback}"
+    ) in compose
+    assert "OIDC_SCOPES: ${OIDC_SCOPES:-openid profile email}" in compose
+    assert "OIDC_JWKS_JSON: ${OIDC_JWKS_JSON:-}" in compose
     assert '"11434:11434"' not in compose
     assert "paper-ledger-data:/data" in compose
     assert "paper-ledger-data:" in compose
