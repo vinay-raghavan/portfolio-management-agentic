@@ -25,6 +25,7 @@ def test_root_env_example_uses_safe_portable_defaults() -> None:
     assert "AGENT_MCP_URL=http://mcp-server:8081/mcp" in env_example
     assert "PAPER_LEDGER_DB_PATH=data/paper-ledger.db" in env_example
     assert "PAPER_EXECUTION_KILL_SWITCH=false" in env_example
+    assert "FYERS_TOKEN_EXCHANGE_ENABLED=false" in env_example
     assert "FYERS_CONNECTOR_KILL_SWITCH=false" in env_example
     assert "MODEL_ROUTE_KILL_SWITCH=false" in env_example
     assert "PROVIDER_REFRESH_SCHEDULER_KILL_SWITCH=false" in env_example

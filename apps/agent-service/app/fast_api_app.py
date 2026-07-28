@@ -70,6 +70,7 @@ from portfolio_domain import (  # noqa: E402
     FileBackedResearchStore,
     FyersConnection,
     FyersOAuthSession,
+    FyersSdkAuthCodeExchangeClient,
     InMemoryFyersPkceVerifierCache,
     PaperBatchRequest,
     PaperExecutionDecision,
@@ -91,8 +92,10 @@ from portfolio_domain import (  # noqa: E402
     SessionMemoryRecord,
     SessionMemoryValidationError,
     actor_hash,
+    build_credential_vault_writer,
     evaluate_credential_vault_readiness,
     evaluate_database_runtime_readiness,
+    exchange_fyers_auth_code_to_vault,
     get_fyers_readonly_connector,
     hash_oauth_state,
     issue_paper_execution_grant,
@@ -1011,20 +1014,52 @@ def post_fyers_oauth_start(
 def post_fyers_oauth_callback(
     request: FyersOAuthCallbackRequest,
     actor: Annotated[ActorContext, Depends(actor_context_dependency)],
-) -> dict:
-    """Record a FYERS OAuth callback without accepting provider tokens."""
+):
+    """Record or explicitly exchange a FYERS OAuth callback without token leaks."""
     _require_any_role(actor, {"viewer", "analyst", "admin"})
     session = _pop_fyers_oauth_session(actor, request.state)
     if session is None:
         raise HTTPException(status_code=409, detail="fyers_oauth_state_unknown_or_expired")
-    if _pop_fyers_pkce_verifier(actor=actor, session=session) is None:
+    code_verifier = _pop_fyers_pkce_verifier(actor=actor, session=session)
+    if code_verifier is None:
         raise HTTPException(
             status_code=409,
             detail="fyers_oauth_verifier_unknown_or_expired",
         )
-    connection = _get_or_create_fyers_connection(actor).callback_recorded()
-    _store_fyers_connection(actor, connection)
     credential_vault = _credential_vault_readiness_payload()
+    connection = _get_or_create_fyers_connection(actor)
+    if _fyers_token_exchange_enabled():
+        credential_vault_profile = load_credential_vault_profile(os.environ)
+        result = exchange_fyers_auth_code_to_vault(
+            connection=connection,
+            auth_code=request.auth_code,
+            code_verifier=code_verifier,
+            client_id=_fyers_client_id(),
+            client_secret=os.getenv("FYERS_CLIENT_SECRET"),
+            redirect_uri=_fyers_redirect_uri(),
+            credential_vault_profile=credential_vault_profile,
+            credential_vault_writer=build_credential_vault_writer(
+                credential_vault_profile,
+                command_runner=_credential_vault_command_runner(),
+            ),
+            exchange_client=_build_fyers_auth_code_exchange_client(),
+        )
+        _store_fyers_connection(actor, result.connection)
+        payload = result.to_dict()
+        response_body = {
+            "status": result.status,
+            "connection": payload["connection"],
+            "credential_vault": credential_vault,
+            "vault_write": payload["vault_write"],
+            "token_exchange": payload["token_exchange"],
+            "mode": "human_api_only",
+        }
+        if result.status != "connected":
+            return JSONResponse(status_code=503, content=response_body)
+        return response_body
+
+    connection = connection.callback_recorded()
+    _store_fyers_connection(actor, connection)
     return {
         "status": "reconnect_required",
         "connection": connection.to_dict(),
@@ -1129,6 +1164,13 @@ def _credential_vault_readiness_payload() -> dict:
         load_credential_vault_profile(os.environ),
     )
     return readiness.to_dict()
+
+
+def _fyers_token_exchange_enabled() -> bool:
+    return env_flag_enabled(
+        "FYERS_TOKEN_EXCHANGE_ENABLED",
+        "PORTFOLIO_FYERS_TOKEN_EXCHANGE_ENABLED",
+    )
 
 
 def _fyers_connector_kill_switch_active() -> bool:
@@ -1465,17 +1507,33 @@ def _fyers_authorize_url(*, state: str, code_challenge: str) -> str:
         "https://api-t1.fyers.in/api/v3/generate-authcode",
     )
     params = {
-        "client_id": os.getenv("FYERS_CLIENT_ID", "configure-fyers-data-app"),
-        "redirect_uri": os.getenv(
-            "FYERS_REDIRECT_URI",
-            "http://localhost:8000/v1/integrations/fyers/oauth/callback",
-        ),
+        "client_id": _fyers_client_id(),
+        "redirect_uri": _fyers_redirect_uri(),
         "response_type": "code",
         "state": state,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
     }
     return f"{base_url}?{urlencode(params)}"
+
+
+def _fyers_client_id() -> str:
+    return os.getenv("FYERS_CLIENT_ID", "configure-fyers-data-app")
+
+
+def _fyers_redirect_uri() -> str:
+    return os.getenv(
+        "FYERS_REDIRECT_URI",
+        "http://localhost:8000/v1/integrations/fyers/oauth/callback",
+    )
+
+
+def _credential_vault_command_runner():
+    return None
+
+
+def _build_fyers_auth_code_exchange_client() -> FyersSdkAuthCodeExchangeClient:
+    return FyersSdkAuthCodeExchangeClient()
 
 
 def _model_usage_events() -> list[ModelUsageEvent]:

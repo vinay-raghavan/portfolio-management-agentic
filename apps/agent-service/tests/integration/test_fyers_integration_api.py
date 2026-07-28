@@ -150,6 +150,35 @@ class _FakePkceVerifierCache:
         return {"backend": "fake"}
 
 
+class _FakeFyersTokenExchangeClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, str | None]] = []
+
+    def exchange_auth_code(
+        self,
+        *,
+        auth_code: str,
+        code_verifier: str,
+        client_id: str,
+        client_secret: str | None,
+        redirect_uri: str,
+    ) -> dict[str, object]:
+        self.calls.append(
+            {
+                "auth_code": auth_code,
+                "code_verifier": code_verifier,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+            }
+        )
+        return {
+            "access_token": "fyers-access-token-secret",
+            "refresh_token": "fyers-refresh-token-secret",
+            "expires_in": 3600,
+        }
+
+
 def test_fyers_oauth_start_and_callback_use_short_lived_pkce_verifier_cache(
     monkeypatch,
 ) -> None:
@@ -186,6 +215,84 @@ def test_fyers_oauth_start_and_callback_use_short_lived_pkce_verifier_cache(
     assert stored_verifier.lower() not in serialized
     assert "code_verifier" not in serialized
     assert "access_token" not in serialized
+
+
+def test_fyers_oauth_callback_can_exchange_auth_code_into_vault_when_explicitly_enabled(
+    monkeypatch,
+) -> None:
+    fake_cache = _FakePkceVerifierCache()
+    captured: dict[str, object] = {}
+
+    def command_runner(args: tuple[str, ...], *, input_text: str) -> None:
+        captured["args"] = args
+        captured["input_text"] = input_text
+
+    exchange_client = _FakeFyersTokenExchangeClient()
+    monkeypatch.setattr(fast_api_app, "_fyers_pkce_verifier_cache", lambda: fake_cache)
+    monkeypatch.setattr(
+        fast_api_app,
+        "_build_fyers_auth_code_exchange_client",
+        lambda: exchange_client,
+    )
+    monkeypatch.setattr(
+        fast_api_app,
+        "_credential_vault_command_runner",
+        lambda: command_runner,
+    )
+    monkeypatch.setenv("FYERS_TOKEN_EXCHANGE_ENABLED", "true")
+    monkeypatch.setenv("FYERS_CLIENT_ID", "FYERSDATA-100")
+    monkeypatch.setenv("FYERS_CLIENT_SECRET", "fyers-client-secret")
+    monkeypatch.setenv("FYERS_REDIRECT_URI", "https://app.example.test/fyers/callback")
+    monkeypatch.setenv("CREDENTIAL_VAULT_BACKEND", "macos_keychain")
+    monkeypatch.setenv("CREDENTIAL_VAULT_SERVICE", "portfolio-agentic-fyers")
+    monkeypatch.setenv("CREDENTIAL_VAULT_LOCAL_RUNTIME", "true")
+    fast_api_app._FYERS_CONNECTIONS.clear()
+    fast_api_app._FYERS_OAUTH_STATES.clear()
+    client = TestClient(app)
+
+    start = client.post(
+        "/v1/integrations/fyers/oauth/start",
+        headers=_headers("pkce-vault-owner", "analyst"),
+        json={},
+    )
+    state = start.json()["oauth"]["state"]
+    stored_verifier = fake_cache.stores[0][1]
+    callback = client.post(
+        "/v1/integrations/fyers/oauth/callback",
+        headers=_headers("pkce-vault-owner", "analyst"),
+        json={"state": state, "auth_code": "browser-auth-code"},
+    )
+
+    assert start.status_code == 200
+    assert callback.status_code == 200
+    payload = callback.json()
+    assert payload["status"] == "connected"
+    assert payload["connection"]["status"] == "connected"
+    assert payload["connection"]["credential_status"] == "vault_reference_configured"
+    assert payload["connection"]["credential_ref_configured"] is True
+    assert payload["credential_vault"]["ready"] is True
+    assert payload["vault_write"]["written"] is True
+    assert payload["token_exchange"]["attempted"] is True
+    assert payload["token_exchange"]["sensitive_field_count"] == 2
+    assert exchange_client.calls == [
+        {
+            "auth_code": "browser-auth-code",
+            "code_verifier": stored_verifier,
+            "client_id": "FYERSDATA-100",
+            "client_secret": "fyers-client-secret",
+            "redirect_uri": "https://app.example.test/fyers/callback",
+        }
+    ]
+    assert "fyers-access-token-secret" in str(captured["input_text"])
+    assert "fyers-refresh-token-secret" in str(captured["input_text"])
+    serialized = f"{payload} {captured['args']}".lower()
+    assert "fyers-access-token-secret" not in serialized
+    assert "fyers-refresh-token-secret" not in serialized
+    assert "fyers-client-secret" not in serialized
+    assert "access_token" not in serialized
+    assert "refresh_token" not in serialized
+    assert "client_secret" not in serialized
+    assert "trading_token" not in serialized
 
 
 def test_fyers_oauth_callback_fails_closed_when_pkce_verifier_is_missing(
