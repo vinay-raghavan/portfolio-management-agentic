@@ -319,6 +319,56 @@ def test_eval_run_summary_records_artifacts_without_secret_values(tmp_path: Path
     ]
 
 
+def test_eval_preflight_ready_summary_does_not_promote_stale_artifacts(
+    tmp_path: Path,
+) -> None:
+    config = EvalRunConfig(
+        provider="gemini",
+        app_dir=tmp_path,
+        summary_output=Path("artifacts/evals/baseline-summary.json"),
+    )
+    traces_dir = tmp_path / config.traces_dir
+    results_dir = tmp_path / config.results_dir
+    traces_dir.mkdir(parents=True)
+    results_dir.mkdir(parents=True)
+    (traces_dir / "stale_trace.json").write_text("{}", encoding="utf-8")
+    (results_dir / "stale_results.json").write_text("{}", encoding="utf-8")
+
+    report = build_preflight(
+        config,
+        env={
+            "GOOGLE_API_KEY": "super-secret-value",
+            "GOOGLE_CLOUD_PROJECT": "portfolio-capstone",
+        },
+        agents_cli_path="/usr/local/bin/agents-cli",
+        adc_available=True,
+    )
+    summary = build_run_summary(
+        mode="preflight",
+        config=config,
+        preflight=report,
+        status="ready",
+        command_results=[],
+        generated_at="2026-07-28T00:00:00Z",
+        candidate_commit="abc123def456",
+    )
+
+    payload = summary.to_dict()
+
+    assert payload["status"] == "ready"
+    assert payload["artifacts"]["trace_files"] == []
+    assert payload["artifacts"]["grade_result_files"] == []
+    assert payload["submission_readiness"] == {
+        "status": "preflight_ready",
+        "blocking_reasons": [
+            "Eval preflight passed, but credentialed generate/grade has not run."
+        ],
+        "required_next_actions": [
+            "Run uv run python scripts/run_agent_evals.py run --fail-on-skip."
+        ],
+    }
+
+
 def test_eval_run_summary_blocks_completed_artifacts_without_candidate_commit(
     tmp_path: Path,
 ) -> None:

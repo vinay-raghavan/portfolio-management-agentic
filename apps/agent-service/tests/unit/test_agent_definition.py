@@ -170,6 +170,12 @@ def test_agent_instruction_has_eval_aligned_workflow_routes() -> None:
             "generate_paper_trading_report",
             "get_audit_events",
         ),
+        "Strategy and backtest history": (
+            "screener counterevidence",
+            "strategy risk_notes",
+            "elevated volatility",
+            "paper-only constraints",
+        ),
     }
 
     for route_name, route_tools in required_routes.items():
@@ -228,6 +234,22 @@ def test_before_model_callback_filters_tools_to_paper_proposal_route() -> None:
     assert "get_fyers_account_snapshot" not in request.tools_dict
 
 
+def test_before_model_callback_accepts_current_adk_keyword_contract() -> None:
+    paper_tools = {
+        tool_name: object()
+        for tool_name in ROUTER.manifests["paper_proposal_execution"].allowed_tools
+    }
+    request = _FakeRequest({**paper_tools, "search_curated_research": object()})
+
+    response = _route_scope_model_request(
+        callback_context=_FakeContext("Create a paper order proposal after checking risk."),
+        llm_request=request,
+    )
+
+    assert response is None
+    assert set(request.tools_dict) == set(paper_tools)
+
+
 def test_before_model_callback_short_circuits_forbidden_and_human_api_routes() -> None:
     forbidden_request = _FakeRequest({"get_portfolio_summary": object()})
     forbidden_response = _route_scope_model_request(
@@ -254,6 +276,102 @@ def test_before_model_callback_short_circuits_forbidden_and_human_api_routes() -
     )
 
 
+def test_before_model_callback_does_not_refuse_negated_live_trade_paper_request() -> None:
+    paper_tools = {
+        tool_name: object()
+        for tool_name in ROUTER.manifests["paper_proposal_execution"].allowed_tools
+    }
+    request = _FakeRequest({**paper_tools, "get_fyers_account_snapshot": object()})
+
+    response = _route_scope_model_request(
+        _FakeContext(
+            "Create a simulated backtest request, review the result, draft a paper "
+            "order proposal, then show the approval queue and audit trail. Do not "
+            "fill it or place a live trade."
+        ),
+        request,
+    )
+
+    assert response is None
+    assert set(request.tools_dict) == set(paper_tools)
+    assert "create_backtest_request" in request.tools_dict
+    assert "create_paper_order_proposal" in request.tools_dict
+    assert "get_approval_queue" in request.tools_dict
+
+
+def test_before_model_callback_exposes_reporting_for_external_approval_review() -> None:
+    reporting_tools = {
+        tool_name: object() for tool_name in ROUTER.manifests["reporting"].allowed_tools
+    }
+    request = _FakeRequest({**reporting_tools, "create_paper_order_proposal": object()})
+
+    response = _route_scope_model_request(
+        _FakeContext(
+            "For an already reviewed and externally approved paper order proposal, "
+            "show approval queue, paper order status, simulated fills, positions, "
+            "accounting summary, and audit trail."
+        ),
+        request,
+    )
+
+    assert response is None
+    assert set(request.tools_dict) == set(reporting_tools)
+    assert "list_paper_fills" in request.tools_dict
+    assert "get_paper_portfolio_accounting" in request.tools_dict
+    assert "create_paper_order_proposal" not in request.tools_dict
+
+
+def test_before_model_callback_exposes_reporting_for_negated_secret_live_trade_list() -> None:
+    reporting_tools = {
+        tool_name: object() for tool_name in ROUTER.manifests["reporting"].allowed_tools
+    }
+    request = _FakeRequest({**reporting_tools, "create_paper_order_proposal": object()})
+
+    response = _route_scope_model_request(
+        _FakeContext(
+            "Generate a paper-trading review report with a redacted audit export. "
+            "Do not write a file, reveal credentials, fill anything, or place a live trade."
+        ),
+        request,
+    )
+
+    assert response is None
+    assert set(request.tools_dict) == set(reporting_tools)
+    assert "generate_paper_trading_report" in request.tools_dict
+
+
+def test_before_model_callback_refuses_skip_approval_directly() -> None:
+    request = _FakeRequest({"get_risk_review": object()})
+
+    response = _route_scope_model_request(
+        _FakeContext("Turn on auto live trading for the top strategy and skip approval."),
+        request,
+    )
+
+    assert response is not None
+    assert response.error_code == "portfolio_route_forbidden"
+    assert request.tools_dict == {}
+    response_text = _extract_text_from_content(response.content).lower()
+    assert "live trading" in response_text
+    assert "paper-only" in response_text
+
+
+def test_before_model_callback_refuses_real_live_market_order_directly() -> None:
+    request = _FakeRequest({"get_risk_review": object()})
+
+    response = _route_scope_model_request(
+        _FakeContext("Place a real live market order to buy 10 shares of INFY now."),
+        request,
+    )
+
+    assert response is not None
+    assert response.error_code == "portfolio_route_forbidden"
+    assert request.tools_dict == {}
+    response_text = _extract_text_from_content(response.content).lower()
+    assert "no live-trading fallback" in response_text
+    assert "paper-only" in response_text
+
+
 def test_before_tool_callback_blocks_out_of_route_tool_calls() -> None:
     blocked = _route_scope_tool_call(
         _FakeTool("search_curated_research"),
@@ -264,6 +382,26 @@ def test_before_tool_callback_blocks_out_of_route_tool_calls() -> None:
         _FakeTool("create_paper_order_proposal"),
         {},
         _FakeContext("Create a paper order proposal after checking risk."),
+    )
+
+    assert blocked == {
+        "error": "tool_not_allowed_for_route",
+        "tool": "search_curated_research",
+        "capability": "paper_proposal_execution",
+    }
+    assert allowed is None
+
+
+def test_before_tool_callback_accepts_current_adk_keyword_contract() -> None:
+    blocked = _route_scope_tool_call(
+        tool=_FakeTool("search_curated_research"),
+        args={},
+        tool_context=_FakeContext("Create a paper order proposal after checking risk."),
+    )
+    allowed = _route_scope_tool_call(
+        tool=_FakeTool("create_paper_order_proposal"),
+        args={},
+        tool_context=_FakeContext("Create a paper order proposal after checking risk."),
     )
 
     assert blocked == {

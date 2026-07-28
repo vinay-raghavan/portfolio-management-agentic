@@ -21,12 +21,15 @@ Use this capability to prepare paper-only strategy drafts, backtest requests, an
 - `get_risk_review`
 - `list_backtest_requests`
 - `list_paper_orders`
+- `list_screener_runs`
 - `list_strategy_drafts`
+- `run_momentum_screener`
+- `run_screener`
 
 ## Context contract
 
-Use recommendation explanation, backtest history, strategy drafts, risk review, approval queue, and audit trail. Approval identity must come from the human-facing API, never from model output.
+Use screener evidence, screener counterevidence, recommendation explanation, backtest history, strategy drafts, strategy risk notes, risk review, approval queue, and audit trail. Approval identity must come from the human-facing API, never from model output.
 
 ## Response contract
 
-Return `PaperProposalExecutionResponse` with preflight status, proposal details, risk blockers, approval requirement, grant status if available, and no fill/approval mutation.
+Return `PaperProposalExecutionResponse` with preflight status, proposal details, screener counterevidence, risk blockers, approval requirement, grant status if available, and no fill/approval mutation.

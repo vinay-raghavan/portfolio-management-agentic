@@ -213,6 +213,84 @@ def test_capstone_evidence_marks_passing_eval_ready_for_submission(
     }
 
 
+def test_capstone_evidence_marks_ready_preflight_as_pending_eval_run(
+    tmp_path: Path,
+) -> None:
+    eval_dir = tmp_path / "apps" / "agent-service" / "artifacts" / "evals"
+    eval_dir.mkdir(parents=True)
+    (eval_dir / "baseline-summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "portfolio-agent-eval-baseline/v1",
+                "mode": "preflight",
+                "status": "ready",
+                "candidate_commit": "abc123def456",
+                "preflight": {
+                    "status": "ready",
+                    "missing_environment": [],
+                    "present_environment_keys": ["GOOGLE_API_KEY"],
+                },
+                "artifacts": {
+                    "trace_files": [],
+                    "grade_result_files": [],
+                },
+                "submission_readiness": {
+                    "status": "preflight_ready",
+                    "blocking_reasons": [
+                        "Eval preflight passed, but credentialed generate/grade has not run."
+                    ],
+                    "required_next_actions": [
+                        "Run uv run python scripts/run_agent_evals.py run --fail-on-skip."
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (eval_dir / "triage-report.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "portfolio-agent-eval-triage/v1",
+                "status": "passed",
+                "candidate_commit": "abc123def456",
+                "summary": {"failure_count": 0, "critical_failure_count": 0},
+                "submission_readiness": {
+                    "status": "ready_for_capstone_submission",
+                    "blocking_reasons": [],
+                    "required_next_actions": [
+                        "Keep the baseline summary, triage report, traces, and grade artifacts with the capstone evidence package.",
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = build_capstone_evidence(
+        CapstoneEvidenceConfig(repo_root=tmp_path),
+        generated_at="2026-07-28T00:00:00Z",
+    ).to_dict()
+
+    assert payload["eval_baseline"]["submission_readiness"] == {
+        "status": "preflight_ready",
+        "source": "baseline_summary",
+        "blocking_reasons": [
+            "Eval preflight passed, but credentialed generate/grade has not run."
+        ],
+        "required_next_actions": [
+            "Run uv run python scripts/run_agent_evals.py run --fail-on-skip."
+        ],
+    }
+    assert {
+        "id": "credentialed_model_eval_baseline",
+        "status": "ready_to_run",
+        "next_action": "Run uv run python scripts/run_agent_evals.py run --fail-on-skip for the exact candidate commit.",
+    } in payload["remaining_gaps"]
+    assert "eval_grade_artifacts" in {
+        item["id"] for item in payload["remaining_gaps"]
+    }
+
+
 def test_capstone_evidence_blocks_mismatched_eval_candidate_commits(
     tmp_path: Path,
 ) -> None:

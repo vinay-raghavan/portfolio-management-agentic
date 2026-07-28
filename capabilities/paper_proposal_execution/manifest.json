@@ -16,7 +16,10 @@
     "get_risk_review",
     "list_backtest_requests",
     "list_paper_orders",
-    "list_strategy_drafts"
+    "list_screener_runs",
+    "list_strategy_drafts",
+    "run_momentum_screener",
+    "run_screener"
   ],
   "context_sources": [
     "recommendation explanation",
